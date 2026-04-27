@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
-# Buildroot post-image hook. Used to assemble bootable artifacts (e.g. a
-# bootable ISO via syslinux/isolinux) once the rootfs.ext4 and bzImage are
-# in place. For the MVP we simply log artifact sizes so CI can flag bloat.
+# Buildroot post-image hook. Assembles bootable ISO from kernel + rootfs.
 set -euo pipefail
 
 IMAGES_DIR="$1"
+SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 
 echo ">> okamaos post-image: $IMAGES_DIR"
 ls -lh "$IMAGES_DIR" || true
 
-# TODO(v1): build a hybrid USB/ISO image with isolinux that boots straight
-# into the okama-shell with a branded splash and no boot menu. Today we just
-# emit kernel + rootfs and let `make okamaos-run-qemu` glue them together.
+# Generate bootable ISO if xorriso/genisoimage is available
+if command -v xorriso &> /dev/null || command -v genisoimage &> /dev/null; then
+    "$SCRIPT_DIR/gen-iso.sh" "$IMAGES_DIR" "$IMAGES_DIR/../okamaos.iso"
+else
+    echo ">> WARNING: xorriso/genisoimage not found, skipping ISO generation"
+    echo ">> Install: sudo apt-get install xorriso"
+fi

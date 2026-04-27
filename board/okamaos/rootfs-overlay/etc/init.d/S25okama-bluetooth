@@ -1,0 +1,49 @@
+#!/bin/sh
+# S25okama-bluetooth — start BlueZ only when Bluetooth is needed.
+# Checks /etc/okamaos/okama.conf BLUETOOTH_ENABLED and the presence of any
+# paired controller trust files before starting bluetoothd.
+
+CONF=/etc/okamaos/okama.conf
+CONTROLLERS_DIR=/var/okamaos/controllers
+BT_ENABLED=no
+
+# Read config
+if [ -f "$CONF" ]; then
+    BT_ENABLED=$(grep '^BLUETOOTH_ENABLED=' "$CONF" | cut -d= -f2 | tr -d '[:space:]')
+fi
+
+# Auto-enable if paired controllers exist
+if [ -d "$CONTROLLERS_DIR" ] && ls "$CONTROLLERS_DIR"/*.json 2>/dev/null | grep -q .; then
+    BT_ENABLED=yes
+fi
+
+case "$1" in
+  start)
+    if [ "$BT_ENABLED" = "yes" ]; then
+        echo "Starting Bluetooth (bluetoothd)..."
+        if which bluetoothd >/dev/null 2>&1; then
+            bluetoothd --nodetach &
+            sleep 1
+            # Auto-connect trusted controllers
+            if which bluetoothctl >/dev/null 2>&1; then
+                for f in "$CONTROLLERS_DIR"/*.json; do
+                    [ -f "$f" ] || continue
+                    MAC=$(python3 -c "import json,sys; d=json.load(open('$f')); print(d.get('mac',''))" 2>/dev/null)
+                    [ -n "$MAC" ] && bluetoothctl connect "$MAC" >/dev/null 2>&1 &
+                done
+            fi
+        else
+            echo "bluetoothd not found — Bluetooth unavailable."
+        fi
+    else
+        echo "Bluetooth disabled in config — skipping."
+    fi
+    ;;
+  stop)
+    killall bluetoothd 2>/dev/null || true
+    ;;
+  *)
+    echo "Usage: $0 {start|stop}"
+    exit 1
+    ;;
+esac

@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+"""okama-snapshot — simple save-state save/restore for OkamaOS games.
+
+MVP: calls game-provided save/restore hooks if available.
+Full hibernation / CRIU checkpointing is deferred to v1.
+
+Usage:
+  okama-snapshot save    <game_id>
+  okama-snapshot restore <game_id>
+  okama-snapshot list
+  okama-snapshot delete  <game_id>
+"""
+
+import sys
+import os
+
+_lib = os.environ.get("OKAMA_LIB", "")
+if not _lib:
+    _lib = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../lib")
+sys.path.insert(0, os.path.abspath(_lib))
+
+import argparse
+import json
+import subprocess
+import time
+
+SAVES_DIR = os.environ.get("OKAMA_SAVES", "/var/okamaos/saves")
+
+
+def save_dir(game_id: str) -> str:
+    return os.path.join(SAVES_DIR, game_id)
+
+
+def cmd_save(args):
+    gdir = save_dir(args.game_id)
+    os.makedirs(gdir, exist_ok=True)
+
+    hook = os.path.join("/var/okamaos/games", args.game_id, "save_hook.py")
+    if os.path.exists(hook):
+        result = subprocess.call(
+            [sys.executable, hook, "save", gdir],
+            env={**os.environ, "PYTHONPATH": "/usr/lib/okamaos"},
+        )
+        if result != 0:
+            print(f"WARNING: save hook exited {result}", file=sys.stderr)
+
+    state_path = os.path.join(gdir, "save_state.json")
+    meta = {
+        "game_id": args.game_id,
+        "timestamp": int(time.time()),
+        "version": "1",
+        "note": "MVP snapshot",
+    }
+    with open(state_path, "w") as f:
+        json.dump(meta, f, indent=2)
+    print(f"Saved: {state_path}")
+
+
+def cmd_restore(args):
+    state_path = os.path.join(save_dir(args.game_id), "save_state.json")
+    if not os.path.exists(state_path):
+        print(f"No save state found for: {args.game_id}", file=sys.stderr)
+        sys.exit(1)
+
+    hook = os.path.join("/var/okamaos/games", args.game_id, "save_hook.py")
+    if os.path.exists(hook):
+        subprocess.call(
+            [sys.executable, hook, "restore", save_dir(args.game_id)],
+            env={**os.environ, "PYTHONPATH": "/usr/lib/okamaos"},
+        )
+
+    with open(state_path) as f:
+        meta = json.load(f)
+    print(f"Restored: {args.game_id} (saved at {meta.get('timestamp','?')})")
+
+
+def cmd_list(args):
+    try:
+        for d in sorted(os.listdir(SAVES_DIR)):
+            state_path = os.path.join(SAVES_DIR, d, "save_state.json")
+            if os.path.exists(state_path):
+                with open(state_path) as f:
+                    meta = json.load(f)
+                print(f"  {d:40s}  ts={meta.get('timestamp','?')}")
+    except FileNotFoundError:
+        print("  (no save states)")
+
+
+def cmd_delete(args):
+    import shutil
+    path = save_dir(args.game_id)
+    if os.path.isdir(path):
+        shutil.rmtree(path)
+        print(f"Deleted save state: {args.game_id}")
+    else:
+        print(f"No save state found for: {args.game_id}", file=sys.stderr)
+        sys.exit(1)
+
+
+def main():
+    p = argparse.ArgumentParser(prog="okama-snapshot")
+    sub = p.add_subparsers(dest="command", required=True)
+
+    ps = sub.add_parser("save")
+    ps.add_argument("game_id")
+
+    pr = sub.add_parser("restore")
+    pr.add_argument("game_id")
+
+    sub.add_parser("list")
+
+    pd = sub.add_parser("delete")
+    pd.add_argument("game_id")
+
+    args = p.parse_args()
+    {"save": cmd_save, "restore": cmd_restore,
+     "list": cmd_list, "delete": cmd_delete}[args.command](args)
+
+
+if __name__ == "__main__":
+    main()

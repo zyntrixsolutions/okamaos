@@ -1,0 +1,25 @@
+{
+  "_comment": "OkamaOS default theme — loaded by okama-shell at startup",
+  "name": "OkamaOS Default",
+  "version": "1",
+  "colors": {
+    "bg":       [10,  10,  24],
+    "accent":   [80,  60, 200],
+    "accent2":  [140, 100, 255],
+    "text":     [230, 230, 240],
+    "dim":      [100, 100, 120],
+    "selected": [60,  50,  160],
+    "card":     [20,  20,  44],
+    "warn":     [220, 100,  30],
+    "ok":       [60,  200,  80],
+    "error":    [220,  50,  50]
+  },
+  "fonts": {
+    "family": "DejaVu Sans",
+    "size_xl": 72,
+    "size_lg": 42,
+    "size_md": 28,
+    "size_sm": 20,
+    "size_hint": 18
+  }
+}

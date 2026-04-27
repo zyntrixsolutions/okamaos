@@ -1,0 +1,41 @@
+#!/bin/sh
+# S40okama-network — bring up networking only if enabled.
+# For MVP this handles wired (DHCP). WiFi wpa_supplicant hook is a stub.
+
+CONF=/etc/okamaos/okama.conf
+NET_ENABLED=yes
+WIFI_ENABLED=no
+
+if [ -f "$CONF" ]; then
+    NET_ENABLED=$(grep '^NETWORK_ENABLED=' "$CONF" | cut -d= -f2 | tr -d '[:space:]')
+    WIFI_ENABLED=$(grep '^WIFI_ENABLED='   "$CONF" | cut -d= -f2 | tr -d '[:space:]')
+fi
+
+case "$1" in
+  start)
+    if [ "$NET_ENABLED" = "yes" ]; then
+        echo "Starting network (DHCP on eth0)..."
+        ifconfig lo up 2>/dev/null || ip link set lo up 2>/dev/null || true
+        # Try wired DHCP; errors are non-fatal (no cable is okay)
+        dhcpcd -b eth0 2>/dev/null || udhcpc -b -i eth0 2>/dev/null || true
+
+        if [ "$WIFI_ENABLED" = "yes" ]; then
+            echo "Starting wpa_supplicant (WiFi)..."
+            # TODO(v1): read ssid/psk from /etc/okamaos/wifi.conf
+            wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf 2>/dev/null || true
+            dhcpcd -b wlan0 2>/dev/null || udhcpc -b -i wlan0 2>/dev/null || true
+        fi
+    else
+        echo "Network disabled — skipping."
+    fi
+    ;;
+  stop)
+    dhcpcd --exit 2>/dev/null || true
+    killall udhcpc 2>/dev/null || true
+    killall wpa_supplicant 2>/dev/null || true
+    ;;
+  *)
+    echo "Usage: $0 {start|stop}"
+    exit 1
+    ;;
+esac

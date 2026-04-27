@@ -1,0 +1,29 @@
+#!/bin/sh
+# S30okama-inputd — start the controller input daemon.
+# okama-inputd normalizes USB and Bluetooth HID gamepad input and emits
+# events to a Unix socket that okama-shell and games consume.
+
+PIDFILE=/var/run/okama-inputd.pid
+
+case "$1" in
+  start)
+    echo "Starting okama-inputd..."
+    start-stop-daemon --start --background \
+        --pidfile "$PIDFILE" --make-pidfile \
+        --exec /usr/bin/okama-inputd -- --daemon
+    ;;
+  stop)
+    echo "Stopping okama-inputd..."
+    start-stop-daemon --stop --pidfile "$PIDFILE" --retry 5
+    rm -f "$PIDFILE"
+    ;;
+  restart)
+    $0 stop
+    sleep 1
+    $0 start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart}"
+    exit 1
+    ;;
+esac

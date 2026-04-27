@@ -1,0 +1,530 @@
+#!/usr/bin/env python3
+"""okama-shell — OkamaOS fullscreen controller-first UI shell.
+
+Designed for Pygame on a framebuffer. No window manager, no desktop.
+Keyboard is secondary: only used for text entry and emergency navigation.
+
+Boot flow: init → S99okama-shell → okama-shell (loops forever)
+In-shell flow: home → navigate sections → launch game → game exits → home
+
+Sections (MVP):
+  Play | Settings | Power
+
+Controller mapping (reads from okama-inputd socket):
+  D-pad / LSTICK: navigate
+  A: select
+  B: back
+  START: home
+  HOME: quick-menu
+
+Keyboard (emergency fallback only):
+  Arrow keys → navigation, Enter → select, Esc → back
+"""
+
+import sys
+import os
+
+_lib = os.environ.get("OKAMA_LIB", "")
+if not _lib:
+    _lib = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../lib")
+sys.path.insert(0, os.path.abspath(_lib))
+
+import subprocess
+import time
+import json
+import argparse
+
+# ---------------------------------------------------------------------------
+# Pygame bootstrap — graceful degradation if not available
+# ---------------------------------------------------------------------------
+try:
+    import pygame
+    PYGAME_OK = True
+except ImportError:
+    PYGAME_OK = False
+
+from okamaos.input_protocol import InputClient
+import okamaos.config as cfg_mod
+import okamaos.games as games_mod
+import okamaos.bluetooth as bt_mod
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+WIDTH, HEIGHT = 1280, 720
+FPS = 30
+
+COL_BG        = (10,  10,  24)
+COL_ACCENT    = (80,  60, 200)
+COL_ACCENT2   = (140, 100, 255)
+COL_TEXT      = (230, 230, 240)
+COL_DIM       = (100, 100, 120)
+COL_SELECTED  = (60,  50, 160)
+COL_CARD      = (20,  20,  44)
+COL_WARN      = (220, 100,  30)
+COL_OK        = (60,  200,  80)
+COL_ERROR     = (220,  50,  50)
+
+SECTIONS = ["Play", "Settings", "Power"]
+POWER_OPTIONS = ["Restart", "Shut Down", "Cancel"]
+SETTINGS_OPTIONS = [
+    "Controllers",
+    "Bluetooth",
+    "Audio (placeholder)",
+    "Network (placeholder)",
+    "Storage info",
+]
+
+BUTTON_HINT_A = "[A] Select"
+BUTTON_HINT_B = "[B] Back"
+BUTTON_HINT_DPAD = "[↕] Navigate"
+BUTTON_HINT_START = "[START] Home"
+
+
+# ---------------------------------------------------------------------------
+# Fallback text renderer (no Pygame)
+# ---------------------------------------------------------------------------
+def _text_shell():
+    """Minimal text-mode shell for terminals / no-Pygame environments."""
+    conf = cfg_mod.get()
+    print("\n" + "=" * 48)
+    print("  OkamaOS Shell  (text mode — Pygame not found)")
+    print("=" * 48)
+
+    while True:
+        games = games_mod.list_installed()
+        print("\nInstalled games:")
+        for i, g in enumerate(games):
+            print(f"  [{i+1}] {g['name']} ({g['id']})")
+        print("  [p] Power off")
+        print("  [r] Reboot")
+        print("  [q] Exit shell (dev mode only)")
+
+        try:
+            choice = input("\nSelect > ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            break
+
+        if choice == "q":
+            if conf.is_dev_mode():
+                break
+            print("Not in developer mode.")
+        elif choice == "p":
+            subprocess.call(["poweroff"])
+        elif choice == "r":
+            subprocess.call(["reboot"])
+        elif choice.isdigit():
+            idx = int(choice) - 1
+            if 0 <= idx < len(games):
+                gid = games[idx]["id"]
+                os.execv("/usr/bin/okama-run", ["okama-run", gid])
+            else:
+                print("Invalid selection.")
+
+
+# ---------------------------------------------------------------------------
+# Pygame shell
+# ---------------------------------------------------------------------------
+class OkamaShell:
+    def __init__(self, windowed: bool = False, dev_mode: bool = False):
+        self.windowed = windowed
+        self.dev_mode = dev_mode
+        self.conf = cfg_mod.get()
+
+        flags = 0 if windowed else pygame.FULLSCREEN | pygame.NOFRAME
+        self.screen = pygame.display.set_mode((WIDTH, HEIGHT), flags)
+        pygame.display.set_caption("OkamaOS")
+        pygame.mouse.set_visible(False)
+
+        self.clock = pygame.time.Clock()
+        self._init_fonts()
+
+        self.input_client = InputClient()
+        self.input_client.connect()
+
+        self.state = "home"       # home | play | settings | power | launching
+        self.section_idx = 0
+        self.list_idx = 0
+        self.settings_idx = 0
+        self.power_idx = 0
+        self.message = ""
+        self.message_timer = 0
+
+        self.games = []
+        self._refresh_games()
+
+        self._input_cooldown = 0
+        self._axis_threshold = 0.5
+        self._axis_held: dict = {}
+
+    def _init_fonts(self):
+        pygame.font.init()
+        try:
+            self.font_xl  = pygame.font.SysFont("DejaVu Sans", 72, bold=True)
+            self.font_lg  = pygame.font.SysFont("DejaVu Sans", 42, bold=True)
+            self.font_md  = pygame.font.SysFont("DejaVu Sans", 28)
+            self.font_sm  = pygame.font.SysFont("DejaVu Sans", 20)
+            self.font_hint= pygame.font.SysFont("DejaVu Sans", 18)
+        except Exception:
+            default = pygame.font.Font(None, 36)
+            self.font_xl = self.font_lg = self.font_md = \
+                self.font_sm = self.font_hint = default
+
+    def _refresh_games(self):
+        self.games = games_mod.list_installed()
+
+    def _show_message(self, msg: str, duration: float = 2.5):
+        self.message = msg
+        self.message_timer = int(duration * FPS)
+
+    def run(self):
+        running = True
+        while running:
+            dt = self.clock.tick(FPS)
+            events = self._collect_events()
+
+            for e in events:
+                if e.get("type") == "QUIT":
+                    running = False
+
+            self._handle_input(events)
+
+            self._draw()
+
+            if self.message_timer > 0:
+                self.message_timer -= 1
+
+        pygame.quit()
+
+    # -----------------------------------------------------------------------
+    # Input collection (controller socket + keyboard fallback)
+    # -----------------------------------------------------------------------
+    def _collect_events(self) -> list:
+        events = []
+
+        # Controller events from okama-inputd
+        for ev in self.input_client.poll():
+            if ev.get("type") == "button" and ev.get("state") == "pressed":
+                events.append({"src": "controller", "action": ev["button"]})
+            elif ev.get("type") == "axis":
+                self._handle_axis_to_dpad(ev, events)
+
+        # Keyboard fallback (low priority)
+        for pev in pygame.event.get():
+            if pev.type == pygame.QUIT:
+                events.append({"type": "QUIT"})
+            elif pev.type == pygame.KEYDOWN:
+                k = pev.key
+                mapping = {
+                    pygame.K_UP:     "DPAD_UP",
+                    pygame.K_DOWN:   "DPAD_DOWN",
+                    pygame.K_LEFT:   "DPAD_LEFT",
+                    pygame.K_RIGHT:  "DPAD_RIGHT",
+                    pygame.K_RETURN: "A",
+                    pygame.K_ESCAPE: "B",
+                    pygame.K_q:      "QUIT" if self.dev_mode else None,
+                }
+                action = mapping.get(k)
+                if action == "QUIT":
+                    events.append({"type": "QUIT"})
+                elif action:
+                    events.append({"src": "keyboard", "action": action})
+
+        return events
+
+    def _handle_axis_to_dpad(self, ev: dict, out: list):
+        axis = ev.get("axis", "")
+        value = ev.get("value", 0.0)
+        prev = self._axis_held.get(axis, 0.0)
+
+        if axis in ("LSTICK_Y", "RSTICK_Y"):
+            if value < -self._axis_threshold and prev >= -self._axis_threshold:
+                out.append({"src": "axis", "action": "DPAD_UP"})
+            elif value > self._axis_threshold and prev <= self._axis_threshold:
+                out.append({"src": "axis", "action": "DPAD_DOWN"})
+        elif axis in ("LSTICK_X", "RSTICK_X"):
+            if value < -self._axis_threshold and prev >= -self._axis_threshold:
+                out.append({"src": "axis", "action": "DPAD_LEFT"})
+            elif value > self._axis_threshold and prev <= self._axis_threshold:
+                out.append({"src": "axis", "action": "DPAD_RIGHT"})
+
+        self._axis_held[axis] = value
+
+    # -----------------------------------------------------------------------
+    # State machine
+    # -----------------------------------------------------------------------
+    def _handle_input(self, events: list):
+        if self._input_cooldown > 0:
+            self._input_cooldown -= 1
+            return
+
+        for ev in events:
+            action = ev.get("action")
+            if not action:
+                continue
+            self._input_cooldown = 4  # ~130ms at 30 fps
+            self._dispatch(action)
+
+    def _dispatch(self, action: str):
+        if self.state == "home":
+            self._home_input(action)
+        elif self.state == "play":
+            self._play_input(action)
+        elif self.state == "settings":
+            self._settings_input(action)
+        elif self.state == "power":
+            self._power_input(action)
+
+    def _home_input(self, action: str):
+        n = len(SECTIONS)
+        if action == "DPAD_RIGHT":
+            self.section_idx = (self.section_idx + 1) % n
+        elif action == "DPAD_LEFT":
+            self.section_idx = (self.section_idx - 1) % n
+        elif action == "A":
+            section = SECTIONS[self.section_idx]
+            if section == "Play":
+                self._refresh_games()
+                self.list_idx = 0
+                self.state = "play"
+            elif section == "Settings":
+                self.settings_idx = 0
+                self.state = "settings"
+            elif section == "Power":
+                self.power_idx = 0
+                self.state = "power"
+
+    def _play_input(self, action: str):
+        n = len(self.games)
+        if action == "B" or action == "START":
+            self.state = "home"
+        elif action == "DPAD_DOWN":
+            if n:
+                self.list_idx = (self.list_idx + 1) % n
+        elif action == "DPAD_UP":
+            if n:
+                self.list_idx = (self.list_idx - 1) % n
+        elif action == "A":
+            if self.games:
+                self._launch_game(self.games[self.list_idx])
+
+    def _launch_game(self, game: dict):
+        gid = game["id"]
+        self._show_message(f"Launching {game['name']}…")
+        self._draw()
+        pygame.display.flip()
+        time.sleep(0.5)
+        pygame.quit()
+        os.execv("/usr/bin/okama-run", ["okama-run", gid])
+
+    def _settings_input(self, action: str):
+        n = len(SETTINGS_OPTIONS)
+        if action == "B" or action == "START":
+            self.state = "home"
+        elif action == "DPAD_DOWN":
+            self.settings_idx = (self.settings_idx + 1) % n
+        elif action == "DPAD_UP":
+            self.settings_idx = (self.settings_idx - 1) % n
+        elif action == "A":
+            opt = SETTINGS_OPTIONS[self.settings_idx]
+            if opt == "Controllers":
+                self._show_message(
+                    "Controller: connected (USB HID). "
+                    "Bluetooth pairing: use okama-cli bluetooth pair <mac>")
+            elif opt == "Bluetooth":
+                s = bt_mod.status()
+                self._show_message(f"Bluetooth powered: {s['powered']}")
+            else:
+                self._show_message(f"{opt} — coming in v1")
+
+    def _power_input(self, action: str):
+        n = len(POWER_OPTIONS)
+        if action == "DPAD_DOWN":
+            self.power_idx = (self.power_idx + 1) % n
+        elif action == "DPAD_UP":
+            self.power_idx = (self.power_idx - 1) % n
+        elif action == "A":
+            opt = POWER_OPTIONS[self.power_idx]
+            if opt == "Restart":
+                subprocess.call(["reboot"])
+            elif opt == "Shut Down":
+                subprocess.call(["poweroff"])
+            elif opt == "Cancel":
+                self.state = "home"
+        elif action == "B":
+            self.state = "home"
+
+    # -----------------------------------------------------------------------
+    # Drawing
+    # -----------------------------------------------------------------------
+    def _draw(self):
+        self.screen.fill(COL_BG)
+
+        if self.state == "home":
+            self._draw_home()
+        elif self.state == "play":
+            self._draw_play()
+        elif self.state == "settings":
+            self._draw_settings()
+        elif self.state == "power":
+            self._draw_power()
+
+        self._draw_message()
+        self._draw_hints()
+
+        if self.dev_mode:
+            self._draw_debug_overlay()
+
+        pygame.display.flip()
+
+    def _draw_home(self):
+        # Brand bar
+        brand = self.font_xl.render("OkamaOS", True, COL_ACCENT2)
+        self.screen.blit(brand, (WIDTH // 2 - brand.get_width() // 2, 60))
+
+        # Section pills
+        pill_w, pill_h = 200, 60
+        total_w = len(SECTIONS) * pill_w + (len(SECTIONS) - 1) * 20
+        start_x = WIDTH // 2 - total_w // 2
+        y = HEIGHT // 2 - pill_h // 2
+
+        for i, section in enumerate(SECTIONS):
+            x = start_x + i * (pill_w + 20)
+            color = COL_ACCENT if i == self.section_idx else COL_CARD
+            pygame.draw.rect(self.screen, color, (x, y, pill_w, pill_h),
+                             border_radius=12)
+            if i == self.section_idx:
+                pygame.draw.rect(self.screen, COL_ACCENT2,
+                                 (x, y, pill_w, pill_h), 2, border_radius=12)
+            label = self.font_md.render(section, True, COL_TEXT)
+            self.screen.blit(label,
+                (x + pill_w // 2 - label.get_width() // 2,
+                 y + pill_h // 2 - label.get_height() // 2))
+
+        # Sub-hint
+        if SECTIONS[self.section_idx] == "Play":
+            sub = self.font_sm.render(
+                f"{len(self.games)} game(s) installed", True, COL_DIM)
+            self.screen.blit(sub, (WIDTH // 2 - sub.get_width() // 2, y + 80))
+
+    def _draw_play(self):
+        title = self.font_lg.render("Play", True, COL_ACCENT2)
+        self.screen.blit(title, (60, 40))
+
+        if not self.games:
+            msg = self.font_md.render(
+                "No games installed.  Use okama-cli install <game.ok>",
+                True, COL_DIM)
+            self.screen.blit(msg, (60, HEIGHT // 2 - 20))
+            return
+
+        card_h = 80
+        margin = 10
+        start_y = 120
+
+        for i, g in enumerate(self.games):
+            y = start_y + i * (card_h + margin)
+            if y + card_h > HEIGHT - 60:
+                break
+            color = COL_SELECTED if i == self.list_idx else COL_CARD
+            pygame.draw.rect(self.screen, color, (40, y, WIDTH - 80, card_h),
+                             border_radius=10)
+
+            name = self.font_md.render(g["name"], True, COL_TEXT)
+            ver  = self.font_sm.render(
+                f"v{g.get('version','?')} · {g.get('id','')}", True, COL_DIM)
+            self.screen.blit(name, (60, y + 12))
+            self.screen.blit(ver,  (60, y + 46))
+
+            if i == self.list_idx:
+                hint = self.font_sm.render("[A] Launch", True, COL_OK)
+                self.screen.blit(hint, (WIDTH - 160, y + 28))
+
+    def _draw_settings(self):
+        title = self.font_lg.render("Settings", True, COL_ACCENT2)
+        self.screen.blit(title, (60, 40))
+
+        for i, opt in enumerate(SETTINGS_OPTIONS):
+            y = 120 + i * 64
+            color = COL_SELECTED if i == self.settings_idx else COL_CARD
+            pygame.draw.rect(self.screen, color, (40, y, WIDTH - 80, 52),
+                             border_radius=8)
+            label = self.font_md.render(opt, True, COL_TEXT)
+            self.screen.blit(label, (60, y + 12))
+
+    def _draw_power(self):
+        title = self.font_lg.render("Power", True, COL_WARN)
+        self.screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 120))
+
+        for i, opt in enumerate(POWER_OPTIONS):
+            y = 240 + i * 80
+            color = COL_WARN if i == self.power_idx else COL_CARD
+            pygame.draw.rect(self.screen, color,
+                             (WIDTH // 2 - 150, y, 300, 60), border_radius=10)
+            label = self.font_md.render(opt, True, COL_TEXT)
+            self.screen.blit(label,
+                (WIDTH // 2 - label.get_width() // 2, y + 15))
+
+    def _draw_message(self):
+        if self.message and self.message_timer > 0:
+            alpha = min(255, self.message_timer * 12)
+            surf = self.font_sm.render(self.message, True, COL_TEXT)
+            bg = pygame.Surface((surf.get_width() + 24, surf.get_height() + 16),
+                                 pygame.SRCALPHA)
+            bg.fill((30, 30, 60, 200))
+            self.screen.blit(bg, (WIDTH // 2 - bg.get_width() // 2, HEIGHT - 90))
+            self.screen.blit(surf, (WIDTH // 2 - surf.get_width() // 2, HEIGHT - 82))
+
+    def _draw_hints(self):
+        hints = f"  {BUTTON_HINT_DPAD}   {BUTTON_HINT_A}   {BUTTON_HINT_B}   {BUTTON_HINT_START}"
+        h = self.font_hint.render(hints, True, COL_DIM)
+        self.screen.blit(h, (20, HEIGHT - 28))
+
+    def _draw_debug_overlay(self):
+        try:
+            with open("/proc/meminfo") as f:
+                lines = {l.split(":")[0]: l.split(":")[1].strip()
+                         for l in f if ":" in l}
+            used = lines.get("MemTotal", "?")
+            avail = lines.get("MemAvailable", "?")
+            debug = f"DEV | RAM total:{used} avail:{avail} | FPS:{self.clock.get_fps():.0f}"
+        except Exception:
+            debug = f"DEV | FPS:{self.clock.get_fps():.0f}"
+
+        surf = self.font_hint.render(debug, True, COL_WARN)
+        self.screen.blit(surf, (WIDTH - surf.get_width() - 10, 6))
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+def main():
+    p = argparse.ArgumentParser(prog="okama-shell")
+    p.add_argument("--windowed", action="store_true",
+                   help="Run in a window instead of fullscreen (dev/host use)")
+    p.add_argument("--text", action="store_true",
+                   help="Force text-mode shell (no Pygame)")
+    args = p.parse_args()
+
+    conf = cfg_mod.get()
+    dev = conf.is_dev_mode()
+
+    if args.text or not PYGAME_OK:
+        _text_shell()
+        return
+
+    os.environ.setdefault("SDL_VIDEODRIVER", "fbcon")
+    os.environ.setdefault("SDL_FBDEV",
+                          conf.get("FRAMEBUFFER_DEVICE", "/dev/fb0"))
+    os.environ.setdefault("SDL_AUDIODRIVER", "alsa")
+
+    if args.windowed:
+        os.environ["SDL_VIDEODRIVER"] = "x11"  # dev host
+
+    pygame.init()
+    shell = OkamaShell(windowed=args.windowed, dev_mode=dev)
+    shell.run()
+
+
+if __name__ == "__main__":
+    main()

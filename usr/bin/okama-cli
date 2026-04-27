@@ -1,0 +1,288 @@
+#!/usr/bin/env python3
+"""okama-cli — OkamaOS command-line interface.
+
+Usage:
+  okama-cli status
+  okama-cli list
+  okama-cli install <path.ok>
+  okama-cli uninstall <game_id>
+  okama-cli run <game_id>
+  okama-cli verify <path.ok>
+  okama-cli memory
+  okama-cli dev enable | disable
+  okama-cli parent set-pin
+  okama-cli poweroff | reboot
+  okama-cli bluetooth status | scan | pair <mac> | trust <mac>
+              | connect <mac> | disconnect <mac> | forget <mac>
+  okama-cli controllers list | test | default <id>
+"""
+
+import sys
+import os
+
+_lib = os.environ.get("OKAMA_LIB", "")
+if not _lib:
+    _lib = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../lib")
+sys.path.insert(0, os.path.abspath(_lib))
+
+import argparse
+import json
+import shutil
+import subprocess
+
+import okamaos.config as cfg_mod
+import okamaos.games as games_mod
+import okamaos.manifest as manifest_mod
+import okamaos.package as pkg_mod
+import okamaos.bluetooth as bt_mod
+import okamaos.parent as parent_mod
+
+
+def cmd_status(args):
+    conf = cfg_mod.get()
+    import platform
+
+    try:
+        with open("/proc/meminfo") as f:
+            meminfo = {l.split(":")[0]: l.split(":")[1].strip()
+                       for l in f if ":" in l}
+        total = meminfo.get("MemTotal", "?")
+        avail = meminfo.get("MemAvailable", "?")
+    except Exception:
+        total = avail = "unavailable"
+
+    installed = games_mod.list_installed()
+
+    active_game = "none"
+    if os.path.exists("/var/run/okama-game.lock"):
+        try:
+            with open("/var/run/okama-game.lock") as f:
+                active_game = f.read().strip() or "unknown"
+        except Exception:
+            active_game = "unknown"
+
+    bt = bt_mod.status()
+
+    print(f"OkamaOS version : {conf.get('VERSION', '?')}")
+    print(f"Kernel          : {platform.release()}")
+    print(f"RAM total       : {total}")
+    print(f"RAM available   : {avail}")
+    print(f"Installed games : {len(installed)}")
+    print(f"Active game     : {active_game}")
+    print(f"Bluetooth       : {bt['powered']}")
+    print(f"Developer mode  : {'yes' if conf.is_dev_mode() else 'no'}")
+
+
+def cmd_list(args):
+    for g in games_mod.list_installed():
+        print(f"  {g['id']:40s} v{g['version']:10s} {g['name']}")
+    if not games_mod.list_installed():
+        print("  (no games installed)")
+
+
+def cmd_install(args):
+    ok_path = args.path
+    conf = cfg_mod.get()
+    dev = conf.is_dev_mode()
+
+    try:
+        manifest = pkg_mod.verify(ok_path, dev_mode=dev)
+    except manifest_mod.ManifestError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    dest = games_mod.game_dir(manifest["id"])
+    if os.path.exists(dest):
+        print(f"Replacing existing install of {manifest['id']}…")
+        shutil.rmtree(dest)
+
+    try:
+        pkg_mod.extract(ok_path, dest)
+        print(f"Installed: {manifest['id']} v{manifest['version']}")
+    except Exception as e:
+        print(f"ERROR during install: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_uninstall(args):
+    dest = games_mod.game_dir(args.game_id)
+    if not os.path.isdir(dest):
+        print(f"Not installed: {args.game_id}", file=sys.stderr)
+        sys.exit(1)
+    shutil.rmtree(dest)
+    print(f"Uninstalled: {args.game_id}")
+
+
+def cmd_run(args):
+    game = games_mod.find_by_id(args.game_id)
+    if not game:
+        print(f"Game not found: {args.game_id}", file=sys.stderr)
+        sys.exit(1)
+    os.execv("/usr/bin/okama-run", ["okama-run", args.game_id])
+
+
+def cmd_verify(args):
+    conf = cfg_mod.get()
+    dev = conf.is_dev_mode()
+    try:
+        m = pkg_mod.verify(args.path, dev_mode=dev)
+        print(f"OK  {m['id']} v{m['version']} — {m['name']}")
+    except manifest_mod.ManifestError as e:
+        print(f"FAIL: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_memory(args):
+    subprocess.call(["/bin/bash", os.path.join(
+        os.path.dirname(__file__), "../../tools/measure-memory.sh")])
+
+
+def cmd_dev(args):
+    conf = cfg_mod.get()
+    if args.action == "enable":
+        if conf.get("PARENT_MODE_ENABLED", "yes") == "yes":
+            pin = input("Enter parent PIN to enable developer mode: ")
+            if not parent_mod.verify_pin(pin):
+                print("Incorrect PIN.", file=sys.stderr)
+                sys.exit(1)
+        conf.set_dev_mode(True)
+        print("Developer mode: ENABLED")
+    elif args.action == "disable":
+        conf.set_dev_mode(False)
+        print("Developer mode: DISABLED")
+
+
+def cmd_parent(args):
+    if args.action == "set-pin":
+        old = input("Current PIN: ")
+        if not parent_mod.verify_pin(old):
+            print("Incorrect PIN.", file=sys.stderr)
+            sys.exit(1)
+        new1 = input("New PIN: ")
+        new2 = input("Confirm new PIN: ")
+        if new1 != new2:
+            print("PINs do not match.", file=sys.stderr)
+            sys.exit(1)
+        parent_mod.set_pin(new1)
+        print("Parent PIN updated.")
+
+
+def cmd_bluetooth(args):
+    action = args.action
+    if action == "status":
+        s = bt_mod.status()
+        print(f"Powered   : {s['powered']}")
+        print(f"Discovering: {s['discovering']}")
+    elif action == "scan":
+        print("Scanning (15 s)…")
+        devices = bt_mod.scan()
+        if devices:
+            for d in devices:
+                print(f"  {d['mac']}  {d['name']}")
+        else:
+            print("  (no devices found)")
+    elif action == "pair":
+        ok = bt_mod.pair(args.mac)
+        print("Paired" if ok else "FAIL: pairing failed")
+        if ok:
+            name = input("Controller name (optional): ")
+            bt_mod.trust(args.mac)
+            bt_mod.save_controller_profile(args.mac, name or "Controller")
+    elif action == "trust":
+        print("Trusted" if bt_mod.trust(args.mac) else "FAIL")
+    elif action == "connect":
+        print("Connected" if bt_mod.connect(args.mac) else "FAIL")
+    elif action == "disconnect":
+        print("Disconnected" if bt_mod.disconnect(args.mac) else "FAIL")
+    elif action == "forget":
+        print("Forgotten" if bt_mod.forget(args.mac) else "FAIL")
+
+
+def cmd_controllers(args):
+    action = args.action
+    if action == "list":
+        trusted = bt_mod.list_trusted()
+        if trusted:
+            for t in trusted:
+                print(f"  {t.get('mac','?'):17s}  {t.get('name','?')}")
+        else:
+            print("  (no paired Bluetooth controllers)")
+        print("  (USB controllers enumerated live by okama-inputd)")
+    elif action == "test":
+        subprocess.call(["/bin/bash", "/usr/local/share/okamaos/../../../tools/controller-test.sh"])
+    elif action == "default":
+        print(f"(stub) Default controller set to: {args.id}")
+
+
+def cmd_poweroff(args):
+    subprocess.call(["poweroff"])
+
+
+def cmd_reboot(args):
+    subprocess.call(["reboot"])
+
+
+def build_parser():
+    p = argparse.ArgumentParser(prog="okama-cli", description="OkamaOS CLI")
+    sub = p.add_subparsers(dest="command", required=True)
+
+    sub.add_parser("status")
+    sub.add_parser("list")
+
+    pi = sub.add_parser("install")
+    pi.add_argument("path")
+
+    pu = sub.add_parser("uninstall")
+    pu.add_argument("game_id")
+
+    pr = sub.add_parser("run")
+    pr.add_argument("game_id")
+
+    pv = sub.add_parser("verify")
+    pv.add_argument("path")
+
+    sub.add_parser("memory")
+    sub.add_parser("poweroff")
+    sub.add_parser("reboot")
+
+    pd = sub.add_parser("dev")
+    pd.add_argument("action", choices=["enable", "disable"])
+
+    pp = sub.add_parser("parent")
+    pp.add_argument("action", choices=["set-pin"])
+
+    pbt = sub.add_parser("bluetooth")
+    pbt.add_argument("action",
+        choices=["status", "scan", "pair", "trust", "connect", "disconnect", "forget"])
+    pbt.add_argument("mac", nargs="?")
+
+    pct = sub.add_parser("controllers")
+    pct.add_argument("action", choices=["list", "test", "default"])
+    pct.add_argument("id", nargs="?")
+
+    return p
+
+
+def main():
+    parser = build_parser()
+    args = parser.parse_args()
+    dispatch = {
+        "status":      cmd_status,
+        "list":        cmd_list,
+        "install":     cmd_install,
+        "uninstall":   cmd_uninstall,
+        "run":         cmd_run,
+        "verify":      cmd_verify,
+        "memory":      cmd_memory,
+        "dev":         cmd_dev,
+        "parent":      cmd_parent,
+        "bluetooth":   cmd_bluetooth,
+        "controllers": cmd_controllers,
+        "poweroff":    cmd_poweroff,
+        "reboot":      cmd_reboot,
+    }
+    dispatch[args.command](args)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,196 @@
+#!/usr/bin/env python3
+"""okama-agent — AI-assisted game creation foundation (MVP: template-based).
+
+Usage:
+  okama-agent new-game
+  okama-agent template list
+  okama-agent template create <name>
+"""
+
+import sys
+import os
+
+_lib = os.environ.get("OKAMA_LIB", "")
+if not _lib:
+    _lib = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../lib")
+sys.path.insert(0, os.path.abspath(_lib))
+
+import argparse
+import json
+import shutil
+import time
+
+TEMPLATES_DIR = os.path.join(
+    os.path.dirname(__file__), "../../usr/share/okamaos/templates"
+)
+TEMPLATES_DIR = os.environ.get("OKAMA_TEMPLATES_DIR",
+    "/usr/share/okamaos/templates")
+GAMES_OUTPUT = os.environ.get("OKAMA_AGENT_OUTPUT", "/tmp/okama-agent-output")
+
+
+BUILTIN_TEMPLATES = {
+    "blank": {
+        "description": "Minimal blank game (controller + SDL2)",
+        "runtime": "okama-sdl2",
+        "entry": "main.py",
+    },
+    "platformer": {
+        "description": "Side-scrolling platformer starter",
+        "runtime": "okama-sdl2",
+        "entry": "main.py",
+    },
+}
+
+
+def cmd_template_list(args):
+    print("Built-in templates:")
+    for name, info in BUILTIN_TEMPLATES.items():
+        print(f"  {name:15s}  {info['description']}")
+
+    custom = []
+    try:
+        for d in os.listdir(TEMPLATES_DIR):
+            if os.path.isdir(os.path.join(TEMPLATES_DIR, d)):
+                custom.append(d)
+    except FileNotFoundError:
+        pass
+
+    if custom:
+        print("Custom templates:")
+        for name in custom:
+            print(f"  {name}")
+
+
+def cmd_template_create(args):
+    name = args.name
+    dest = os.path.join(TEMPLATES_DIR, name)
+    os.makedirs(dest, exist_ok=True)
+
+    manifest = {
+        "name": name.replace("-", " ").title(),
+        "id": f"com.okamalabs.template.{name}",
+        "version": "0.1.0",
+        "runtime": "okama-sdl2",
+        "entry": "main.py",
+        "min_ram_mb": 64,
+        "target_fps": 30,
+        "permissions": ["controller", "audio"],
+        "age_rating": "Everyone",
+        "supports_save_state": False,
+        "controller_required": True,
+        "keyboard_usage": "none",
+    }
+    with open(os.path.join(dest, "manifest.ok.json"), "w") as f:
+        json.dump(manifest, f, indent=2)
+
+    with open(os.path.join(dest, "main.py"), "w") as f:
+        f.write('# Template: ' + name + '\n')
+        f.write('print("Hello from ' + name + '")\n')
+
+    print(f"Created template: {dest}")
+
+
+def cmd_new_game(args):
+    print("OkamaOS Game Creator")
+    print("=" * 40)
+    cmd_template_list(args)
+
+    template = input("\nChoose template (blank): ").strip() or "blank"
+    game_name = input("Game name: ").strip()
+    publisher = input("Publisher ID (e.g. com.mygame): ").strip() or "com.okamalabs"
+
+    if not game_name:
+        print("Game name required.", file=sys.stderr)
+        sys.exit(1)
+
+    safe_name = game_name.lower().replace(" ", "-")
+    game_id = f"{publisher}.{safe_name}"
+    ts = int(time.time())
+    output_dir = os.path.join(GAMES_OUTPUT, safe_name)
+    os.makedirs(output_dir, exist_ok=True)
+
+    template_src = os.path.join(TEMPLATES_DIR, template)
+    if os.path.isdir(template_src):
+        shutil.copytree(template_src, output_dir, dirs_exist_ok=True)
+    else:
+        _scaffold_blank(output_dir)
+
+    manifest = {
+        "name": game_name,
+        "id": game_id,
+        "version": "0.1.0",
+        "runtime": "okama-sdl2",
+        "entry": "main.py",
+        "min_ram_mb": 64,
+        "target_fps": 30,
+        "permissions": ["controller", "audio"],
+        "age_rating": "Everyone",
+        "supports_save_state": False,
+        "controller_required": True,
+        "keyboard_usage": "none",
+    }
+    with open(os.path.join(output_dir, "manifest.ok.json"), "w") as f:
+        json.dump(manifest, f, indent=2)
+
+    print(f"\nGame scaffold created: {output_dir}")
+    print(f"  id      : {game_id}")
+    print(f"  entry   : main.py")
+    print(f"\nBuild it with:")
+    print(f"  okama-pack build {output_dir}")
+    print(f"\nFuture: okama-agent will accept natural language prompts to")
+    print(f"  generate game logic, assets, and controller mappings via AI API.")
+
+
+def _scaffold_blank(dest: str) -> None:
+    with open(os.path.join(dest, "main.py"), "w") as f:
+        f.write(
+            "import sys, os\n"
+            "sys.path.insert(0, '/usr/lib/okamaos')\n"
+            "from okamaos.input_protocol import InputClient\n"
+            "import pygame\n\n"
+            "def main():\n"
+            "    pygame.init()\n"
+            "    screen = pygame.display.set_mode((640, 480))\n"
+            "    clock = pygame.time.Clock()\n"
+            "    running = True\n"
+            "    while running:\n"
+            "        for event in pygame.event.get():\n"
+            "            if event.type == pygame.QUIT:\n"
+            "                running = False\n"
+            "        screen.fill((20, 20, 40))\n"
+            "        pygame.display.flip()\n"
+            "        clock.tick(30)\n"
+            "    pygame.quit()\n\n"
+            "if __name__ == '__main__':\n"
+            "    main()\n"
+        )
+    os.makedirs(os.path.join(dest, "assets"), exist_ok=True)
+
+
+def main():
+    p = argparse.ArgumentParser(prog="okama-agent",
+        description="OkamaOS AI game creation agent (MVP: templates)")
+    sub = p.add_subparsers(dest="command", required=True)
+
+    sub.add_parser("new-game")
+
+    pt = sub.add_parser("template")
+    tsub = pt.add_subparsers(dest="template_action", required=True)
+    tsub.add_parser("list")
+
+    tc = tsub.add_parser("create")
+    tc.add_argument("name")
+
+    args = p.parse_args()
+
+    if args.command == "new-game":
+        cmd_new_game(args)
+    elif args.command == "template":
+        if args.template_action == "list":
+            cmd_template_list(args)
+        elif args.template_action == "create":
+            cmd_template_create(args)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,65 @@
+{
+  "_comment": "Controller button mapping profiles for okama-inputd. These translate raw evdev codes into the Okama unified input protocol.",
+  "version": "1",
+  "profiles": [
+    {
+      "id": "generic-usb-hid",
+      "name": "Generic USB HID Gamepad",
+      "match": { "bus": "usb", "vendor": "*", "product": "*" },
+      "buttons": {
+        "BTN_SOUTH": "A",
+        "BTN_EAST":  "B",
+        "BTN_WEST":  "X",
+        "BTN_NORTH": "Y",
+        "BTN_TL":    "L1",
+        "BTN_TR":    "R1",
+        "BTN_TL2":   "L2",
+        "BTN_TR2":   "R2",
+        "BTN_START": "START",
+        "BTN_SELECT":"SELECT",
+        "BTN_MODE":  "HOME"
+      },
+      "axes": {
+        "ABS_X":  "LSTICK_X",
+        "ABS_Y":  "LSTICK_Y",
+        "ABS_RX": "RSTICK_X",
+        "ABS_RY": "RSTICK_Y",
+        "ABS_HAT0X": "DPAD_X",
+        "ABS_HAT0Y": "DPAD_Y"
+      }
+    },
+    {
+      "id": "xpad-usb",
+      "name": "Xbox Controller (USB / xpad driver)",
+      "match": { "bus": "usb", "vendor": "045e", "product": "*" },
+      "extends": "generic-usb-hid",
+      "buttons": {
+        "BTN_MODE": "HOME"
+      }
+    },
+    {
+      "id": "dualshock4-bt",
+      "name": "DualShock 4 / DualSense (Bluetooth)",
+      "match": { "bus": "bluetooth", "vendor": "054c", "product": "*" },
+      "extends": "generic-usb-hid",
+      "buttons": {
+        "BTN_SOUTH": "A",
+        "BTN_EAST":  "B",
+        "BTN_WEST":  "X",
+        "BTN_NORTH": "Y",
+        "BTN_PS":    "HOME",
+        "BTN_TOUCHPAD": "TOUCH"
+      }
+    }
+  ],
+  "keyboard_fallback": {
+    "_comment": "Used ONLY in developer mode or text-entry fields.",
+    "KEY_UP":    "DPAD_UP",
+    "KEY_DOWN":  "DPAD_DOWN",
+    "KEY_LEFT":  "DPAD_LEFT",
+    "KEY_RIGHT": "DPAD_RIGHT",
+    "KEY_ENTER": "A",
+    "KEY_ESC":   "B",
+    "KEY_Q":     "QUIT"
+  }
+}

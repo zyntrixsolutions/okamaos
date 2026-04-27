@@ -1,0 +1,17 @@
+# OkamaOS inittab — console-grade boot, no login prompt in normal mode.
+#
+# Format: <id>:<runlevels>:<action>:<process>
+
+# Mount filesystems and run /etc/init.d/* via BusyBox sysv compat.
+::sysinit:/etc/init.d/rcS
+
+# In *normal* mode we do NOT spawn a getty on tty1; the okama-shell takes it.
+# A getty is only available on tty2 as an emergency console — and only if
+# developer mode is enabled (S99okama-shell guards this).
+tty2::respawn:/sbin/getty -L tty2 0 vt100
+
+# Stuff to do before rebooting
+::shutdown:/etc/init.d/rcK
+::shutdown:/sbin/swapoff -a
+::shutdown:/bin/umount -a -r
+::ctrlaltdel:/sbin/reboot

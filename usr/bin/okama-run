@@ -1,0 +1,176 @@
+#!/usr/bin/env python3
+"""okama-run — strict game launcher for OkamaOS.
+
+Only one game may run at a time. Enforces the lock file, validates the
+manifest, stops non-essential services, launches the game fullscreen,
+waits for exit, recovers from crashes, and returns to okama-shell.
+
+Usage:
+  okama-run <game_id>
+  okama-run <game_id> --no-suspend
+"""
+
+import sys
+import os
+
+_lib = os.environ.get("OKAMA_LIB", "")
+if not _lib:
+    _lib = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../lib")
+sys.path.insert(0, os.path.abspath(_lib))
+
+import argparse
+import json
+import subprocess
+import signal
+import time
+import traceback
+import shutil
+
+import okamaos.config as cfg_mod
+import okamaos.games as games_mod
+import okamaos.manifest as manifest_mod
+
+LOCK_FILE = "/var/run/okama-game.lock"
+LOG_DIR = "/var/okamaos/logs"
+
+SUSPEND_SERVICES = [
+    "S40okama-network",
+]
+
+
+def acquire_lock(game_id: str) -> None:
+    if os.path.exists(LOCK_FILE):
+        with open(LOCK_FILE) as f:
+            current = f.read().strip()
+        print(f"ERROR: Game already running: {current}", file=sys.stderr)
+        sys.exit(1)
+    with open(LOCK_FILE, "w") as f:
+        f.write(game_id)
+
+
+def release_lock() -> None:
+    try:
+        os.remove(LOCK_FILE)
+    except FileNotFoundError:
+        pass
+
+
+def suspend_services() -> None:
+    for svc in SUSPEND_SERVICES:
+        path = f"/etc/init.d/{svc}"
+        if os.path.exists(path):
+            subprocess.call([path, "stop"],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def resume_services() -> None:
+    for svc in reversed(SUSPEND_SERVICES):
+        path = f"/etc/init.d/{svc}"
+        if os.path.exists(path):
+            subprocess.call([path, "start"],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def build_launch_cmd(manifest: dict, game_dir: str) -> list:
+    runtime = manifest["runtime"]
+    entry = os.path.join(game_dir, manifest["entry"])
+
+    if runtime in ("okama-lite", "okama-python", "okama-sdl2"):
+        return [sys.executable, entry]
+    else:
+        raise ValueError(f"Unknown runtime: {runtime}")
+
+
+def save_crash_log(game_id: str, returncode: int, stderr_out: str) -> str:
+    os.makedirs(LOG_DIR, exist_ok=True)
+    ts = int(time.time())
+    path = os.path.join(LOG_DIR, f"crash_{game_id}_{ts}.log")
+    with open(path, "w") as f:
+        f.write(f"game_id    : {game_id}\n")
+        f.write(f"returncode : {returncode}\n")
+        f.write(f"timestamp  : {ts}\n\n")
+        f.write(stderr_out or "")
+    return path
+
+
+def main():
+    p = argparse.ArgumentParser(prog="okama-run")
+    p.add_argument("game_id")
+    p.add_argument("--no-suspend", action="store_true")
+    args = p.parse_args()
+
+    conf = cfg_mod.get()
+    dev = conf.is_dev_mode()
+
+    game_id = args.game_id
+    game_dir = games_mod.game_dir(game_id)
+    manifest_path = os.path.join(game_dir, "manifest.ok.json")
+
+    if not os.path.isdir(game_dir):
+        print(f"Game not installed: {game_id}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        manifest = manifest_mod.load_and_validate(manifest_path, dev_mode=dev)
+    except manifest_mod.ManifestError as e:
+        print(f"Manifest error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    acquire_lock(game_id)
+
+    if not args.no_suspend:
+        suspend_services()
+
+    env = os.environ.copy()
+    env["PYTHONPATH"] = "/usr/lib/okamaos"
+    env["OKAMA_GAME_ID"] = game_id
+    env["OKAMA_GAME_DIR"] = game_dir
+    env["SDL_VIDEODRIVER"] = "fbcon"
+    env["SDL_FBDEV"] = conf.get("FRAMEBUFFER_DEVICE", "/dev/fb0")
+    env["SDL_AUDIODRIVER"] = "alsa"
+
+    try:
+        cmd = build_launch_cmd(manifest, game_dir)
+    except ValueError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        release_lock()
+        sys.exit(1)
+
+    print(f"Launching: {manifest['name']} ({game_id})")
+    log_path = os.path.join(LOG_DIR, f"{game_id}.log")
+    os.makedirs(LOG_DIR, exist_ok=True)
+
+    proc = None
+    exit_code = 0
+    stderr_out = ""
+    try:
+        with open(log_path, "w") as log_f:
+            proc = subprocess.Popen(
+                cmd,
+                cwd=game_dir,
+                env=env,
+                stdout=log_f,
+                stderr=subprocess.PIPE,
+            )
+            _, stderr_bytes = proc.communicate()
+            exit_code = proc.returncode
+            stderr_out = (stderr_bytes or b"").decode(errors="replace")
+    except Exception:
+        stderr_out = traceback.format_exc()
+        exit_code = -1
+
+    if not args.no_suspend:
+        resume_services()
+
+    release_lock()
+
+    if exit_code != 0:
+        crash_log = save_crash_log(game_id, exit_code, stderr_out)
+        print(f"Game exited with code {exit_code}. Crash log: {crash_log}")
+        print("Returning to OkamaOS shell…")
+    else:
+        print(f"Game finished cleanly. Returning to OkamaOS shell…")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,15 @@
+{
+  "name": "Okama Demo Game",
+  "id": "com.okamalabs.demo",
+  "version": "0.1.0",
+  "runtime": "okama-sdl2",
+  "entry": "main.py",
+  "min_ram_mb": 48,
+  "target_fps": 30,
+  "permissions": ["controller", "audio", "save_data"],
+  "age_rating": "Everyone",
+  "supports_save_state": true,
+  "controller_required": true,
+  "keyboard_usage": "none",
+  "description": "OkamaOS reference demo game. Controller-first. Shows sprite movement, pause screen, save state, and clean exit back to shell."
+}

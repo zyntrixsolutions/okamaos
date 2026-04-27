@@ -1,0 +1,32 @@
+# OkamaOS .gitignore
+
+# Buildroot clone and build artifacts
+buildroot/
+output/
+build/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+*.egg-info/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~
+
+# Test artifacts
+/tmp/
+
+# Secrets — never commit these
+/etc/okamaos/parent.conf
+board/okamaos/rootfs-overlay/etc/okamaos/parent.conf
+
+# OS
+.DS_Store
+Thumbs.db

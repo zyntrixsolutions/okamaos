@@ -1,0 +1,1 @@
+source "$BR2_EXTERNAL_OKAMAOS_PATH/package/okama-runtime/Config.in"

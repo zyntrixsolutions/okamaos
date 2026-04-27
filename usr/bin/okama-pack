@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+"""okama-pack — build, inspect, and verify .ok game packages.
+
+Usage:
+  okama-pack build  <game_dir> [--output path.ok]
+  okama-pack inspect <file.ok>
+  okama-pack verify  <file.ok>
+"""
+
+import sys
+import os
+
+_lib = os.environ.get("OKAMA_LIB", "")
+if not _lib:
+    _lib = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../lib")
+sys.path.insert(0, os.path.abspath(_lib))
+
+import argparse
+import json
+import okamaos.config as cfg_mod
+import okamaos.package as pkg_mod
+import okamaos.manifest as manifest_mod
+
+
+def cmd_build(args):
+    conf = cfg_mod.get()
+    dev = conf.is_dev_mode()
+
+    source = os.path.abspath(args.game_dir)
+    if args.output:
+        out = args.output
+    else:
+        name = os.path.basename(source.rstrip("/"))
+        out = f"{name}.ok"
+
+    try:
+        result = pkg_mod.build(source, out, dev_mode=dev)
+        size_kb = os.path.getsize(result) // 1024
+        print(f"Built: {result}  ({size_kb} KB)")
+    except manifest_mod.ManifestError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_inspect(args):
+    try:
+        m = pkg_mod.inspect(args.ok_file)
+        print(json.dumps(m, indent=2))
+    except Exception as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_verify(args):
+    conf = cfg_mod.get()
+    dev = conf.is_dev_mode()
+    try:
+        m = pkg_mod.verify(args.ok_file, dev_mode=dev)
+        print(f"OK  {m['id']} v{m['version']} — {m['name']}")
+        print(f"    runtime     : {m['runtime']}")
+        print(f"    entry       : {m['entry']}")
+        print(f"    age_rating  : {m.get('age_rating','?')}")
+        print(f"    controller  : {'required' if m.get('controller_required',True) else 'optional'}")
+        print(f"    keyboard    : {m.get('keyboard_usage','none')}")
+    except manifest_mod.ManifestError as e:
+        print(f"FAIL: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def main():
+    p = argparse.ArgumentParser(prog="okama-pack",
+        description="OkamaOS .ok package tool")
+    sub = p.add_subparsers(dest="command", required=True)
+
+    pb = sub.add_parser("build")
+    pb.add_argument("game_dir")
+    pb.add_argument("--output", "-o", default="")
+
+    pi = sub.add_parser("inspect")
+    pi.add_argument("ok_file")
+
+    pv = sub.add_parser("verify")
+    pv.add_argument("ok_file")
+
+    args = p.parse_args()
+    {"build": cmd_build, "inspect": cmd_inspect, "verify": cmd_verify}[args.command](args)
+
+
+if __name__ == "__main__":
+    main()

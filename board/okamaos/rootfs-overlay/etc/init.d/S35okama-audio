@@ -1,0 +1,27 @@
+#!/bin/sh
+# S35okama-audio — initialize ALSA and unmute master channel.
+
+case "$1" in
+  start)
+    if which amixer >/dev/null 2>&1; then
+        echo "Initializing ALSA audio..."
+        alsactl init 2>/dev/null || true
+        CONF=/etc/okamaos/okama.conf
+        VOL=80
+        if [ -f "$CONF" ]; then
+            VOL=$(grep '^DEFAULT_VOLUME=' "$CONF" | cut -d= -f2 | tr -d '[:space:]')
+        fi
+        amixer sset Master "${VOL}%" unmute 2>/dev/null || true
+        amixer sset PCM   "${VOL}%" unmute 2>/dev/null || true
+    else
+        echo "amixer not found — audio init skipped."
+    fi
+    ;;
+  stop)
+    alsactl store 2>/dev/null || true
+    ;;
+  *)
+    echo "Usage: $0 {start|stop}"
+    exit 1
+    ;;
+esac

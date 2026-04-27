@@ -1,0 +1,27 @@
+#!/bin/sh
+# S20okama-devices — device node setup via eudev (udevd).
+# Falls back to mdev (BusyBox) if eudev is absent.
+
+case "$1" in
+  start)
+    if which udevd >/dev/null 2>&1; then
+        echo "Starting eudev..."
+        udevd --daemon
+        udevadm trigger --action=add
+        udevadm settle --timeout=5
+    elif which mdev >/dev/null 2>&1; then
+        echo "Starting mdev (fallback)..."
+        echo /sbin/mdev > /proc/sys/kernel/hotplug
+        mdev -s
+    else
+        echo "WARNING: no device manager found. USB hotplug will not work."
+    fi
+    ;;
+  stop)
+    killall udevd 2>/dev/null || true
+    ;;
+  *)
+    echo "Usage: $0 {start|stop}"
+    exit 1
+    ;;
+esac

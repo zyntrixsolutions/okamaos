@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+"""okama-store — OkamaOS game store client (MVP: stub).
+
+Usage:
+  okama-store browse
+  okama-store search <query>
+  okama-store download <game_id>
+  okama-store featured
+"""
+
+import sys
+import os
+
+_lib = os.environ.get("OKAMA_LIB", "")
+if not _lib:
+    _lib = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../lib")
+sys.path.insert(0, os.path.abspath(_lib))
+
+import argparse
+
+STORE_URL = "https://store.okamalabs.com/v1"
+
+
+def _stub(name: str) -> None:
+    print(f"okama-store {name}: store not yet live in MVP.")
+    print(f"  Store endpoint: {STORE_URL}")
+    print("  v1 design:")
+    print("    - Authenticated browsing with parent-managed account")
+    print("    - Age-filtered game listing")
+    print("    - One-tap download and install via .ok packages")
+    print("    - Parent approval for purchases")
+    print("    - Signed packages only (no sideload from store)")
+
+
+def main():
+    p = argparse.ArgumentParser(prog="okama-store",
+                                description="OkamaOS game store")
+    sub = p.add_subparsers(dest="command", required=True)
+    sub.add_parser("browse")
+    sub.add_parser("featured")
+    ps = sub.add_parser("search")
+    ps.add_argument("query")
+    pd = sub.add_parser("download")
+    pd.add_argument("game_id")
+
+    args = p.parse_args()
+    _stub(args.command)
+
+
+if __name__ == "__main__":
+    main()

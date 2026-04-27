@@ -1,0 +1,33 @@
+#!/bin/sh
+# S10okama-mounts — mount required filesystems.
+# Runs early in boot before any OkamaOS service.
+
+case "$1" in
+  start)
+    echo "Mounting OkamaOS filesystems..."
+
+    mount -t proc  none /proc  2>/dev/null || true
+    mount -t sysfs none /sys   2>/dev/null || true
+    mount -t devtmpfs none /dev 2>/dev/null || true
+    mkdir -p /dev/pts
+    mount -t devpts none /dev/pts 2>/dev/null || true
+
+    # tmpfs for run-time state
+    mkdir -p /run /var/run /var/lock
+    mount -t tmpfs -o size=32m tmpfs /run 2>/dev/null || true
+
+    # /var/okamaos lives on the data partition; ensure dirs exist
+    mkdir -p /var/okamaos/games \
+             /var/okamaos/saves \
+             /var/okamaos/logs  \
+             /var/okamaos/cache \
+             /var/okamaos/controllers \
+             /var/okamaos/updates
+    ;;
+  stop)
+    ;;
+  *)
+    echo "Usage: $0 {start|stop}"
+    exit 1
+    ;;
+esac

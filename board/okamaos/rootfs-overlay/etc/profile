@@ -1,0 +1,21 @@
+# OkamaOS /etc/profile
+# Loaded only for interactive login shells (developer mode / emergency getty).
+# Normal users never see this — okama-shell replaces the login flow.
+
+export PATH="/usr/bin:/usr/sbin:/bin:/sbin"
+export PYTHONPATH="/usr/lib/okamaos"
+export OKAMAOS_VERSION="0.1.0"
+export OKAMA_LOG="/var/okamaos/logs"
+export OKAMA_GAMES="/var/okamaos/games"
+export OKAMA_SAVES="/var/okamaos/saves"
+
+# Developer prompt — only reached in dev mode
+PS1="[OkamaOS-DEV] \u@\h:\w\$ "
+
+if [ -f /etc/okamaos/devmode.conf ]; then
+    echo ""
+    echo "  OkamaOS Developer Shell"
+    echo "  Run 'okama-cli status' to see system state."
+    echo "  Run 'exit' to return to okama-shell."
+    echo ""
+fi

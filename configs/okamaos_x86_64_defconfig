@@ -1,0 +1,85 @@
+# OkamaOS x86_64 defconfig (Buildroot)
+#
+# This is a minimal, console-grade base. It pulls Linux + BusyBox + Python3 +
+# SDL2/pygame stack + ALSA + BlueZ. No X11, no Wayland, no desktop shells.
+#
+# Place this file at $(BR_DIR)/configs/okamaos_x86_64_defconfig (the root
+# Makefile copies it for you), then run:
+#   make -C buildroot O=output okamaos_x86_64_defconfig
+
+# --- Architecture ---
+BR2_x86_64=y
+BR2_x86_nocona=y
+
+# --- Toolchain ---
+BR2_TOOLCHAIN_BUILDROOT_GLIBC=y
+BR2_TOOLCHAIN_BUILDROOT_CXX=y
+
+# --- Init / system ---
+BR2_INIT_BUSYBOX=y
+BR2_SYSTEM_BIN_SH_BASH=y
+BR2_TARGET_GENERIC_HOSTNAME="okamaos"
+BR2_TARGET_GENERIC_ISSUE="OkamaOS"
+BR2_TARGET_GENERIC_GETTY_PORT="tty2"
+BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_OKAMAOS_PATH)/board/okamaos/rootfs-overlay"
+BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_OKAMAOS_PATH)/board/okamaos/post-build.sh"
+BR2_ROOTFS_POST_IMAGE_SCRIPT="$(BR2_EXTERNAL_OKAMAOS_PATH)/board/okamaos/post-image.sh"
+
+# --- Kernel ---
+BR2_LINUX_KERNEL=y
+BR2_LINUX_KERNEL_CUSTOM_VERSION=y
+BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="6.6.30"
+BR2_LINUX_KERNEL_USE_CUSTOM_CONFIG=y
+BR2_LINUX_KERNEL_CUSTOM_CONFIG_FILE="$(BR2_EXTERNAL_OKAMAOS_PATH)/board/okamaos/linux.config"
+BR2_LINUX_KERNEL_BZIMAGE=y
+
+# --- BusyBox ---
+BR2_PACKAGE_BUSYBOX_CONFIG="$(BR2_EXTERNAL_OKAMAOS_PATH)/board/okamaos/busybox.config"
+
+# --- Filesystem ---
+BR2_TARGET_ROOTFS_EXT2=y
+BR2_TARGET_ROOTFS_EXT2_4=y
+BR2_TARGET_ROOTFS_SQUASHFS=y
+
+# --- Bootloader ---
+BR2_TARGET_SYSLINUX=y
+BR2_TARGET_SYSLINUX_ISOLINUX=y
+
+# --- Python + game runtime ---
+BR2_PACKAGE_PYTHON3=y
+BR2_PACKAGE_PYTHON3_PY_PYC=y
+BR2_PACKAGE_PYTHON_PYGAME=y
+BR2_PACKAGE_SDL2=y
+BR2_PACKAGE_SDL2_IMAGE=y
+BR2_PACKAGE_SDL2_MIXER=y
+BR2_PACKAGE_SDL2_TTF=y
+
+# --- Input / device handling ---
+BR2_PACKAGE_EUDEV=y
+BR2_PACKAGE_LIBEVDEV=y
+BR2_PACKAGE_LIBINPUT=y
+BR2_PACKAGE_EVTEST=y
+BR2_PACKAGE_JOYSTICK=y
+
+# --- Bluetooth ---
+BR2_PACKAGE_BLUEZ5_UTILS=y
+BR2_PACKAGE_BLUEZ5_UTILS_CLIENT=y
+BR2_PACKAGE_BLUEZ5_UTILS_OBEX=n
+BR2_PACKAGE_BLUEZ5_UTILS_DEPRECATED=y
+
+# --- Audio ---
+BR2_PACKAGE_ALSA_LIB=y
+BR2_PACKAGE_ALSA_UTILS=y
+
+# --- Networking ---
+BR2_PACKAGE_DROPBEAR=y
+BR2_PACKAGE_DROPBEAR_DISABLE_REVERSEDNS=y
+BR2_PACKAGE_IW=y
+BR2_PACKAGE_WPA_SUPPLICANT=y
+BR2_PACKAGE_DHCPCD=y
+
+# --- Compression for .ok packages ---
+BR2_PACKAGE_ZSTD=y
+
+# --- OkamaOS userland (BR2_EXTERNAL package) ---
+BR2_PACKAGE_OKAMA_RUNTIME=y

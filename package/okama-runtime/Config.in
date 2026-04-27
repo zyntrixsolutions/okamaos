@@ -1,0 +1,8 @@
+config BR2_PACKAGE_OKAMA_RUNTIME
+	bool "okama-runtime (OkamaOS userland)"
+	default y
+	select BR2_PACKAGE_PYTHON3
+	help
+	  OkamaOS userland: okama-shell, okama-cli, okama-run, okama-pack,
+	  okama-inputd, okama-agent, okama-store, okama-update,
+	  okama-snapshot.

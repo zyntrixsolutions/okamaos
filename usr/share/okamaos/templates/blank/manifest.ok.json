@@ -1,0 +1,14 @@
+{
+  "name": "Blank Game",
+  "id": "com.okamalabs.template.blank",
+  "version": "0.1.0",
+  "runtime": "okama-sdl2",
+  "entry": "main.py",
+  "min_ram_mb": 48,
+  "target_fps": 30,
+  "permissions": ["controller", "audio"],
+  "age_rating": "Everyone",
+  "supports_save_state": false,
+  "controller_required": true,
+  "keyboard_usage": "none"
+}

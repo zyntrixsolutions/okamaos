@@ -1,0 +1,362 @@
+#!/usr/bin/env python3
+"""okama-inputd — OkamaOS controller input daemon.
+
+Reads raw evdev events from USB and Bluetooth HID gamepads, normalises them
+through the controller profile map, and broadcasts Okama unified input events
+as newline-delimited JSON to a Unix domain socket.
+
+Architecture:
+  - One thread per /dev/input/eventN device
+  - Main thread accepts socket connections and fans out events to all clients
+  - Hot-plug handled via inotify on /dev/input (or polling fallback)
+  - Keyboard treated as secondary; only emits events in dev/fallback mode
+
+Usage (daemon mode — called by init script):
+  okama-inputd --daemon
+
+Usage (interactive test):
+  okama-inputd --test
+"""
+
+import sys
+import os
+
+_lib = os.environ.get("OKAMA_LIB", "")
+if not _lib:
+    _lib = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../lib")
+sys.path.insert(0, os.path.abspath(_lib))
+
+import argparse
+import json
+import socket
+import threading
+import time
+import struct
+import glob
+import select
+import logging
+
+from okamaos.input_protocol import SOCKET_PATH, BUTTONS, AXES
+import okamaos.config as cfg_mod
+
+LOG_PATH = "/var/okamaos/logs/okama-inputd.log"
+
+logging.basicConfig(
+    level=logging.WARNING,
+    format="%(asctime)s [okama-inputd] %(levelname)s %(message)s",
+    handlers=[logging.StreamHandler(sys.stderr)],
+)
+log = logging.getLogger("okama-inputd")
+
+# evdev event struct: (time_sec, time_usec, type, code, value)  — 24 bytes
+EVFMT = "llHHi"
+EVSIZE = struct.calcsize(EVFMT)
+
+EV_SYN  = 0
+EV_KEY  = 1
+EV_ABS  = 3
+EV_MSC  = 4
+
+# evdev ABS axis indices
+ABS_X    = 0
+ABS_Y    = 1
+ABS_RX   = 3
+ABS_RY   = 4
+ABS_HAT0X = 16
+ABS_HAT0Y = 17
+ABS_Z    = 2   # L2 trigger
+ABS_RZ   = 5   # R2 trigger
+
+BTN_A      = 0x130  # BTN_SOUTH
+BTN_B      = 0x131  # BTN_EAST
+BTN_X      = 0x133  # BTN_WEST (note: raw codes vary by driver)
+BTN_Y      = 0x134  # BTN_NORTH
+BTN_TL     = 0x136
+BTN_TR     = 0x137
+BTN_TL2    = 0x138
+BTN_TR2    = 0x139
+BTN_SELECT = 0x13a
+BTN_START  = 0x13b
+BTN_MODE   = 0x13c  # HOME / Guide
+
+BUTTON_MAP = {
+    0x130: "A",
+    0x131: "B",
+    0x133: "X",
+    0x134: "Y",
+    0x136: "L1",
+    0x137: "R1",
+    0x138: "L2",
+    0x139: "R2",
+    0x13a: "SELECT",
+    0x13b: "START",
+    0x13c: "HOME",
+    0x13d: "L3",
+    0x13e: "R3",
+}
+
+AXIS_MAP = {
+    ABS_X:    ("LSTICK_X", False),
+    ABS_Y:    ("LSTICK_Y", True),
+    ABS_RX:   ("RSTICK_X", False),
+    ABS_RY:   ("RSTICK_Y", True),
+    ABS_Z:    ("L2_AXIS",  False),
+    ABS_RZ:   ("R2_AXIS",  False),
+}
+
+HAT_MAP = {
+    ABS_HAT0X: ("DPAD_LEFT", "DPAD_RIGHT"),
+    ABS_HAT0Y: ("DPAD_UP",   "DPAD_DOWN"),
+}
+
+
+def normalise_axis(raw: int, inverted: bool = False) -> float:
+    """Map raw evdev axis value (0–255 or –32768–32767) to –1.0..1.0."""
+    if raw > 127:
+        v = (raw - 128) / 127.0
+    elif raw < 0:
+        v = raw / 32768.0
+    else:
+        v = raw / 128.0 - 1.0
+    if inverted:
+        v = -v
+    if abs(v) < 0.08:
+        v = 0.0
+    return round(v, 3)
+
+
+class ControllerThread(threading.Thread):
+    def __init__(self, path: str, controller_id: int,
+                 broadcast_fn, disconnect_fn):
+        super().__init__(daemon=True)
+        self.path = path
+        self.controller_id = controller_id
+        self.broadcast = broadcast_fn
+        self.disconnect_fn = disconnect_fn
+        self._stop = threading.Event()
+
+    def run(self):
+        try:
+            fd = open(self.path, "rb")
+        except (PermissionError, FileNotFoundError) as e:
+            log.warning("Cannot open %s: %s", self.path, e)
+            return
+
+        name = self._read_name(fd)
+        log.info("Controller %d connected: %s (%s)",
+                 self.controller_id, name, self.path)
+        self.broadcast({
+            "type": "connect",
+            "controller": self.controller_id,
+            "name": name,
+            "bus": "usb",
+            "path": self.path,
+        })
+
+        try:
+            while not self._stop.is_set():
+                r, _, _ = select.select([fd], [], [], 0.1)
+                if not r:
+                    continue
+                data = fd.read(EVSIZE)
+                if len(data) < EVSIZE:
+                    break
+                _, _, ev_type, code, value = struct.unpack(EVFMT, data)
+                self._handle(ev_type, code, value)
+        except OSError:
+            pass
+        finally:
+            fd.close()
+            log.info("Controller %d disconnected.", self.controller_id)
+            self.broadcast({
+                "type": "disconnect",
+                "controller": self.controller_id,
+            })
+            self.disconnect_fn(self.controller_id)
+
+    def _handle(self, ev_type: int, code: int, value: int):
+        if ev_type == EV_KEY:
+            btn = BUTTON_MAP.get(code)
+            if btn:
+                self.broadcast({
+                    "type": "button",
+                    "button": btn,
+                    "state": "pressed" if value else "released",
+                    "controller": self.controller_id,
+                })
+        elif ev_type == EV_ABS:
+            if code in AXIS_MAP:
+                axis_name, inverted = AXIS_MAP[code]
+                self.broadcast({
+                    "type": "axis",
+                    "axis": axis_name,
+                    "value": normalise_axis(value, inverted),
+                    "controller": self.controller_id,
+                })
+            elif code in HAT_MAP:
+                neg_btn, pos_btn = HAT_MAP[code]
+                if value < 0:
+                    self.broadcast({"type": "button", "button": neg_btn,
+                                    "state": "pressed", "controller": self.controller_id})
+                elif value > 0:
+                    self.broadcast({"type": "button", "button": pos_btn,
+                                    "state": "pressed", "controller": self.controller_id})
+                else:
+                    for btn in (neg_btn, pos_btn):
+                        self.broadcast({"type": "button", "button": btn,
+                                        "state": "released", "controller": self.controller_id})
+
+    def _read_name(self, fd) -> str:
+        import fcntl
+        EVIOCGNAME = 0x80ff4506
+        buf = bytearray(256)
+        try:
+            fcntl.ioctl(fd, EVIOCGNAME, buf)
+            return buf.decode(errors="replace").rstrip("\x00").strip()
+        except Exception:
+            return os.path.basename(self.path)
+
+    def stop(self):
+        self._stop.set()
+
+
+class InputDaemon:
+    def __init__(self, dev_mode: bool = False):
+        self.dev_mode = dev_mode
+        self._clients: list = []
+        self._clients_lock = threading.Lock()
+        self._controllers: dict = {}   # id -> ControllerThread
+        self._next_id = 0
+        self._id_lock = threading.Lock()
+        self._stop = threading.Event()
+
+    def broadcast(self, event: dict) -> None:
+        line = (json.dumps(event) + "\n").encode()
+        with self._clients_lock:
+            dead = []
+            for conn in self._clients:
+                try:
+                    conn.sendall(line)
+                except OSError:
+                    dead.append(conn)
+            for c in dead:
+                self._clients.remove(c)
+
+    def _on_disconnect(self, controller_id: int) -> None:
+        with self._id_lock:
+            self._controllers.pop(controller_id, None)
+
+    def _next_controller_id(self) -> int:
+        with self._id_lock:
+            cid = self._next_id
+            self._next_id += 1
+        return cid
+
+    def _scan_devices(self):
+        """Enumerate /dev/input/event* and start a thread per new gamepad."""
+        existing_paths = {t.path for t in self._controllers.values()}
+        for path in sorted(glob.glob("/dev/input/event*")):
+            if path in existing_paths:
+                continue
+            if not self._is_gamepad(path):
+                continue
+            cid = self._next_controller_id()
+            t = ControllerThread(
+                path, cid, self.broadcast, self._on_disconnect)
+            self._controllers[cid] = t
+            t.start()
+
+    def _is_gamepad(self, path: str) -> bool:
+        """Return True if the device looks like a joystick/gamepad."""
+        EV_ABS_bit = 1 << EV_ABS
+        EV_KEY_bit = 1 << EV_KEY
+        import fcntl
+        EVIOCGBIT_EV = 0x80084520
+        try:
+            with open(path, "rb") as fd:
+                buf = bytearray(4)
+                fcntl.ioctl(fd, EVIOCGBIT_EV, buf)
+                bits = struct.unpack("<I", buf)[0]
+                return bool(bits & EV_ABS_bit) and bool(bits & EV_KEY_bit)
+        except Exception:
+            return False
+
+    def run_server(self):
+        if os.path.exists(SOCKET_PATH):
+            os.remove(SOCKET_PATH)
+        os.makedirs(os.path.dirname(SOCKET_PATH), exist_ok=True)
+        srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        srv.bind(SOCKET_PATH)
+        srv.listen(8)
+        srv.setblocking(False)
+        log.info("okama-inputd listening on %s", SOCKET_PATH)
+
+        last_scan = 0.0
+        while not self._stop.is_set():
+            now = time.time()
+            if now - last_scan > 2.0:
+                self._scan_devices()
+                last_scan = now
+
+            r, _, _ = select.select([srv], [], [], 0.5)
+            if r:
+                try:
+                    conn, _ = srv.accept()
+                    with self._clients_lock:
+                        self._clients.append(conn)
+                    log.debug("Client connected (%d total)",
+                              len(self._clients))
+                except OSError:
+                    pass
+
+        srv.close()
+        try:
+            os.remove(SOCKET_PATH)
+        except FileNotFoundError:
+            pass
+
+    def test_mode(self):
+        """Interactive test — print events to stdout."""
+        print("okama-inputd test mode. Press controller buttons. Ctrl-C to exit.")
+        self._scan_devices()
+        original_broadcast = self.broadcast
+
+        def print_broadcast(event: dict):
+            print(json.dumps(event))
+            original_broadcast(event)
+
+        self.broadcast = print_broadcast
+
+        try:
+            while True:
+                self._scan_devices()
+                time.sleep(2)
+        except KeyboardInterrupt:
+            print("\nDone.")
+
+
+def main():
+    p = argparse.ArgumentParser(prog="okama-inputd")
+    p.add_argument("--daemon", action="store_true",
+                   help="Run as socket server daemon (called by init)")
+    p.add_argument("--test", action="store_true",
+                   help="Print events to stdout (controller test mode)")
+    p.add_argument("--debug", action="store_true")
+    args = p.parse_args()
+
+    if args.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
+
+    conf = cfg_mod.get()
+    dev = conf.is_dev_mode()
+
+    daemon = InputDaemon(dev_mode=dev)
+
+    if args.test:
+        daemon.test_mode()
+    else:
+        daemon.run_server()
+
+
+if __name__ == "__main__":
+    main()

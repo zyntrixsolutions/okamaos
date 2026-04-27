@@ -58,7 +58,7 @@ set default=0
 set timeout=3
 
 menuentry "OkamaOS" {
-    linux  /boot/bzImage rw quiet loglevel=3 console=tty1
+    linux  /boot/bzImage rw console=tty1 init=/sbin/init panic=10
     initrd /boot/rootfs.cpio.gz
 }
 EOF

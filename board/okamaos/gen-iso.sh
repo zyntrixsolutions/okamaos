@@ -55,10 +55,11 @@ echo "    Initramfs: $INITRD_SIZE"
 # GRUB2 config
 cat > "$ISO_WORK/boot/grub/grub.cfg" << 'EOF'
 set default=0
-set timeout=3
+set timeout=0
 
 menuentry "OkamaOS" {
-    linux  /boot/bzImage rw console=tty1 init=/sbin/init panic=10
+    set gfxpayload=text
+    linux  /boot/bzImage rw earlyprintk=vga console=tty1 console=ttyS0,115200 nomodeset ignore_loglevel debug init=/sbin/init panic=10
     initrd /boot/rootfs.cpio.gz
 }
 EOF

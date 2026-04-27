@@ -1,27 +1,6 @@
 make: Entering directory '/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/buildroot'
-[7m>>> okama-runtime 0.1.0 Extracting[27m
-[7m>>> okama-runtime 0.1.0 Patching[27m
-[7m>>> okama-runtime 0.1.0 Configuring[27m
-[7m>>> okama-runtime 0.1.0 Building[27m
-[7m>>> okama-runtime 0.1.0 Installing to target[27m
-mkdir -p /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/target/usr/bin
-mkdir -p /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/target/usr/lib/okamaos
-mkdir -p /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/target/usr/share/okamaos
-mkdir -p /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/target/var/okamaos/games
-mkdir -p /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/target/var/okamaos/saves
-mkdir -p /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/target/var/okamaos/logs
-mkdir -p /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/target/var/okamaos/cache
-mkdir -p /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/target/var/okamaos/controllers
-mkdir -p /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/target/var/okamaos/updates
-cp -a /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/usr/bin/. /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/target/usr/bin/
-cp -a /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/usr/lib/okamaos/. /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/target/usr/lib/okamaos/
-cp -a /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/usr/share/okamaos/. /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/target/usr/share/okamaos/ 2>/dev/null || true
-chmod 0755 /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/target/usr/bin/okama-*
-# games dir + lib must be root-owned executable
-chmod 0755 /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/target/usr/lib/okamaos/*.py 2>/dev/null || true
-# pygame dropped from Buildroot 2024.02 — install from PyPI into target
-/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/bin/pip3 install --target=/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/target/usr/lib/python3/dist-packages --no-deps --ignore-requires-python pygame==2.5.2 || true
-/bin/bash: line 1: /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/bin/pip3: No such file or directory
+/usr/bin/make -j1  O=/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output HOSTCC="/usr/bin/gcc" HOSTCXX="/usr/bin/g++" syncconfig
+  GEN     /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/Makefile
 [7m>>>   Finalizing host directory[27m
 [7m>>>   Finalizing target directory[27m
 mkdir -p /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/etc/meson
@@ -110,7 +89,7 @@ echo "find /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projec
 echo "find /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/ext2/target/tmp/ -mindepth 1 -prune -print0 | xargs -0r rm -rf --" >> /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/ext2/fakeroot
 printf '   \n' >> /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/ext2/fakeroot
 printf '   \n' >> /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/ext2/fakeroot
-printf '   	rm -f /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/images/rootfs.ext2\n	/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/sbin/mkfs.ext4 -d /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/ext2/target -r 1 -N 0 -m 5 -L "rootfs" -I 256 -O ^64bit /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/images/rootfs.ext2 "60M" || { ret=$?; echo "*** Maybe you need to increase the filesystem size (BR2_TARGET_ROOTFS_EXT2_SIZE)" 1>&2; exit $ret; }\n' >> /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/ext2/fakeroot
+printf '   	rm -f /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/images/rootfs.ext2\n	/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/sbin/mkfs.ext4 -d /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/ext2/target -r 1 -N 0 -m 5 -L "rootfs" -I 256 -O ^64bit /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/images/rootfs.ext2 "512M" || { ret=$?; echo "*** Maybe you need to increase the filesystem size (BR2_TARGET_ROOTFS_EXT2_SIZE)" 1>&2; exit $ret; }\n' >> /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/ext2/fakeroot
 chmod a+x /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/ext2/fakeroot
 PATH="/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/bin:/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/sbin:/home/amakodev/.config/nvm/versions/node/v24.14.1/bin:/usr/local/bin:/usr/bin:/usr/local/games:/usr/games:/sbin:/usr/sbin" FAKEROOTDONTTRYCHOWN=1 /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/bin/fakeroot -- /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/ext2/fakeroot
 rootdir=/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/ext2/target
@@ -118,17 +97,98 @@ table='/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/o
 mke2fs 1.47.0 (5-Feb-2023)
 Creating regular file /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/images/rootfs.ext2
 64-bit filesystem support is not enabled.  The larger fields afforded by this feature enable full-strength checksumming.  Pass -O 64bit to rectify.
-Creating filesystem with 61440 1k blocks and 15360 inodes
-Filesystem UUID: b3ba3940-ec21-4b1a-8ae5-3c5c2edc7e5e
+Creating filesystem with 131072 4k blocks and 32768 inodes
+Filesystem UUID: bd7f92f4-3a54-4636-94bb-ddb16ae01202
 Superblock backups stored on blocks: 
-	8193, 24577, 40961, 57345
+	32768, 98304
 
-Allocating group tables: 0/8   done                            
-Writing inode tables: 0/8   done                            
+Allocating group tables: 0/4   done                            
+Writing inode tables: 0/4   done                            
 Creating journal (4096 blocks): done
-Copying files into the device: __populate_fs: Could not allocate block in ext2 filesystem while writing file "_zoneinfo.cpython-311-x86_64-linux-gnu.so"
-mkfs.ext4: Could not allocate block in ext2 filesystem while populating file system
-*** Maybe you need to increase the filesystem size (BR2_TARGET_ROOTFS_EXT2_SIZE)
-make[1]: *** [fs/ext2/ext2.mk:66: /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/images/rootfs.ext2] Error 1
-make: *** [Makefile:82: _all] Error 2
+Copying files into the device: done
+Writing superblocks and filesystem accounting information: 0/4   done
+
+ln -sf rootfs.ext2 /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/images/rootfs.ext4
+[7m>>>   Generating filesystem image rootfs.squashfs[27m
+mkdir -p /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/images
+rm -rf /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/squashfs
+mkdir -p /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/squashfs
+rsync -auH --exclude=/THIS_IS_NOT_YOUR_ROOT_FILESYSTEM /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/target/ /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/squashfs/target
+echo '#!/bin/sh' > /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/squashfs/fakeroot
+echo "set -e" >> /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/squashfs/fakeroot
+echo "chown -h -R 0:0 /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/squashfs/target" >> /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/squashfs/fakeroot
+PATH="/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/bin:/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/sbin:/home/amakodev/.config/nvm/versions/node/v24.14.1/bin:/usr/local/bin:/usr/bin:/usr/local/games:/usr/games:/sbin:/usr/sbin" /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/buildroot/support/scripts/mkusers /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/full_users_table.txt /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/squashfs/target >> /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/squashfs/fakeroot
+echo "/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/bin/makedevs -d /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/full_devices_table.txt /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/squashfs/target" >> /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/squashfs/fakeroot
+printf '   	rm -rf /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/squashfs/target/usr/lib/udev/hwdb.d/ /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/squashfs/target/etc/udev/hwdb.d/\n' >> /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/squashfs/fakeroot
+echo "find /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/squashfs/target/run/ -mindepth 1 -prune -print0 | xargs -0r rm -rf --" >> /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/squashfs/fakeroot
+echo "find /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/squashfs/target/tmp/ -mindepth 1 -prune -print0 | xargs -0r rm -rf --" >> /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/squashfs/fakeroot
+printf '   \n' >> /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/squashfs/fakeroot
+printf '   \n' >> /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/squashfs/fakeroot
+printf '   	/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/bin/mksquashfs /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/squashfs/target /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/images/rootfs.squashfs -noappend -processors 4 -b 128K  -comp gzip\n' >> /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/squashfs/fakeroot
+chmod a+x /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/squashfs/fakeroot
+PATH="/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/bin:/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/sbin:/home/amakodev/.config/nvm/versions/node/v24.14.1/bin:/usr/local/bin:/usr/bin:/usr/local/games:/usr/games:/sbin:/usr/sbin" FAKEROOTDONTTRYCHOWN=1 /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/bin/fakeroot -- /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/squashfs/fakeroot
+rootdir=/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/squashfs/target
+table='/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/full_devices_table.txt'
+Parallel mksquashfs: Using 4 processors
+Creating 4.0 filesystem on /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/images/rootfs.squashfs, block size 131072.
+[=============================================================-] 3280/3280 100%
+
+Exportable Squashfs 4.0 filesystem, gzip compressed, data block size 131072
+	compressed data, compressed metadata, compressed fragments,
+	compressed xattrs, compressed ids
+	duplicates are removed
+Filesystem size 31285.62 Kbytes (30.55 Mbytes)
+	37.44% of uncompressed filesystem size (83566.37 Kbytes)
+Inode table size 35854 bytes (35.01 Kbytes)
+	27.72% of uncompressed inode table size (129343 bytes)
+Directory table size 37743 bytes (36.86 Kbytes)
+	39.91% of uncompressed directory table size (94565 bytes)
+Number of duplicate files found 99
+Number of inodes 3886
+Number of files 3026
+Number of fragments 378
+Number of symbolic links 509
+Number of device nodes 0
+Number of fifo nodes 0
+Number of socket nodes 0
+Number of directories 351
+Number of hard-links 0
+Number of ids (unique uids + gids) 3
+Number of uids 2
+	root (0)
+	www-data (33)
+Number of gids 3
+	root (0)
+	netdev (101)
+	www-data (33)
+[7m>>>   Generating filesystem image rootfs.tar[27m
+mkdir -p /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/images
+rm -rf /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/tar
+mkdir -p /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/tar
+rsync -auH --exclude=/THIS_IS_NOT_YOUR_ROOT_FILESYSTEM /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/target/ /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/tar/target
+echo '#!/bin/sh' > /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/tar/fakeroot
+echo "set -e" >> /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/tar/fakeroot
+echo "chown -h -R 0:0 /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/tar/target" >> /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/tar/fakeroot
+PATH="/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/bin:/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/sbin:/home/amakodev/.config/nvm/versions/node/v24.14.1/bin:/usr/local/bin:/usr/bin:/usr/local/games:/usr/games:/sbin:/usr/sbin" /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/buildroot/support/scripts/mkusers /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/full_users_table.txt /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/tar/target >> /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/tar/fakeroot
+echo "/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/bin/makedevs -d /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/full_devices_table.txt /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/tar/target" >> /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/tar/fakeroot
+printf '   	rm -rf /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/tar/target/usr/lib/udev/hwdb.d/ /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/tar/target/etc/udev/hwdb.d/\n' >> /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/tar/fakeroot
+echo "find /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/tar/target/run/ -mindepth 1 -prune -print0 | xargs -0r rm -rf --" >> /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/tar/fakeroot
+echo "find /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/tar/target/tmp/ -mindepth 1 -prune -print0 | xargs -0r rm -rf --" >> /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/tar/fakeroot
+printf '   \n' >> /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/tar/fakeroot
+printf '   \n' >> /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/tar/fakeroot
+printf '   	(cd /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/tar/target; find -print0 | LC_ALL=C sort -z | /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/bin/tar  --pax-option=exthdr.name=%%d/PaxHeaders/%%f,atime:=0,ctime:=0 -cf /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/images/rootfs.tar --null --xattrs-include='\''*'\'' --no-recursion -T - --numeric-owner)\n' >> /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/tar/fakeroot
+chmod a+x /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/tar/fakeroot
+PATH="/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/bin:/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/sbin:/home/amakodev/.config/nvm/versions/node/v24.14.1/bin:/usr/local/bin:/usr/bin:/usr/local/games:/usr/games:/sbin:/usr/sbin" FAKEROOTDONTTRYCHOWN=1 /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/bin/fakeroot -- /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/tar/fakeroot
+rootdir=/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/tar/target
+table='/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/full_devices_table.txt'
+ln -snf /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/x86_64-buildroot-linux-gnu/sysroot /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/staging
+[7m>>>   Executing post-image script /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/board/okamaos/post-image.sh[27m
+>> okamaos post-image: /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/images
+total 231M
+-rw-r--r-- 1 amakodev amakodev 6.2M Apr 27 16:53 bzImage
+-rw-r--r-- 1 amakodev amakodev 512M Apr 27 20:06 rootfs.ext2
+lrwxrwxrwx 1 amakodev amakodev   11 Apr 27 20:06 rootfs.ext4 -> rootfs.ext2
+-rw-r--r-- 1 amakodev amakodev  31M Apr 27 20:06 rootfs.squashfs
+-rw-r--r-- 1 amakodev amakodev  88M Apr 27 20:06 rootfs.tar
+drwxr-xr-x 2 amakodev amakodev 4.0K Apr 27 16:23 syslinux
 make: Leaving directory '/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/buildroot'

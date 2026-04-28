@@ -541,7 +541,6 @@ class OkamaShell:
         if action == "DEV_CONSOLE":
             self._dev_console_cmd = ""
             self._dev_console_history.append(">>> Dev mode unlocked (F10). Type 'help' for commands.")
-            self._dev_console_history.append("> Root password is 'zyntrix'")
             self.state = "dev_console"
             return
 

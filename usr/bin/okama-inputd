@@ -110,19 +110,45 @@ HAT_MAP = {
 }
 
 
-def normalise_axis(raw: int, inverted: bool = False) -> float:
-    """Map raw evdev axis value (0–255 or –32768–32767) to –1.0..1.0."""
-    if raw > 127:
-        v = (raw - 128) / 127.0
-    elif raw < 0:
-        v = raw / 32768.0
-    else:
-        v = raw / 128.0 - 1.0
+def normalise_axis(raw: int, minimum: int = -32768, maximum: int = 32767,
+                   inverted: bool = False) -> float:
+    """Map raw evdev axis value to -1.0..1.0 using the device-reported range.
+
+    Handles both:
+      - 16-bit signed: -32768..32767 (modern USB/BT gamepads, default)
+      - 8-bit unsigned: 0..255 (legacy devices, triggers on some pads)
+    """
+    if maximum <= minimum:
+        return 0.0
+    center = (minimum + maximum) / 2.0
+    half_range = (maximum - minimum) / 2.0
+    v = (raw - center) / half_range
+    v = max(-1.0, min(1.0, v))
     if inverted:
         v = -v
     if abs(v) < 0.08:
         v = 0.0
     return round(v, 3)
+
+
+# struct input_absinfo: value, minimum, maximum, fuzz, flat, resolution (6 x int32)
+_ABSINFO_FMT = "iiiiii"
+_ABSINFO_SIZE = struct.calcsize(_ABSINFO_FMT)
+
+
+def _read_abs_range(fd, axis_code: int):
+    """Return (minimum, maximum) for axis_code via EVIOCGABS ioctl, or None."""
+    import fcntl
+    # EVIOCGABS(axis) = _IOR('E', 0x40 + axis, struct input_absinfo)
+    # On Linux x86_64: _IOC_READ=2, 'E'=0x45, size=24 → 0x80184540 + axis
+    EVIOCGABS = 0x80184540 + axis_code
+    buf = bytearray(_ABSINFO_SIZE)
+    try:
+        fcntl.ioctl(fd, EVIOCGABS, buf)
+        _v, minimum, maximum, _fuzz, _flat, _res = struct.unpack(_ABSINFO_FMT, buf)
+        return minimum, maximum
+    except Exception:
+        return None, None
 
 
 class ControllerThread(threading.Thread):
@@ -134,6 +160,7 @@ class ControllerThread(threading.Thread):
         self.broadcast = broadcast_fn
         self.disconnect_fn = disconnect_fn
         self._stop = threading.Event()
+        self._axis_ranges: dict = {}  # axis_code -> (min, max)
 
     def run(self):
         try:
@@ -143,6 +170,7 @@ class ControllerThread(threading.Thread):
             return
 
         name = self._read_name(fd)
+        self._cache_axis_ranges(fd)
         log.info("Controller %d connected: %s (%s)",
                  self.controller_id, name, self.path)
         self.broadcast({
@@ -174,6 +202,14 @@ class ControllerThread(threading.Thread):
             })
             self.disconnect_fn(self.controller_id)
 
+    def _cache_axis_ranges(self, fd) -> None:
+        """Pre-read min/max for all mapped axes so normalisation is accurate."""
+        for axis_code in list(AXIS_MAP.keys()) + list(HAT_MAP.keys()):
+            mn, mx = _read_abs_range(fd, axis_code)
+            if mn is not None and mx is not None and mx > mn:
+                self._axis_ranges[axis_code] = (mn, mx)
+                log.debug("Axis %d range: %d..%d", axis_code, mn, mx)
+
     def _handle(self, ev_type: int, code: int, value: int):
         if ev_type == EV_KEY:
             btn = BUTTON_MAP.get(code)
@@ -187,10 +223,11 @@ class ControllerThread(threading.Thread):
         elif ev_type == EV_ABS:
             if code in AXIS_MAP:
                 axis_name, inverted = AXIS_MAP[code]
+                mn, mx = self._axis_ranges.get(code, (-32768, 32767))
                 self.broadcast({
                     "type": "axis",
                     "axis": axis_name,
-                    "value": normalise_axis(value, inverted),
+                    "value": normalise_axis(value, mn, mx, inverted),
                     "controller": self.controller_id,
                 })
             elif code in HAT_MAP:

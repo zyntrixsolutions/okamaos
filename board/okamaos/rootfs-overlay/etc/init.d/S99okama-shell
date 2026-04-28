@@ -29,8 +29,11 @@ case "$1" in
         echo "ERROR: /dev/fb0 not found!" > /dev/tty1
         sleep 5
     fi
-    # Unbind fbcon from /dev/fb0 so pygame can own the framebuffer exclusively
-    [ -d /sys/class/vtconsole/vtcon1 ] && echo 0 > /sys/class/vtconsole/vtcon1/bind || true
+    # Unbind fbcon from /dev/fb0 so SDL/pygame can own the framebuffer exclusively
+    # vtcon0 is typically the dummy console; vtcon1 is the framebuffer console
+    for vtcon in /sys/class/vtconsole/vtcon*; do
+        [ -f "$vtcon/bind" ] && echo 0 > "$vtcon/bind" 2>/dev/null || true
+    done
     # Clear the tty1 console of any boot messages before handing it to the shell
     printf '\033[2J\033[H' > /dev/tty1
     # Disable the kernel cursor on tty1
@@ -39,9 +42,15 @@ case "$1" in
     printf '\033[1;37mLaunching okama-shell...\033[0m\n' > /dev/tty1
     # Switch active VT to tty1
     chvt 1 2>/dev/null || true
+    # Detect installed Python version dynamically for pygame.libs path
+    PYVER=$(ls /usr/lib/ 2>/dev/null | grep -E '^python3\.[0-9]+$' | sort -V | tail -1)
+    PYLIBS_PATH=""
+    if [ -n "$PYVER" ] && [ -d "/usr/lib/$PYVER/site-packages/pygame.libs" ]; then
+        PYLIBS_PATH="/usr/lib/$PYVER/site-packages/pygame.libs:"
+    fi
     openvt -c 1 -f -w -- sh -c "
         export PYTHONPATH=/usr/lib/okamaos
-        export LD_LIBRARY_PATH=/usr/lib/python3.11/site-packages/pygame.libs:/usr/lib
+        export LD_LIBRARY_PATH=${PYLIBS_PATH}/usr/lib
         while true; do
             /usr/bin/okama-shell 2>> /var/okamaos/logs/shell.log
             EXIT_CODE=\$?

@@ -125,8 +125,13 @@ def main():
     env["PYTHONPATH"] = "/usr/lib/okamaos"
     env["OKAMA_GAME_ID"] = game_id
     env["OKAMA_GAME_DIR"] = game_dir
-    env["SDL_VIDEODRIVER"] = "fbcon"
-    env["SDL_FBDEV"] = conf.get("FRAMEBUFFER_DEVICE", "/dev/fb0")
+    # SDL2 has no fbcon backend; use kmsdrm (DRM) or offscreen + FbWriter fallback
+    fb_dev = conf.get("FRAMEBUFFER_DEVICE", "/dev/fb0")
+    if os.path.exists("/dev/dri/card0") or os.path.exists("/dev/dri/card1"):
+        env["SDL_VIDEODRIVER"] = "kmsdrm"
+    else:
+        env["SDL_VIDEODRIVER"] = "offscreen"
+        env["SDL_FBDEV"] = fb_dev
     env["SDL_AUDIODRIVER"] = "alsa"
 
     try:

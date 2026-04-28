@@ -24,14 +24,15 @@
 
 ### v0.3 — Pygame Shell ✅
 - [x] `/dev/fb0` framebuffer created at boot (GRUB gfxmode + kernel SYSFB/DRM_SIMPLEDRM/FB_VESA)
-- [x] pygame fullscreen shell renders on framebuffer (`SDL_VIDEODRIVER=offscreen` + `FbWriter`)
+- [x] pygame fullscreen shell renders on framebuffer (`kmsdrm` primary, `offscreen`+`FbWriter` fallback)
 - [x] Controller D-pad navigation in pygame shell
 - [x] Keyboard navigation (Arrow/WASD/Tab/Enter/Space/Esc/Home)
-- [x] Mouse hover + click navigation
+- [x] Mouse hover + click navigation (PS/2 + USB HID)
 - [x] Play / Settings / Power sections functional
 - [x] Game launch via `okama-run`
 - [x] Silent boot: kernel `quiet loglevel=0`, init.d output redirected to boot log
 - [x] Modern UI: gradient bg, section colors, pulsing logo, hover effects, live clock
+- [x] **v0.3.1** Boot display fixed: SDL2 kmsdrm/offscreen driver chain, FbWriter wired + BGRX pixel format, axis normalisation, PS/2+USB input kernel config, dynamic Python path
 
 ### v0.4 — Game Runtime
 - [ ] `.ok` package install via `okama-cli install <file.ok>`

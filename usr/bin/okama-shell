@@ -168,7 +168,12 @@ class OkamaShell:
         if windowed:
             flags = 0
             self.screen = pygame.display.set_mode((WIDTH, HEIGHT), flags)
+        elif os.environ.get("SDL_VIDEODRIVER") == "offscreen":
+            # offscreen backend has no real display; FULLSCREEN flag is meaningless
+            # WIDTH/HEIGHT were already set to framebuffer dimensions before init
+            self.screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.DOUBLEBUF)
         else:
+            # kmsdrm and similar DRM backends support FULLSCREEN properly
             flags = pygame.FULLSCREEN | pygame.HWSURFACE | pygame.DOUBLEBUF
             self.screen = pygame.display.set_mode((0, 0), flags)
             # Update global layout dimensions to match actual framebuffer size
@@ -579,7 +584,7 @@ class OkamaShell:
         self.screen.blit(brand, (bx, by))
 
         # Version badge
-        ver_txt = self.font_hint.render("v0.3.0", True, COL_DIM)
+        ver_txt = self.font_hint.render("v0.3.1", True, COL_DIM)
         self.screen.blit(ver_txt, (bx + brand.get_width() + 10,
                                    by + brand.get_height() - ver_txt.get_height() - 2))
 
@@ -821,7 +826,9 @@ class FbWriter:
         try:
             if (surface.get_width(), surface.get_height()) != (self.w, self.h):
                 surface = pygame.transform.scale(surface, (self.w, self.h))
-            raw = pygame.image.tostring(surface, "RGBX")
+            # Linux /dev/fb0 32bpp is XRGB8888 (LE) = BGRX in memory order
+            fmt = "BGRX" if self.bpp == 32 else "RGB"
+            raw = pygame.image.tostring(surface, fmt)
             self._mm.seek(0)
             self._mm.write(raw)
         except Exception:
@@ -857,16 +864,55 @@ def main():
 
     if args.windowed:
         os.environ["SDL_VIDEODRIVER"] = "x11"  # dev host
-    else:
-        # fbcon: SDL renders directly to the Linux framebuffer AND hooks into
-        # /dev/input/event* for keyboard + mouse — fixes both color and input.
-        os.environ["SDL_VIDEODRIVER"] = "fbcon"
-        os.environ["SDL_FBDEV"] = conf.get("FRAMEBUFFER_DEVICE", "/dev/fb0")
-        os.environ.setdefault("SDL_INPUT_LINUX_EVENTS_BACKUP", "1")
+        pygame.init()
+        shell = OkamaShell(windowed=args.windowed, dev_mode=dev)
+        shell.run()
+        return
 
-    pygame.init()
-    shell = OkamaShell(windowed=args.windowed, dev_mode=dev)
-    shell.run()
+    # On bare-metal/VM Linux with no X11/Wayland we try three backends in order:
+    #  1. kmsdrm  — cleanest; uses /dev/dri/card0 directly (DRM_BOCHS / DRM_VIRTIO)
+    #  2. offscreen + FbWriter — renders to memory then blits to /dev/fb0
+    #  3. text fallback
+    fb_dev = conf.get("FRAMEBUFFER_DEVICE", "/dev/fb0")
+    drivers = []
+    if os.path.exists("/dev/dri/card0") or os.path.exists("/dev/dri/card1"):
+        drivers.append("kmsdrm")
+    drivers.append("offscreen")  # always available
+
+    last_err = ""
+    for drv in drivers:
+        os.environ["SDL_VIDEODRIVER"] = drv
+        if drv == "offscreen":
+            os.environ["SDL_FBDEV"] = fb_dev
+        try:
+            pygame.display.quit()
+            pygame.init()
+            fb = None
+            if drv == "offscreen":
+                try:
+                    fb = FbWriter(fb_dev)
+                    # Match pygame surface to actual framebuffer resolution
+                    global WIDTH, HEIGHT
+                    WIDTH, HEIGHT = fb.w, fb.h
+                except Exception as fe:
+                    print(f"FbWriter init failed: {fe}", file=sys.stderr)
+                    fb = None
+            shell = OkamaShell(windowed=False, dev_mode=dev)
+            shell.run(fb=fb)
+            if fb:
+                fb.close()
+            return
+        except Exception as e:
+            last_err = f"{drv}: {e}"
+            print(f"SDL driver '{drv}' failed: {e}", file=sys.stderr)
+            try:
+                pygame.quit()
+            except Exception:
+                pass
+
+    print(f"All SDL drivers failed ({last_err}), falling back to text shell",
+          file=sys.stderr)
+    _text_shell()
 
 
 if __name__ == "__main__":

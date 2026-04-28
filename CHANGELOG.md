@@ -5,6 +5,24 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.3.1] - 2026-04-28
+
+### Fixed
+- **Blank screen (primary bug)**: `SDL_VIDEODRIVER=fbcon` is not a valid SDL2 backend and caused `pygame.display.init()` to fail silently; replaced with a priority-ordered driver chain: `kmsdrm` (when `/dev/dri/card0` exists) → `offscreen` + `FbWriter` → text-mode fallback
+- **FbWriter never called**: `shell.run()` was invoked without `fb=` argument in all non-windowed paths; `FbWriter` is now instantiated and passed when using `offscreen` backend
+- **Wrong pixel format in FbWriter**: `pygame.image.tostring(surface, "RGBX")` produces R,G,B,X but the Linux 32bpp framebuffer is XRGB8888 (LE) = B,G,R,X in memory; changed to `"BGRX"` for 32bpp or `"RGB"` for 24bpp
+- **`offscreen` + `FULLSCREEN` conflict**: `set_mode((0,0), FULLSCREEN)` with offscreen backend creates a 0×0 surface; now uses `set_mode((W,H), DOUBLEBUF)` with actual framebuffer dimensions pre-populated from `FbWriter`
+- **`okama-run` same fbcon bug**: `SDL_VIDEODRIVER=fbcon` also set for game launches; fixed to match `okama-shell` driver selection logic
+- **Axis normalisation broken**: `normalise_axis()` mapped center 0 to −1.0 and max 32767 to 258 for standard −32768..32767 gamepads; replaced with range-aware formula `(raw − center) / half_range`; per-device min/max read at connect time via `EVIOCGABS` ioctl and cached in `ControllerThread._axis_ranges`
+- **Hardcoded `python3.11` in LD_LIBRARY_PATH**: `S99okama-shell` dynamically detects the installed Python version at boot instead of hardcoding `python3.11` for `pygame.libs` path
+- **vtcon unbind incomplete**: only `vtcon1` was unbound; now iterates all `/sys/class/vtconsole/vtcon*` entries to release the framebuffer console before SDL takes over
+- **Missing kernel VT/TTY options**: added `CONFIG_TTY`, `CONFIG_VT`, `CONFIG_VT_CONSOLE`, `CONFIG_HW_CONSOLE`, `CONFIG_VT_HW_CONSOLE_BINDING`, `CONFIG_UNIX98_PTYS` to `linux.config`
+- **Missing PS/2 + USB input drivers**: added `CONFIG_SERIO`, `CONFIG_SERIO_I8042`, `CONFIG_KEYBOARD_ATKBD`, `CONFIG_MOUSE_PS2`, `CONFIG_INPUT_MOUSEDEV`, `CONFIG_USB_MOUSE`, `CONFIG_USB_KBD` — enables keyboard and mouse in VirtualBox BIOS and EFI modes
+- **Missing ACPI + EFI stub**: added `CONFIG_ACPI`, `CONFIG_ACPI_BUTTON`, `CONFIG_EFI_STUB` for clean poweroff/reboot and UEFI boot
+- **`/dev/fb0` not in device table**: added `fb0`, `tty`, `tty1`, `tty2`, and `input/event*` static device nodes to `device_table.txt` so devices exist before eudev settles
+
+---
+
 ## [0.3.0] - 2026-04-28
 
 ### Added

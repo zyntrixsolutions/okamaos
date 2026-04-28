@@ -20,6 +20,7 @@
 - [x] OkamaOS Shell launches on tty1 at boot
 - [x] Text-mode fallback shell functional (Power off / Reboot / Launch game)
 - [x] pygame 2.6.1 installed into rootfs (manylinux wheel)
+- [x] ALSA utils (amixer, aplay, alsactl) included
 
 ### v0.3 — Pygame Shell ⏳
 - [ ] pygame fullscreen shell renders on framebuffer (SDL_VIDEODRIVER=fbcon)

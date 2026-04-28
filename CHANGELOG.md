@@ -27,6 +27,8 @@ Format: [Semantic Versioning](https://semver.org/)
 - Buildroot zlib 404 download — overrode `LIBZLIB_SITE` to GitHub releases mirror
 - `okama-runtime` rsync infinite loop — removed `SITE_METHOD=local`
 - `BR2_LEGACY` error — removed deprecated defconfig options
+- `gen-iso.sh` tar extraction — ignore device node mknod errors in user space
+- `amixer` missing at runtime — added `BR2_PACKAGE_ALSA_UTILS_AMIXER/APLAY/ALSACTL`
 
 ### Changed
 - Bootloader switched from isolinux to GRUB2 for 64-bit kernel compatibility

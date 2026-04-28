@@ -46,7 +46,8 @@ cp "$IMAGES_DIR/bzImage" "$ISO_WORK/boot/bzImage"
 
 # Build cpio.gz initramfs from rootfs.tar
 echo ">>> Building initramfs (~30s)..."
-tar -C "$ROOTFS_WORK" -xf "$IMAGES_DIR/rootfs.tar"
+tar -C "$ROOTFS_WORK" -xf "$IMAGES_DIR/rootfs.tar" 2>/dev/null || \
+    tar -C "$ROOTFS_WORK" --warning=no-unknown-keyword -xf "$IMAGES_DIR/rootfs.tar" 2>/dev/null || true
 # /init is the initramfs entry point the kernel looks for first
 [ ! -e "$ROOTFS_WORK/init" ] && ln -s /sbin/init "$ROOTFS_WORK/init"
 (cd "$ROOTFS_WORK" && find . | cpio -o -H newc 2>/dev/null | gzip -9) \

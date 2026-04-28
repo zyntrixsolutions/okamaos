@@ -23,6 +23,7 @@
 - [x] ALSA utils (amixer, aplay, alsactl) included
 
 ### v0.3 — Pygame Shell ⏳
+- [x] `/dev/fb0` framebuffer created at boot (GRUB gfxmode + kernel SYSFB/DRM_SIMPLEDRM/FB_VESA)
 - [ ] pygame fullscreen shell renders on framebuffer (SDL_VIDEODRIVER=fbcon)
 - [ ] Controller D-pad navigation in pygame shell
 - [ ] Play / Settings / Power sections functional

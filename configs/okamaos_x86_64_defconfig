@@ -83,6 +83,9 @@ BR2_PACKAGE_IW=y
 BR2_PACKAGE_WPA_SUPPLICANT=y
 BR2_PACKAGE_DHCPCD=y
 
+# --- Fonts / font discovery ---
+BR2_PACKAGE_FONTCONFIG=y
+
 # --- Compression for .ok packages ---
 BR2_PACKAGE_ZSTD=y
 

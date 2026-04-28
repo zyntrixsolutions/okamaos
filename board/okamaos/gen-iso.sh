@@ -59,6 +59,7 @@ echo "    Initramfs: $INITRD_SIZE"
 cat > "$ISO_WORK/boot/grub/grub.cfg" << 'EOF'
 set default=0
 set timeout=0
+set gfxmode=1024x768x32
 
 menuentry "OkamaOS" {
     set gfxpayload=keep

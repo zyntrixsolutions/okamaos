@@ -580,6 +580,10 @@ def main():
             fb = FbWriter(conf.get("FRAMEBUFFER_DEVICE", "/dev/fb0"))
         except Exception as e:
             print(f"WARNING: cannot open framebuffer: {e}", file=sys.stderr)
+            print("Falling back to text mode — no framebuffer available.", file=sys.stderr)
+            pygame.quit()
+            _text_shell()
+            return
 
     shell.run(fb=fb)
     if fb:

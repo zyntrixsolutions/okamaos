@@ -13,7 +13,7 @@ case "$1" in
     mount -t devpts none /dev/pts 2>/dev/null || true
 
     # tmpfs for run-time state
-    mkdir -p /run /var/run /var/lock
+    mkdir -p /run /var/run /var/lock /var/lock/subsys
     mount -t tmpfs -o size=32m tmpfs /run 2>/dev/null || true
 
     # /var/okamaos lives on the data partition; ensure dirs exist

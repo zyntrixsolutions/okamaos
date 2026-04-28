@@ -5,6 +5,18 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.2.9] - 2026-04-28
+
+### Fixed
+- `touch: /var/lock/subsys/dbus-daemon: No such file or directory` — `S10okama-mounts` now creates `/var/lock/subsys/`
+- `S99okama-shell: line 27: can't create /sys/class/vtconsole/vtcon1/bind` — busybox sh leaks redirect-open errors to pre-redirect stderr; replaced bare redirect with `[ -d /sys/class/vtconsole/vtcon1 ] && echo 0 > ...` guard
+- `WARNING: cannot open framebuffer: /dev/fb0` (blank screen hang) — root cause: `set gfxmode` missing from GRUB config so `gfxpayload=keep` kept VGA text mode and passed no framebuffer to kernel; added `set gfxmode=1024x768x32` in `gen-iso.sh`
+- `linux.config`: added `CONFIG_SYSFB=y`, `CONFIG_SYSFB_SIMPLEFB=y`, `CONFIG_DRM_SIMPLEDRM=y`, `CONFIG_FB_SIMPLE=y`, `CONFIG_FB_VESA=y`, `CONFIG_VGASTATE=y`, `CONFIG_FB_EFI=y` so kernel attaches to the GRUB-provided framebuffer and creates `/dev/fb0`
+- `UserWarning: 'fc-list' is missing` — added `BR2_PACKAGE_FONTCONFIG=y` to `okamaos_x86_64_defconfig`
+- `okama-shell`: no longer runs headlessly when `FbWriter` fails; instead falls back to text mode shell so the user always gets a usable console
+
+---
+
 ## [0.2.8] - 2026-04-28
 
 ### Fixed

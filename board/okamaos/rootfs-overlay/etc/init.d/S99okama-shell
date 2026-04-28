@@ -24,7 +24,7 @@ case "$1" in
     echo "Launching okama-shell on tty1..."
     # Run on tty1 in the background (init will not wait for it)
     # Unbind fbcon from /dev/fb0 so pygame can own the framebuffer exclusively
-    echo 0 > /sys/class/vtconsole/vtcon1/bind 2>/dev/null || true
+    [ -d /sys/class/vtconsole/vtcon1 ] && echo 0 > /sys/class/vtconsole/vtcon1/bind || true
     # Switch active VT to tty1
     chvt 1 2>/dev/null || true
     openvt -c 1 -f -w -- sh -c "

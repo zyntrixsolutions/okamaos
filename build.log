@@ -1,367 +1,4 @@
 make: Entering directory '/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/buildroot'
-Using /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/linux-6.6.30/.config as base
-#
-# merged configuration written to /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/linux-6.6.30/.config (needs make)
-#
-  HOSTCC  scripts/basic/fixdep
-  HOSTCC  scripts/kconfig/conf.o
-  HOSTCC  scripts/kconfig/confdata.o
-  HOSTCC  scripts/kconfig/expr.o
-  HOSTCC  scripts/kconfig/lexer.lex.o
-  HOSTCC  scripts/kconfig/menu.o
-  HOSTCC  scripts/kconfig/parser.tab.o
-  HOSTCC  scripts/kconfig/preprocess.o
-  HOSTCC  scripts/kconfig/symbol.o
-  HOSTCC  scripts/kconfig/util.o
-  HOSTLD  scripts/kconfig/conf
-#
-# configuration written to .config
-#
-[7m>>> linux 6.6.30 Updating kernel config with fixups[27m
-#
-# configuration written to .config
-#
-[7m>>> linux 6.6.30 Configuring[27m
-[7m>>> linux 6.6.30 Building[27m
-GIT_DIR=. PATH="/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/bin:/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/sbin:/home/amakodev/.config/nvm/versions/node/v24.14.1/bin:/usr/local/bin:/usr/bin:/usr/local/games:/usr/games:/sbin:/usr/sbin:/home/amakodev/.windsurf/extensions/ms-python.debugpy-2025.18.0-linux-x64/bundled/scripts/noConfigScripts" PKG_CONFIG="/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/bin/pkg-config" PKG_CONFIG_SYSROOT_DIR="/" PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 PKG_CONFIG_ALLOW_SYSTEM_LIBS=1 PKG_CONFIG_LIBDIR="/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/lib/pkgconfig:/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/share/pkgconfig" BR_BINARIES_DIR=/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/images KCFLAGS=-Wno-attribute-alias /usr/bin/make -j4 HOSTCC="/usr/bin/gcc -O2 -isystem /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/include -L/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/lib -Wl,-rpath,/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/lib" ARCH=x86_64 INSTALL_MOD_PATH=/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/target CROSS_COMPILE="/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/bin/x86_64-buildroot-linux-gnu-" WERROR=0 REGENERATE_PARSERS=1 DEPMOD=/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/sbin/depmod INSTALL_MOD_STRIP=1 -C /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/linux-6.6.30 all
-  SYNC    include/config/auto.conf
-  HOSTCC  scripts/basic/fixdep
-  HOSTCC  scripts/kconfig/conf.o
-  HOSTCC  scripts/kconfig/confdata.o
-  HOSTCC  scripts/kconfig/expr.o
-  HOSTCC  scripts/kconfig/lexer.lex.o
-  HOSTCC  scripts/kconfig/menu.o
-  HOSTCC  scripts/kconfig/parser.tab.o
-  HOSTCC  scripts/kconfig/preprocess.o
-  HOSTCC  scripts/kconfig/symbol.o
-  HOSTCC  scripts/kconfig/util.o
-  HOSTLD  scripts/kconfig/conf
-  DESCEND objtool
-make[5]: 'install_headers' is up to date.
-  CALL    scripts/checksyscalls.sh
-  HOSTCC  usr/gen_init_cpio
-  CC      init/main.o
-  CC      kernel/sysctl.o
-  GEN     usr/initramfs_data.cpio
-  COPY    usr/initramfs_inc_data
-  AS      usr/initramfs_data.o
-  AR      usr/built-in.a
-  LDS     arch/x86/kernel/vmlinux.lds
-  CC      arch/x86/kernel/setup.o
-  CC      arch/x86/mm/init.o
-  CC      arch/x86/kernel/x86_init.o
-  CC      init/do_mounts.o
-  CC      arch/x86/mm/init_64.o
-  CC      kernel/umh.o
-  CC      arch/x86/kernel/i8259.o
-  CC      init/do_mounts_initrd.o
-  CC      arch/x86/kernel/irqinit.o
-  CC      kernel/power/main.o
-  AR      arch/x86/mm/built-in.a
-  CC      init/initramfs.o
-  CC      arch/x86/kernel/bootflag.o
-  AR      kernel/power/built-in.a
-  CC      kernel/irq/irqdomain.o
-  CC      arch/x86/kernel/e820.o
-  AR      init/built-in.a
-  CC      kernel/dma/mapping.o
-  CC      arch/x86/kernel/pci-dma.o
-  AR      kernel/irq/built-in.a
-  AR      kernel/dma/built-in.a
-  CC      arch/x86/kernel/process.o
-  CC      block/bsg.o
-  AR      kernel/built-in.a
-  CC      drivers/video/aperture.o
-  CC      lib/decompress.o
-  CC      lib/decompress_bunzip2.o
-  AR      block/built-in.a
-  CC      drivers/video/cmdline.o
-  CC      arch/x86/kernel/cpu/microcode/core.o
-  CC      arch/x86/kernel/cpu/microcode/intel.o
-  CC      lib/decompress_inflate.o
-  CC      drivers/video/fbdev/core/fb_notify.o
-  CC      lib/decompress_unlz4.o
-  CC      arch/x86/kernel/acpi/boot.o
-  CC      arch/x86/kernel/cpu/microcode/amd.o
-  CC      drivers/video/fbdev/core/fb_info.o
-  CC      lib/decompress_unlzma.o
-  AR      arch/x86/kernel/cpu/microcode/built-in.a
-  AR      arch/x86/kernel/cpu/built-in.a
-  CC      arch/x86/kernel/acpi/sleep.o
-  CC      drivers/video/fbdev/core/fbmem.o
-  CC      lib/decompress_unlzo.o
-  CC      arch/x86/kernel/acpi/cppc.o
-  CC      lib/decompress_unxz.o
-  CC      drivers/video/fbdev/core/fbcmap.o
-  CC      arch/x86/kernel/acpi/cstate.o
-  CC      lib/decompress_unzstd.o
-  AR      arch/x86/kernel/acpi/built-in.a
-  CC      drivers/video/fbdev/core/modedb.o
-  CC      arch/x86/kernel/mpparse.o
-  CC      lib/xxhash.o
-  CC      arch/x86/kernel/apic/apic.o
-  CC      drivers/video/fbdev/core/fbcvt.o
-  CC      lib/lz4/lz4_decompress.o
-  CC      lib/zstd/zstd_decompress_module.o
-  CC      lib/zstd/decompress/huf_decompress.o
-  CC      drivers/video/fbdev/core/fb_cmdline.o
-  CC      arch/x86/kernel/apic/io_apic.o
-  AR      lib/lz4/built-in.a
-  CC      drivers/video/fbdev/core/fb_io_fops.o
-  CC      drivers/video/fbdev/core/fb_backlight.o
-  CC      lib/zstd/decompress/zstd_ddict.o
-  CC      drivers/video/fbdev/core/fbmon.o
-  CC      arch/x86/kernel/apic/apic_flat_64.o
-  CC      lib/xz/xz_dec_syms.o
-  AR      arch/x86/kernel/apic/built-in.a
-  AR      arch/x86/kernel/built-in.a
-  AR      arch/x86/built-in.a
-  CC      lib/xz/xz_dec_stream.o
-  CC      drivers/video/fbdev/core/fb_defio.o
-  CC      lib/zstd/decompress/zstd_decompress.o
-  CC      lib/xz/xz_dec_lzma2.o
-  CC      drivers/acpi/tables.o
-  CC      lib/zstd/decompress/zstd_decompress_block.o
-  CC      drivers/video/fbdev/core/fb_chrdev.o
-  CC      lib/xz/xz_dec_bcj.o
-  CC      drivers/acpi/blacklist.o
-  AR      lib/xz/built-in.a
-  CC      drivers/acpi/osi.o
-  CC      drivers/video/fbdev/core/fb_procfs.o
-  CC      drivers/video/fbdev/core/fbsysfs.o
-  CC      drivers/acpi/osl.o
-  CC      arch/x86/video/fbdev.o
-  CC      drivers/video/fbdev/core/fbcon.o
-  CC      lib/zstd/zstd_common_module.o
-  AR      arch/x86/video/built-in.a
-  CC      drivers/acpi/utils.o
-  CC      drivers/pnp/resource.o
-  CC      lib/zstd/common/debug.o
-  CC      lib/zstd/common/entropy_common.o
-  CC      lib/zstd/common/error_private.o
-  CC      lib/zstd/common/fse_decompress.o
-  CC      drivers/acpi/reboot.o
-  CC      drivers/pnp/pnpacpi/core.o
-  CC      drivers/video/fbdev/core/bitblit.o
-  CC      lib/zstd/common/zstd_common.o
-  CC      drivers/acpi/nvs.o
-  AR      lib/zstd/built-in.a
-  CC      lib/glob.o
-  CC      drivers/pnp/pnpacpi/rsparser.o
-  AR      lib/lib.a
-  AR      lib/built-in.a
-  CC      drivers/acpi/wakeup.o
-  CC      drivers/video/fbdev/core/softcursor.o
-  CC      drivers/video/fbdev/core/sysfillrect.o
-  AR      drivers/pnp/pnpacpi/built-in.a
-  AR      drivers/pnp/built-in.a
-  CC      drivers/acpi/sleep.o
-  CC      drivers/video/fbdev/core/syscopyarea.o
-  CC      drivers/video/fbdev/core/sysimgblt.o
-  CC      drivers/acpi/device_sysfs.o
-  CC      drivers/iommu/dma-iommu.o
-  CC      drivers/video/fbdev/core/fb_sys_fops.o
-  CC      drivers/acpi/device_pm.o
-  CC      drivers/gpu/drm/drm_edid.o
-  AR      drivers/video/fbdev/core/built-in.a
-  AR      drivers/video/fbdev/built-in.a
-  AR      drivers/video/built-in.a
-  CC      drivers/acpi/proc.o
-  AR      drivers/iommu/built-in.a
-  CC      drivers/acpi/bus.o
-  CC      drivers/base/core.o
-  CC      drivers/acpi/glue.o
-  CC      drivers/acpi/scan.o
-  CC      drivers/acpi/resource.o
-  CC      drivers/gpu/drm/drm_modes.o
-  CC      drivers/base/platform.o
-  CC      drivers/acpi/acpi_processor.o
-  CC      drivers/base/cpu.o
-  CC      drivers/acpi/processor_core.o
-  CC      drivers/base/property.o
-  CC      drivers/base/cacheinfo.o
-  CC      drivers/gpu/drm/drm_sysfs.o
-  CC      drivers/acpi/processor_pdc.o
-  CC      drivers/acpi/ec.o
-  CC      drivers/base/power/common.o
-  CC      drivers/gpu/drm/drm_panel.o
-  CC      drivers/base/firmware_loader/main.o
-  AR      drivers/base/power/built-in.a
-  CC      drivers/acpi/acpi_apd.o
-  CC      drivers/gpu/drm/drm_encoder_slave.o
-  CC      drivers/acpi/acpi_platform.o
-  CC      drivers/scsi/scsi.o
-  AR      drivers/base/firmware_loader/built-in.a
-  CC      drivers/base/physical_location.o
-  CC      drivers/gpu/drm/drm_modeset_helper.o
-  CC      drivers/acpi/acpi_pnp.o
-  AR      drivers/base/built-in.a
-  CC      drivers/scsi/hosts.o
-  CC      drivers/acpi/power.o
-  CC      drivers/acpi/event.o
-  CC      drivers/gpu/drm/drm_fbdev_generic.o
-  CC      drivers/scsi/scsi_ioctl.o
-  CC      drivers/scsi/scsicam.o
-  CC      drivers/acpi/evged.o
-  CC      drivers/gpu/drm/drm_fb_helper.o
-  CC      drivers/acpi/sysfs.o
-  CC      drivers/ata/libata-core.o
-  CC      drivers/scsi/scsi_error.o
-  CC      drivers/acpi/property.o
-  AR      drivers/gpu/drm/built-in.a
-  AR      drivers/gpu/built-in.a
-  CC      drivers/scsi/scsi_lib.o
-  CC      drivers/acpi/acpi_cmos_rtc.o
-  CC      drivers/scsi/scsi_lib_dma.o
-  CC      drivers/ata/libata-scsi.o
-  CC      drivers/acpi/x86/apple.o
-  CC      drivers/acpi/x86/utils.o
-  CC      drivers/ata/libata-eh.o
-  CC      drivers/scsi/scsi_scan.o
-  CC      drivers/acpi/x86/s2idle.o
-  CC      drivers/acpi/acpi_lpat.o
-  GEN     drivers/scsi/scsi_devinfo_tbl.c
-  CC      drivers/scsi/scsi_devinfo.o
-  CC      drivers/scsi/scsi_sysctl.o
-  CC      drivers/acpi/acpi_lpit.o
-  CC      drivers/acpi/acpi_pcc.o
-  CC      drivers/ata/libata-transport.o
-  CC      drivers/scsi/scsi_proc.o
-  CC      drivers/usb/core/usb.o
-  CC      drivers/scsi/scsi_trace.o
-  CC      drivers/ata/libata-trace.o
-  CC      drivers/acpi/ac.o
-  CC      drivers/usb/core/hub.o
-  CC      drivers/scsi/scsi_logging.o
-  CC      drivers/acpi/button.o
-  CC      drivers/ata/libata-sff.o
-  CC      drivers/acpi/fan_core.o
-  CC      drivers/scsi/scsi_pm.o
-  CC      drivers/acpi/fan_attr.o
-  CC      drivers/scsi/scsi_bsg.o
-  CC      drivers/ata/libata-acpi.o
-  CC      drivers/acpi/processor_driver.o
-  CC      drivers/usb/core/hcd.o
-  CC      drivers/scsi/scsi_common.o
-  CC      drivers/acpi/processor_thermal.o
-  CC      drivers/ata/libata-pata-timings.o
-  CC      drivers/scsi/sd.o
-  CC      drivers/acpi/processor_idle.o
-  AR      drivers/ata/built-in.a
-  CC      drivers/input/serio/i8042.o
-  CC      drivers/usb/core/message.o
-  CC      drivers/acpi/processor_throttling.o
-  AR      drivers/input/serio/built-in.a
-  CC      drivers/scsi/scsi_sysfs.o
-  CC      drivers/acpi/processor_perflib.o
-  CC      drivers/input/mouse/synaptics.o
-  CC      drivers/usb/core/driver.o
-  CC      drivers/acpi/container.o
-  AR      drivers/scsi/built-in.a
-  CC      drivers/acpi/thermal.o
-  CC      drivers/acpi/acpi_memhotplug.o
-  CC      drivers/usb/core/config.o
-  CC      drivers/input/mouse/psmouse-smbus.o
-  CC      drivers/rtc/rtc-mc146818-lib.o
-  CC      drivers/acpi/battery.o
-  AR      drivers/input/mouse/built-in.a
-  AR      drivers/input/built-in.a
-  CC      drivers/usb/core/file.o
-  CC      drivers/usb/storage/scsiglue.o
-  AR      drivers/rtc/built-in.a
-  CC      drivers/usb/storage/protocol.o
-  CC      drivers/acpi/cppc_acpi.o
-  CC      drivers/usb/core/sysfs.o
-  CC      drivers/usb/storage/transport.o
-  CC      drivers/i2c/i2c-boardinfo.o
-  CC      drivers/acpi/spcr.o
-  CC      drivers/i2c/i2c-core-base.o
-  CC      drivers/usb/core/endpoint.o
-  CC      drivers/usb/storage/usb.o
-  CC      drivers/acpi/dptf/int340x_thermal.o
-  CC      drivers/usb/core/devio.o
-  AR      drivers/acpi/dptf/built-in.a
-  AR      drivers/acpi/built-in.a
-  CC      drivers/usb/core/notify.o
-  CC      drivers/usb/storage/initializers.o
-  CC      drivers/i2c/i2c-core-smbus.o
-  CC      drivers/usb/core/generic.o
-  CC      drivers/usb/storage/sierra_ms.o
-  CC      drivers/usb/core/quirks.o
-  CC      drivers/i2c/i2c-core-acpi.o
-  CC      drivers/usb/storage/option_ms.o
-  CC      drivers/usb/core/devices.o
-  CC      drivers/usb/storage/usual-tables.o
-  AR      drivers/i2c/built-in.a
-  CC      drivers/bluetooth/btintel.o
-  CC      drivers/cpufreq/intel_pstate.o
-  CC      drivers/usb/core/port.o
-  AR      drivers/usb/storage/built-in.a
-  CC      drivers/usb/core/usb-acpi.o
-  AR      drivers/usb/core/built-in.a
-  AR      drivers/usb/built-in.a
-  CC      drivers/mailbox/pcc.o
-  AR      drivers/cpufreq/built-in.a
-  AR      drivers/mailbox/built-in.a
-  AR      drivers/bluetooth/built-in.a
-  AR      drivers/built-in.a
-  AR      built-in.a
-  AR      vmlinux.a
-  LD      vmlinux.o
-  OBJCOPY modules.builtin.modinfo
-  GEN     modules.builtin
-  MODPOST vmlinux.symvers
-  UPD     include/generated/utsversion.h
-  CC      init/version-timestamp.o
-  LD      .tmp_vmlinux.kallsyms1
-  NM      .tmp_vmlinux.kallsyms1.syms
-  KSYMS   .tmp_vmlinux.kallsyms1.S
-  AS      .tmp_vmlinux.kallsyms1.S
-  LD      .tmp_vmlinux.kallsyms2
-  NM      .tmp_vmlinux.kallsyms2.syms
-  KSYMS   .tmp_vmlinux.kallsyms2.S
-  AS      .tmp_vmlinux.kallsyms2.S
-  LD      vmlinux
-  NM      System.map
-  SORTTAB vmlinux
-  RELOCS  arch/x86/boot/compressed/vmlinux.relocs
-  RSTRIP  vmlinux
-  CC      arch/x86/boot/version.o
-  LDS     arch/x86/boot/compressed/vmlinux.lds
-  VOFFSET arch/x86/boot/compressed/../voffset.h
-  CC      arch/x86/boot/compressed/cmdline.o
-  CC      arch/x86/boot/compressed/error.o
-  OBJCOPY arch/x86/boot/compressed/vmlinux.bin
-  CC      arch/x86/boot/compressed/early_serial_console.o
-  CC      arch/x86/boot/compressed/kaslr.o
-  CC      arch/x86/boot/compressed/ident_map_64.o
-  CC      arch/x86/boot/compressed/idt_64.o
-  CC      arch/x86/boot/compressed/pgtable_64.o
-  CC      arch/x86/boot/compressed/acpi.o
-  CC      arch/x86/boot/compressed/misc.o
-  GZIP    arch/x86/boot/compressed/vmlinux.bin.gz
-  MKPIGGY arch/x86/boot/compressed/piggy.S
-  AS      arch/x86/boot/compressed/piggy.o
-  LD      arch/x86/boot/compressed/vmlinux
-  ZOFFSET arch/x86/boot/zoffset.h
-  OBJCOPY arch/x86/boot/vmlinux.bin
-  AS      arch/x86/boot/header.o
-  LD      arch/x86/boot/setup.elf
-  OBJCOPY arch/x86/boot/setup.bin
-  BUILD   arch/x86/boot/bzImage
-Kernel: arch/x86/boot/bzImage is ready  (#2)
-GIT_DIR=. PATH="/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/bin:/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/sbin:/home/amakodev/.config/nvm/versions/node/v24.14.1/bin:/usr/local/bin:/usr/bin:/usr/local/games:/usr/games:/sbin:/usr/sbin:/home/amakodev/.windsurf/extensions/ms-python.debugpy-2025.18.0-linux-x64/bundled/scripts/noConfigScripts" PKG_CONFIG="/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/bin/pkg-config" PKG_CONFIG_SYSROOT_DIR="/" PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 PKG_CONFIG_ALLOW_SYSTEM_LIBS=1 PKG_CONFIG_LIBDIR="/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/lib/pkgconfig:/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/share/pkgconfig" BR_BINARIES_DIR=/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/images KCFLAGS=-Wno-attribute-alias /usr/bin/make -j4 HOSTCC="/usr/bin/gcc -O2 -isystem /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/include -L/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/lib -Wl,-rpath,/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/lib" ARCH=x86_64 INSTALL_MOD_PATH=/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/target CROSS_COMPILE="/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/bin/x86_64-buildroot-linux-gnu-" WERROR=0 REGENERATE_PARSERS=1 DEPMOD=/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/sbin/depmod INSTALL_MOD_STRIP=1 -C /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/linux-6.6.30 bzImage
-  DESCEND objtool
-make[5]: 'install_headers' is up to date.
-  CALL    scripts/checksyscalls.sh
-Kernel: arch/x86/boot/bzImage is ready  (#2)
-[7m>>> linux 6.6.30 Installing to target[27m
-# Install modules and remove symbolic links pointing to build
-# directories, not relevant on the target
-# Installing dtc (device tree compiler) as host tool, if selected
-if grep -q "CONFIG_DTC=y" /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/linux-6.6.30/.config; then /usr/bin/install -D -m 0755 /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/linux-6.6.30/scripts/dtc/dtc /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/bin/linux-dtc ; ln -sf linux-dtc /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/bin/dtc; fi
-[7m>>> linux 6.6.30 Installing to images directory[27m
-/usr/bin/install -m 0644 -D /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/linux-6.6.30/arch/x86/boot/bzImage /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/images/bzImage
 [7m>>>   Finalizing host directory[27m
 [7m>>>   Finalizing target directory[27m
 mkdir -p /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/etc/meson
@@ -459,7 +96,7 @@ mke2fs 1.47.0 (5-Feb-2023)
 Creating regular file /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/images/rootfs.ext2
 64-bit filesystem support is not enabled.  The larger fields afforded by this feature enable full-strength checksumming.  Pass -O 64bit to rectify.
 Creating filesystem with 131072 4k blocks and 32768 inodes
-Filesystem UUID: f872de9d-a825-4528-b32f-51e12c18a583
+Filesystem UUID: e51216a9-1953-4e4d-8096-bda64d1849d5
 Superblock backups stored on blocks: 
 	32768, 98304
 
@@ -492,17 +129,17 @@ rootdir=/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/
 table='/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/full_devices_table.txt'
 Parallel mksquashfs: Using 4 processors
 Creating 4.0 filesystem on /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/images/rootfs.squashfs, block size 131072.
-[=============================================================-] 3280/3280 100%
+[=============================================================\] 3280/3280 100%
 
 Exportable Squashfs 4.0 filesystem, gzip compressed, data block size 131072
 	compressed data, compressed metadata, compressed fragments,
 	compressed xattrs, compressed ids
 	duplicates are removed
-Filesystem size 31285.63 Kbytes (30.55 Mbytes)
+Filesystem size 31285.61 Kbytes (30.55 Mbytes)
 	37.44% of uncompressed filesystem size (83566.37 Kbytes)
-Inode table size 35877 bytes (35.04 Kbytes)
-	27.74% of uncompressed inode table size (129343 bytes)
-Directory table size 37740 bytes (36.86 Kbytes)
+Inode table size 35849 bytes (35.01 Kbytes)
+	27.72% of uncompressed inode table size (129343 bytes)
+Directory table size 37742 bytes (36.86 Kbytes)
 	39.91% of uncompressed directory table size (94565 bytes)
 Number of duplicate files found 99
 Number of inodes 3886
@@ -544,12 +181,12 @@ rootdir=/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/
 table='/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/full_devices_table.txt'
 [7m>>>   Executing post-image script /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/board/okamaos/post-image.sh[27m
 >> okamaos post-image: /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/images
-total 231M
--rw-r--r-- 1 amakodev amakodev 6.5M Apr 27 21:21 bzImage
--rw-r--r-- 1 amakodev amakodev 512M Apr 27 21:22 rootfs.ext2
-lrwxrwxrwx 1 amakodev amakodev   11 Apr 27 21:22 rootfs.ext4 -> rootfs.ext2
--rw-r--r-- 1 amakodev amakodev  31M Apr 27 21:22 rootfs.squashfs
--rw-r--r-- 1 amakodev amakodev  88M Apr 27 21:22 rootfs.tar
+total 233M
+-rw-r--r-- 1 amakodev amakodev 8.2M Apr 27 23:04 bzImage
+-rw-r--r-- 1 amakodev amakodev 512M Apr 27 23:17 rootfs.ext2
+lrwxrwxrwx 1 amakodev amakodev   11 Apr 27 23:17 rootfs.ext4 -> rootfs.ext2
+-rw-r--r-- 1 amakodev amakodev  31M Apr 27 23:17 rootfs.squashfs
+-rw-r--r-- 1 amakodev amakodev  88M Apr 27 23:17 rootfs.tar
 drwxr-xr-x 2 amakodev amakodev 4.0K Apr 27 16:23 syslinux
 >>> OkamaOS ISO Generator (GRUB2)
     Kernel : /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/images/bzImage
@@ -563,22 +200,21 @@ xorriso 1.5.6 : RockRidge filesystem manipulator, libburnia project.
 Drive current: -outdev 'stdio:/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/okamaos.iso'
 Media current: stdio file, overwriteable
 Media status : is blank
-Media summary: 0 sessions, 0 data blocks, 0 data, 47.4g free
-Added to ISO image: directory '/'='/tmp/grub.CUHASL'
+Media summary: 0 sessions, 0 data blocks, 0 data, 47.1g free
+Added to ISO image: directory '/'='/tmp/grub.6fmNnQ'
 xorriso : UPDATE :     956 files added in 1 seconds
-Added to ISO image: directory '/'='/tmp/tmp.r4pGsXTV6T'
+Added to ISO image: directory '/'='/tmp/tmp.o3OiRtJ3LU'
 xorriso : UPDATE :     961 files added in 1 seconds
 xorriso : WARNING : -volid text does not comply to ISO 9660 / ECMA 119 rules
 xorriso : NOTE : Copying to System Area: 512 bytes from file '/usr/lib/grub/i386-pc/boot_hybrid.img'
-xorriso : UPDATE :  22.24% done
-xorriso : UPDATE :  32.21% done
-xorriso : UPDATE :  56.82% done
-xorriso : UPDATE :  77.06% done
-xorriso : UPDATE :  98.22% done
-ISO image produced: 31146 sectors
-Written to medium : 31146 sectors at LBA 0
+xorriso : UPDATE :  68.69% done
+ISO image produced: 32027 sectors
+Written to medium : 32027 sectors at LBA 0
 Writing to 'stdio:/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/okamaos.iso' completed successfully.
 
 >>> ISO created: /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/okamaos.iso
--rw-rw-r-- 1 amakodev amakodev 61M Apr 27 21:23 /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/okamaos.iso
+-rw-rw-r-- 1 amakodev amakodev 63M Apr 27 23:17 /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/okamaos.iso
+make: Leaving directory '/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/buildroot'
+repos/partners/okamaos_projectX/output/okamaos.iso
+-rw-rw-r-- 1 amakodev amakodev 63M Apr 27 23:17 /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/okamaos.iso
 make: Leaving directory '/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/buildroot'

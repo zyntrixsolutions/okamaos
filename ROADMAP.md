@@ -79,6 +79,21 @@
 - [x] **Polished game library** (`_draw_play`): two-line cards with ID/version sub-line + size badge; footer pills (Store + Install .ok)
 - [x] **`manifest.py`** relaxed: `keyboard_usage="supported"` valid; `controller_required=false` unrestricted
 
+### v0.8.0 — VOID STRIKER Triple-A Showcase ✅
+- [x] **VOID STRIKER** (`com.okamaos.voidstriker` v1.0.0): self-contained `.ok` vertical shoot-em-up
+- [x] Procedural enemy waves (Drone / Tank / Bomber) with per-wave difficulty scaling
+- [x] Multi-phase Boss every 5 waves (entry animation, 3 attack phases, breakable shield)
+- [x] Full particle system: per-kill explosions, engine trail, muzzle sparks
+- [x] Screen-shake system with calibrated per-event intensity and frame decay
+- [x] 3 weapons (LASER / SPREAD / BEAM) with cyclic pickup + RB hotkey
+- [x] Rechargeable shield mechanic (X button)
+- [x] Score combo multiplier with 95-frame window
+- [x] Power-up drops: weapon, shield, extra life
+- [x] 3-layer parallax starfield at 60 fps
+- [x] High-score save state (`save_state.json`)
+- [x] `okama-inputd` InputClient + keyboard fallback; `--windowed` dev flag
+- [x] rootfs-overlay preinstalled stub for first-boot appearance in Play screen
+
 ### v1.0 — Console Polish
 - [x] Silent boot (`quiet loglevel=0`, boot log redirect) — completed in v0.3
 - [ ] Boot time < 8 seconds

@@ -5,6 +5,27 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.8.0] - 2026-04-28
+
+### Added
+- **VOID STRIKER** (`com.okamaos.voidstriker` v1.0.0): Triple-A vertical shoot-em-up packaged as a self-contained `.ok` bundle — zero extra dependencies, pure pygame, 60 fps on framebuffer
+  - Procedural enemy waves scaling with wave number: Drone (zigzag attacker), Tank (armoured, 3-way burst), Bomber (spread drop)
+  - Multi-phase Boss every 5 waves: entry animation, phase-1 aimed burst → phase-2 spiral → phase-3 full-spiral + aimed; breakable energy shield on wave ≥ 3; per-phase colour core; HP bar with phase pips
+  - Particle system: ~20-45 particle explosion per kill/hit; engine trail on movement; muzzle spark on fire
+  - Screen-shake: calibrated per-event intensity (hit=12, kill=3/7, boss=7); decays each frame
+  - 3 selectable weapons: **LASER** (rapid single, dmg 1), **SPREAD** (3-way, dmg 1), **BEAM** (dual high-speed, dmg 2); cycle with RB/Tab
+  - Rechargeable shield (X button when bar full, 130-frame duration, absorbs one hit pattern)
+  - Combo multiplier system: combo × (combo//3) score bonus, 95-frame window, resets on player hit
+  - Power-ups: Weapon cycle (W), Shield recharge (S), Extra life (+); 28% drop chance on enemy kill
+  - Scrolling 3-layer parallax starfield (130/55/22 stars at 0.35×/0.9×/2.0× speed)
+  - High-score persistence via `save_state.json` (saved on death or menu exit)
+  - Full `okamaos.input_protocol.InputClient` integration; keyboard fallback (WASD/arrows/Space/Tab)
+  - `--windowed` CLI flag for dev/testing
+- **`games/voidstriker-pkg/`**: lean packaging source (`main.py` + `manifest.ok.json`)
+- **rootfs-overlay stub** (`board/okamaos/rootfs-overlay/var/okamaos/games/com.okamaos.voidstriker/`): preinstalled so the game appears in Play screen on first ISO boot
+
+---
+
 ## [0.7.2] - 2026-04-28
 
 ### Fixed

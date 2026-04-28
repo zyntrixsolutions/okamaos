@@ -1,0 +1,16 @@
+{
+  "name": "VOID STRIKER",
+  "id": "com.okamaos.voidstriker",
+  "version": "1.0.0",
+  "runtime": "okama-sdl2",
+  "entry": "main.py",
+  "min_ram_mb": 64,
+  "target_fps": 60,
+  "permissions": ["controller", "audio", "save_data"],
+  "age_rating": "Everyone",
+  "supports_save_state": true,
+  "controller_required": false,
+  "keyboard_usage": "supported",
+  "python_deps": [],
+  "description": "Triple-A vertical shoot-em-up for OkamaOS. Procedural enemy waves, multi-phase bosses, particle FX, screen-shake, 3 weapons, combo system, and high-score save. Pure pygame — zero extra dependencies. Controller + keyboard. 60 fps."
+}

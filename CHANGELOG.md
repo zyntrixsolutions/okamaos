@@ -5,6 +5,13 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.7.1] - 2026-04-28
+
+### Fixed
+- **Keyboard navigation on Play screen**: Y and X keys were not mapped to Game Store and Install .ok actions respectively. Added SDL keyboard mappings (`pygame.K_y` → "Y", `pygame.K_x` → "X") and evdev fallback mappings (keycodes 21 and 45) so keyboard users can now access the footer buttons without a controller.
+
+---
+
 ## [0.7.0] - 2026-04-28
 
 ### Changed

@@ -68,6 +68,8 @@ _EVDEV_KEY_MAP = {
     1:   "B",          # KEY_ESC
     15:  "DPAD_RIGHT", # KEY_TAB
     102: "START",      # KEY_HOME
+    21:  "Y",          # KEY_Y
+    45:  "X",          # KEY_X
     16:  "_QUIT_DEV",  # KEY_Q  (dev-mode quit)
 }
 
@@ -440,6 +442,8 @@ class OkamaShell:
                     pygame.K_ESCAPE: "B",
                     pygame.K_TAB:    "DPAD_RIGHT",
                     pygame.K_HOME:   "START",
+                    pygame.K_y:      "Y",
+                    pygame.K_x:      "X",
                     pygame.K_q:      "QUIT" if self.dev_mode else None,
                 }
                 action = mapping.get(k)

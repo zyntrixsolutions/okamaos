@@ -25,6 +25,9 @@ case "$1" in
     # Run on tty1 in the background (init will not wait for it)
     openvt -c 1 -f -w -- sh -c "
         export PYTHONPATH=/usr/lib/okamaos
+        export SDL_VIDEODRIVER=fbdev
+        export SDL_FBDEV=/dev/fb0
+        export SDL_AUDIODRIVER=alsa
         while true; do
             /usr/bin/okama-shell
             echo \"okama-shell exited — restarting\" >> /var/okamaos/logs/shell.log

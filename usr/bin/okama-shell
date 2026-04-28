@@ -513,7 +513,7 @@ def main():
         _text_shell()
         return
 
-    os.environ.setdefault("SDL_VIDEODRIVER", "fbcon")
+    os.environ.setdefault("SDL_VIDEODRIVER", "fbdev")
     os.environ.setdefault("SDL_FBDEV",
                           conf.get("FRAMEBUFFER_DEVICE", "/dev/fb0"))
     os.environ.setdefault("SDL_AUDIODRIVER", "alsa")

@@ -5,6 +5,14 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.2.1] - 2026-04-28
+
+### Fixed
+- `pygame.error: fbcon not available` — SDL2 framebuffer driver is `fbdev`, not `fbcon` (kernel console name)
+- `S99okama-shell` now exports `SDL_VIDEODRIVER=fbdev`, `SDL_FBDEV=/dev/fb0`, `SDL_AUDIODRIVER=alsa`
+
+---
+
 ## [0.2.0] - 2026-04-28
 
 ### Added

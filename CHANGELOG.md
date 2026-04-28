@@ -5,6 +5,26 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.6.0] - 2026-04-28
+
+### Added
+- **Game Store** (`game_store` state): browse a remote catalog from `store.okamaos.io`, see size/version/category per game, one-press download+verify+install with live percentage progress bar; Y or Refresh button fetches catalog in a background thread
+- **Standalone .ok packages** (self-contained): `okama-run` now prepends `<game_dir>/site-packages/` to `PYTHONPATH` and `<game_dir>/lib/` to `LD_LIBRARY_PATH` so games with bundled deps run without any system-wide pip installs
+- **`okama-pack bundle`** subcommand: `pip install --target site-packages/ <python_deps>` directly from manifest `python_deps` list or `--deps` override; prepares self-contained game directories before `okama-pack build`
+- **`okamaos.store`** module: `fetch_catalog()`, `download_game()` with streaming progress callback + SHA-256 checksum verification, `format_size()` helper
+- **`okamaos.updates`** module: `current_version()`, `fetch_release_info()`, `is_newer()`, `find_local_updates()` for both remote and USB-based OS updates
+- **Settings > Updates** sub-screen: shows installed version, "Check for OS Updates" (async), "Apply Local Update" (scans USB/media for `.ok-update` files); status shown with color coding (green=ok, red=error)
+
+### Changed
+- **Game Library UI** (`_draw_play`): polished card layout — name + ID/version sub-line on left, size badge or launch hint on right; two footer pills: `✦ Game Store` (purple) + `+ Install .ok` (green); sub-header row shows count and action hints; empty state updated
+- **`_play_input`**: Y → Game Store, X → Install .ok, empty-state A → Game Store instead of Install
+- **`manifest.py`**: added `"supported"` as valid `keyboard_usage` value; removed dev-mode-only restriction on `controller_required=false`; `controller_required` is now purely informational
+- **`SETTINGS_OPTIONS`**: added `"Updates"` entry
+- Home screen version badge: `v0.5.0` → `v0.6.0`
+- pgdrive `manifest.ok.json`: `keyboard_usage` corrected to `"full"` (now unrestricted)
+
+---
+
 ## [0.5.0] - 2026-04-28
 
 ### Fixed
@@ -14,7 +34,7 @@ Format: [Semantic Versioning](https://semver.org/)
 - **`_draw_section_header` — polished header bar**: now draws a subtle semi-transparent background panel, a 4 px left accent stripe in the section colour, the title vertically centred in the 56 px band, a thin vertical separator, and the clock on the far right — all within a single cohesive row with no overlap.
 - **Bottom hint bar**: `_draw_hints` now blits a matching semi-transparent background behind the hint text for better legibility.
 - **Separator draw order**: header and footer separator lines are now drawn *after* the state-specific content so they sit on top of any background panels painted by sub-screens.
-- **Home screen version badge**: updated to `v0.5.0`.
+- **Home screen version badge**: updated to `v0.5.0` (later bumped to `v0.6.0`).
 
 ### Added
 - **PGDrive preinstalled game** (`com.okamaos.pgdrive`): packaged the `games/pgdrive` open-ended driving simulator as an OkamaOS `.ok`-compatible game with `manifest.ok.json` and `main.py` entry point; the game stub is placed in `board/okamaos/rootfs-overlay/var/okamaos/games/com.okamaos.pgdrive/` so it appears in the Play screen on first boot. Supports joystick (default) and keyboard (pass `--keyboard`); auto-resets on destination arrival or crash.

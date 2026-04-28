@@ -128,6 +128,14 @@ import okamaos.games as games_mod
 import okamaos.bluetooth as bt_mod
 import okamaos.package as pkg_mod
 import okamaos.manifest as manifest_mod
+try:
+    import okamaos.store as store_mod
+except ImportError:
+    store_mod = None
+try:
+    import okamaos.updates as updates_mod
+except ImportError:
+    updates_mod = None
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -155,6 +163,8 @@ COL_ERROR      = (230,  60,  60)
 COL_PLAY       = ( 80, 200, 120)
 COL_POWER      = (220,  80,  80)
 COL_SETTINGS   = ( 80, 160, 220)
+COL_STORE      = (160,  90, 230)
+COL_UPDATE     = (220, 160,  50)
 
 SECTIONS = ["Play", "Settings", "Power"]
 SECTION_ICONS = [">", "*", "O"]
@@ -167,7 +177,10 @@ SETTINGS_OPTIONS = [
     "Audio",
     "Network",
     "Storage Info",
+    "Updates",
 ]
+
+_UPDATE_ACTIONS = ["Check for OS Updates", "Apply Local Update (.ok-update)"]
 
 HINT_KB   = "[<>] Navigate   [Enter] Select   [Esc] Back   [Tab] Section"
 HINT_CTRL = "[^v] Navigate   [A] Select   [B] Back   [START] Home"
@@ -301,6 +314,21 @@ class OkamaShell:
         self.install_files = []
         self.install_idx = 0
         self.install_status = ""
+
+        # Game store state
+        self.store_catalog: list = []
+        self.store_idx = 0
+        self.store_scroll = 0
+        self.store_status = ""
+        self.store_loading = False
+        self._store_dl_progress: tuple = (0, 0)
+
+        # System update state
+        self.update_idx = 0
+        self.update_status = ""
+        self.update_info: dict = {}
+        self.update_loading = False
+        self._update_local_files: list = []
 
         # Animation / visual state
         self._tick = 0            # frame counter for animations
@@ -497,6 +525,10 @@ class OkamaShell:
             self._settings_storage_input(action, ev)
         elif self.state == "install_browse":
             self._install_browse_input(action, ev)
+        elif self.state == "game_store":
+            self._game_store_input(action, ev)
+        elif self.state == "settings_updates":
+            self._settings_updates_input(action, ev)
 
     def _home_input(self, action: str, ev: dict = None):
         n = len(SECTIONS)
@@ -558,14 +590,22 @@ class OkamaShell:
         elif action == "DPAD_UP":
             if n:
                 self.list_idx = (self.list_idx - 1) % n
+        elif action == "Y":
+            self._enter_game_store()
+        elif action == "X":
+            self._enter_install_browse()
         elif action == "CLICK" and ev:
-            install_r = self._play_install_rect()
-            if install_r and install_r.collidepoint(ev["pos"]):
+            pos = ev["pos"]
+            store_r, inst_r = self._play_footer_rects()
+            if store_r.collidepoint(pos):
+                self._enter_game_store()
+                return
+            if inst_r.collidepoint(pos):
                 self._enter_install_browse()
                 return
             rects = self._play_game_rects()
             for i, r in enumerate(rects):
-                if r.collidepoint(ev["pos"]):
+                if r.collidepoint(pos):
                     if i == self.list_idx:
                         self._launch_game(self.games[i])
                     else:
@@ -575,9 +615,7 @@ class OkamaShell:
             if self.games:
                 self._launch_game(self.games[self.list_idx])
             else:
-                self._enter_install_browse()
-        elif action == "DPAD_RIGHT" and not self.games:
-            self._enter_install_browse()
+                self._enter_game_store()
 
     def _play_game_rects(self):
         card_h, margin, start_y = 80, 10, 120
@@ -626,6 +664,8 @@ class OkamaShell:
             self._enter_settings_network()
         elif opt == "Storage Info":
             self._enter_settings_storage()
+        elif opt == "Updates":
+            self._enter_settings_updates()
 
     def _settings_rects(self):
         return [
@@ -1073,6 +1113,309 @@ class OkamaShell:
         except Exception as e:
             self.install_status = f"Error: {str(e)[:60]}"
 
+    # -----------------------------------------------------------------------
+    # Game Store
+    # -----------------------------------------------------------------------
+    def _enter_game_store(self):
+        self.store_idx = 0
+        self.store_scroll = 0
+        if not self.store_catalog:
+            self.store_status = "Press Y to fetch catalog from store.okamaos.io"
+        self.state = "game_store"
+
+    def _fetch_store_catalog(self):
+        if self.store_loading or store_mod is None:
+            if store_mod is None:
+                self.store_status = "Store module unavailable."
+            return
+        import threading
+        self.store_loading = True
+        self.store_status = "Fetching catalog\u2026"
+
+        def _work():
+            try:
+                data = store_mod.fetch_catalog()
+                self.store_catalog = data.get("games", [])
+                self.store_status = (
+                    f"{len(self.store_catalog)} game"
+                    f"{'s' if len(self.store_catalog) != 1 else ''} available"
+                )
+            except Exception as e:
+                self.store_status = f"Error: {str(e)[:60]}"
+            finally:
+                self.store_loading = False
+
+        threading.Thread(target=_work, daemon=True).start()
+
+    def _store_download(self, entry: dict):
+        if self.store_loading or store_mod is None:
+            return
+        import threading
+        name = entry.get("name", entry.get("id", "game"))
+        self.store_loading = True
+        self._store_dl_progress = (0, entry.get("size_bytes", 0))
+        self.store_status = f"Downloading {name}\u2026"
+
+        def _work():
+            tmp = f"/tmp/{entry.get('id','game')}.ok"
+            try:
+                def _progress(recv, total):
+                    self._store_dl_progress = (recv, total)
+                    pct = int(recv * 100 / total) if total else 0
+                    self.store_status = f"Downloading {name}\u2026 {pct}%"
+
+                store_mod.download_game(entry, tmp, progress_cb=_progress)
+                manifest = pkg_mod.verify(tmp, dev_mode=self.dev_mode)
+                dest = games_mod.game_dir(manifest["id"])
+                if os.path.exists(dest):
+                    shutil.rmtree(dest)
+                pkg_mod.extract(tmp, dest)
+                self._refresh_games()
+                self.store_status = f"Installed: {name} v{manifest['version']}"
+            except Exception as e:
+                self.store_status = f"Failed: {str(e)[:60]}"
+            finally:
+                self.store_loading = False
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
+
+        threading.Thread(target=_work, daemon=True).start()
+
+    def _game_store_input(self, action: str, ev: dict = None):
+        n = len(self.store_catalog)
+        if action in ("B", "START"):
+            self.state = "play"
+        elif action == "Y":
+            self._fetch_store_catalog()
+        elif action == "DPAD_UP" and n:
+            self.store_idx = (self.store_idx - 1) % n
+        elif action == "DPAD_DOWN" and n:
+            self.store_idx = (self.store_idx + 1) % n
+        elif action == "A" and n:
+            self._store_download(self.store_catalog[self.store_idx])
+        elif action == "CLICK" and ev:
+            pos = ev["pos"]
+            refresh_r = self._store_refresh_rect()
+            if refresh_r.collidepoint(pos):
+                self._fetch_store_catalog()
+                return
+            rects = self._subscreen_rects(n)
+            for i, r in enumerate(rects):
+                if r.collidepoint(pos):
+                    if i == self.store_idx:
+                        self._store_download(self.store_catalog[i])
+                    else:
+                        self.store_idx = i
+            return
+
+    def _store_refresh_rect(self):
+        btn_w, btn_h = 180, 36
+        return pygame.Rect(WIDTH - btn_w - 24, 63, btn_w, btn_h)
+
+    def _store_catalog_rects(self, n: int) -> list:
+        card_h, gap = 68, 6
+        start_y = 112
+        return [
+            pygame.Rect(40, start_y + i * (card_h + gap), WIDTH - 80, card_h)
+            for i in range(n)
+            if start_y + i * (card_h + gap) + card_h <= HEIGHT - 60
+        ]
+
+    def _draw_game_store(self):
+        self._draw_section_header("\u22c6 Game Store", COL_STORE)
+        mx, my = self._mouse_pos
+        installed_ids = {g["id"] for g in self.games}
+
+        # Status bar
+        status_s = self.font_sm.render(self.store_status, True,
+                                       COL_ERROR if self.store_status.startswith("Error")
+                                       or self.store_status.startswith("Failed")
+                                       else COL_DIM)
+        self.screen.blit(status_s, (24, 70))
+
+        # Refresh button
+        rr = self._store_refresh_rect()
+        r_hov = rr.collidepoint(mx, my)
+        r_bg = _lerp_color(COL_CARD, COL_STORE, 0.35 if r_hov else 0.12)
+        pygame.draw.rect(self.screen, r_bg, rr, border_radius=8)
+        pygame.draw.rect(self.screen, COL_STORE, rr, 1, border_radius=8)
+        lbl_r = self.font_hint.render(
+            "\u21bb Refresh" if not self.store_loading else "Loading\u2026",
+            True, COL_STORE)
+        self.screen.blit(lbl_r, (rr.x + rr.w // 2 - lbl_r.get_width() // 2,
+                                  rr.y + rr.h // 2 - lbl_r.get_height() // 2))
+
+        # Catalog list
+        n = len(self.store_catalog)
+        if n == 0:
+            info = self.font_sm.render(
+                "No catalog loaded. Press Y or click Refresh to fetch.",
+                True, COL_DIM)
+            self.screen.blit(info, (WIDTH // 2 - info.get_width() // 2, 300))
+        else:
+            rects = self._store_catalog_rects(n)
+            for i, (entry, r) in enumerate(zip(self.store_catalog, rects)):
+                is_sel = (i == self.store_idx)
+                is_hov = r.collidepoint(mx, my)
+                is_inst = entry.get("id") in installed_ids
+
+                bg = _lerp_color(COL_CARD, COL_SELECTED, 0.72) if is_sel \
+                     else (COL_CARD_HOV if is_hov else COL_CARD)
+                pygame.draw.rect(self.screen, bg, r, border_radius=10)
+                if is_sel:
+                    pygame.draw.rect(self.screen, COL_STORE, r, 2, border_radius=10)
+                    pygame.draw.rect(self.screen, COL_STORE,
+                                     pygame.Rect(r.x, r.y, 4, r.h), border_radius=2)
+
+                name_col = COL_TEXT if is_sel else COL_TEXT2
+                name_s = self.font_mdb.render(entry.get("name", "?"), True, name_col)
+                self.screen.blit(name_s, (60, r.y + (r.h - name_s.get_height()) // 2 - 10))
+
+                cat = entry.get("category", "")
+                ver = entry.get("version", "?")
+                meta = f"v{ver}" + (f"  \u2022  {cat}" if cat else "")
+                meta_s = self.font_hint.render(meta, True, COL_DIM)
+                self.screen.blit(meta_s, (60, r.y + (r.h + meta_s.get_height()) // 2 + 2))
+
+                # Right side: size + installed badge / action hint
+                sb = entry.get("size_bytes", 0)
+                size_str = store_mod.format_size(sb) if store_mod else ""
+                if is_inst:
+                    badge = self.font_hint.render(
+                        f"\u2713 Installed  {size_str}", True, COL_OK)
+                elif is_sel:
+                    badge = self.font_sm.render(
+                        f"A \u25b6 Download  {size_str}", True, COL_STORE)
+                else:
+                    badge = self.font_hint.render(size_str, True, COL_DIM)
+                self.screen.blit(badge, (r.right - badge.get_width() - 16,
+                                         r.y + (r.h - badge.get_height()) // 2))
+
+        # Download progress bar
+        recv, total = self._store_dl_progress
+        if self.store_loading and total > 0:
+            bar_h = 4
+            bar_y = HEIGHT - 48 - bar_h - 4
+            fill_w = int((WIDTH - 80) * recv / total)
+            pygame.draw.rect(self.screen, COL_CARD,
+                             pygame.Rect(40, bar_y, WIDTH - 80, bar_h))
+            pygame.draw.rect(self.screen, COL_STORE,
+                             pygame.Rect(40, bar_y, fill_w, bar_h))
+
+    # -----------------------------------------------------------------------
+    # Settings > Updates
+    # -----------------------------------------------------------------------
+    def _enter_settings_updates(self):
+        self.update_idx = 0
+        self.update_status = ""
+        self.update_info = {}
+        self.update_loading = False
+        self._update_local_files = []
+        self.state = "settings_updates"
+
+    def _settings_updates_input(self, action: str, ev: dict = None):
+        n = len(_UPDATE_ACTIONS)
+        if action in ("B", "START"):
+            self.state = "settings"
+        elif action == "DPAD_UP":
+            self.update_idx = (self.update_idx - 1) % n
+        elif action == "DPAD_DOWN":
+            self.update_idx = (self.update_idx + 1) % n
+        elif action == "A":
+            self._update_select()
+        elif action == "CLICK" and ev:
+            rects = self._subscreen_rects(n)
+            for i, r in enumerate(rects):
+                if r.collidepoint(ev["pos"]):
+                    self.update_idx = i
+                    self._update_select()
+            return
+
+    def _update_select(self):
+        opt = _UPDATE_ACTIONS[self.update_idx]
+        if "Check" in opt:
+            self._check_os_update()
+        elif "Local" in opt:
+            self._apply_local_update()
+
+    def _check_os_update(self):
+        if updates_mod is None:
+            self.update_status = "Updates module unavailable."
+            return
+        if self.update_loading:
+            return
+        import threading
+        self.update_loading = True
+        self.update_status = "Checking for updates\u2026"
+
+        def _work():
+            try:
+                info = updates_mod.fetch_release_info()
+                cv = updates_mod.current_version()
+                rv = info.get("version", "?")
+                if updates_mod.is_newer(cv, rv):
+                    self.update_info = info
+                    self.update_status = (
+                        f"Update available: v{rv}  "
+                        f"({store_mod.format_size(info.get('size_bytes',0)) if store_mod else ''})"
+                    )
+                else:
+                    self.update_info = {}
+                    self.update_status = f"OkamaOS v{cv} is up to date."
+            except Exception as e:
+                self.update_status = f"Check failed: {str(e)[:60]}"
+            finally:
+                self.update_loading = False
+
+        threading.Thread(target=_work, daemon=True).start()
+
+    def _apply_local_update(self):
+        if updates_mod is None:
+            self.update_status = "Updates module unavailable."
+            return
+        files = updates_mod.find_local_updates()
+        if files:
+            self._update_local_files = files
+            self.update_status = (
+                f"Found {len(files)} .ok-update file(s). "
+                "Use okama-cli update apply <file> to install."
+            )
+        else:
+            self.update_status = "No .ok-update files found on USB/media/tmp."
+
+    def _draw_settings_updates(self):
+        self._draw_section_header("* Updates", COL_UPDATE)
+        mx, my = self._mouse_pos
+
+        # Current version row
+        cv = updates_mod.current_version() if updates_mod else "unknown"
+        ver_label = self.font_sm.render(
+            f"Current version:  v{cv}", True, COL_DIM)
+        self.screen.blit(ver_label, (48, 70))
+
+        # Status text
+        if self.update_status:
+            is_good = any(x in self.update_status for x in ("up to date", "Installed"))
+            is_err = any(x in self.update_status for x in ("failed", "Error", "unavailable"))
+            col = COL_OK if is_good else (COL_ERROR if is_err else COL_DIM)
+            st_s = self.font_sm.render(self.update_status, True, col)
+            self.screen.blit(st_s, (48, HEIGHT - 90))
+
+        # Update note
+        if self.update_info:
+            notes_s = self.font_hint.render(
+                self.update_info.get("notes", "")[:80], True, COL_DIM)
+            self.screen.blit(notes_s, (48, HEIGHT - 110))
+
+        # Action list
+        self._draw_subscreen_list(
+            [{"label": a} for a in _UPDATE_ACTIONS],
+            self.update_idx,
+            key_fn=lambda x: x["label"])
+
+    # -----------------------------------------------------------------------
     def _draw_install_browse(self):
         self._draw_section_header("> Install Game", COL_PLAY)
 
@@ -1170,6 +1513,10 @@ class OkamaShell:
             self._draw_settings_storage()
         elif self.state == "install_browse":
             self._draw_install_browse()
+        elif self.state == "game_store":
+            self._draw_game_store()
+        elif self.state == "settings_updates":
+            self._draw_settings_updates()
 
         # Separator lines drawn after state content so they appear on top
         pygame.draw.line(self.screen, COL_BORDER, (0, 56), (WIDTH, 56), 1)
@@ -1198,7 +1545,7 @@ class OkamaShell:
         self.screen.blit(brand, (bx, by))
 
         # Version badge
-        ver_txt = self.font_hint.render("v0.5.0", True, COL_DIM)
+        ver_txt = self.font_hint.render("v0.6.0", True, COL_DIM)
         self.screen.blit(ver_txt, (bx + brand.get_width() + 10,
                                    by + brand.get_height() - ver_txt.get_height() - 2))
 
@@ -1255,83 +1602,108 @@ class OkamaShell:
         sub = self.font_sm.render(sub_txt, True, COL_DIM)
         self.screen.blit(sub, (WIDTH // 2 - sub.get_width() // 2, y_sub))
 
-    def _play_install_rect(self):
-        """Returns the Install Game button rect shown in the play list footer."""
-        btn_w, btn_h = 280, 52
-        return pygame.Rect(WIDTH // 2 - btn_w // 2,
-                           HEIGHT - btn_h - 52, btn_w, btn_h)
+    def _play_footer_rects(self):
+        """Return (store_rect, install_rect) for the two footer action pills."""
+        btn_w, btn_h = 260, 46
+        gap = 16
+        total = btn_w * 2 + gap
+        x0 = WIDTH // 2 - total // 2
+        y = HEIGHT - btn_h - 48
+        return (
+            pygame.Rect(x0, y, btn_w, btn_h),
+            pygame.Rect(x0 + btn_w + gap, y, btn_w, btn_h),
+        )
 
     def _draw_play(self):
         self._draw_section_header("> Play", COL_PLAY)
-
-        if not self.games:
-            # Empty state card
-            empty_r = pygame.Rect(40, HEIGHT // 2 - 80, WIDTH - 80, 130)
-            pygame.draw.rect(self.screen, COL_CARD, empty_r, border_radius=14)
-            pygame.draw.rect(self.screen, COL_BORDER, empty_r, 1, border_radius=14)
-            msg1 = self.font_md.render("No games installed", True, COL_DIM)
-            msg2 = self.font_sm.render(
-                "Select \"Install Game\" below to browse for a .ok package",
-                True, COL_DIM)
-            self.screen.blit(msg1, (WIDTH//2 - msg1.get_width()//2,
-                                    empty_r.y + 22))
-            self.screen.blit(msg2, (WIDTH//2 - msg2.get_width()//2,
-                                    empty_r.y + 72))
-            # Install button
-            r = self._play_install_rect()
-            mx, my = self._mouse_pos
-            is_hov = r.collidepoint(mx, my)
-            btn_col = _lerp_color(COL_CARD, COL_PLAY, 0.5) if is_hov else COL_CARD
-            pygame.draw.rect(self.screen, btn_col, r, border_radius=12)
-            pygame.draw.rect(self.screen, COL_PLAY, r, 2, border_radius=12)
-            lbl = self.font_mdb.render("+ Install Game", True, COL_PLAY)
-            self.screen.blit(lbl, (r.x + r.w // 2 - lbl.get_width() // 2,
-                                   r.y + r.h // 2 - lbl.get_height() // 2))
-            return
-
-        card_h = 80
-        margin = 10
-        start_y = 120
         mx, my = self._mouse_pos
 
-        for i, g in enumerate(self.games):
-            y = start_y + i * (card_h + margin)
-            if y + card_h > HEIGHT - 60:
-                break
-            r = pygame.Rect(40, y, WIDTH - 80, card_h)
-            is_sel = (i == self.list_idx)
-            is_hov = r.collidepoint(mx, my)
+        # --- Sub-header row: count + quick hints ---
+        n = len(self.games)
+        count_str = f"{n} game{'s' if n != 1 else ''} installed"
+        count_s = self.font_sm.render(count_str, True, COL_DIM)
+        self.screen.blit(count_s, (48, 70))
+        hint_s = self.font_hint.render("A: Launch   Y: Store   X: Install .ok",
+                                       True, COL_DIM)
+        self.screen.blit(hint_s, (WIDTH - hint_s.get_width() - 24, 70))
 
-            color = _lerp_color(COL_CARD, COL_SELECTED, 0.8) if is_sel \
-                    else (COL_CARD_HOV if is_hov else COL_CARD)
-            pygame.draw.rect(self.screen, color, r, border_radius=12)
-            if is_sel:
-                pygame.draw.rect(self.screen, COL_PLAY, r, 2, border_radius=12)
-                sel_bar = pygame.Rect(r.x, r.y, 4, r.h)
-                pygame.draw.rect(self.screen, COL_PLAY, sel_bar,
-                                 border_radius=2)
+        if not self.games:
+            # Empty state
+            empty_r = pygame.Rect(120, 180, WIDTH - 240, 130)
+            pygame.draw.rect(self.screen, COL_CARD, empty_r, border_radius=14)
+            pygame.draw.rect(self.screen, COL_BORDER, empty_r, 1, border_radius=14)
+            msg1 = self.font_md.render("No games installed yet", True, COL_DIM)
+            msg2 = self.font_sm.render(
+                "Visit the Game Store or install a .ok file from USB",
+                True, COL_DIM)
+            self.screen.blit(msg1, (WIDTH//2 - msg1.get_width()//2, empty_r.y + 24))
+            self.screen.blit(msg2, (WIDTH//2 - msg2.get_width()//2, empty_r.y + 72))
+        else:
+            card_h, gap, start_y = 72, 8, 100
+            for i, g in enumerate(self.games):
+                y = start_y + i * (card_h + gap)
+                if y + card_h > HEIGHT - 64:
+                    break
+                r = pygame.Rect(40, y, WIDTH - 80, card_h)
+                is_sel = (i == self.list_idx)
+                is_hov = r.collidepoint(mx, my)
 
-            name = self.font_mdb.render(g["name"], True,
-                                        COL_TEXT if is_sel else COL_TEXT2)
-            ver  = self.font_sm.render(
-                f"v{g.get('version','?')} | {g.get('id','')}", True, COL_DIM)
-            self.screen.blit(name, (66, y + 12))
-            self.screen.blit(ver,  (66, y + 46))
+                bg = _lerp_color(COL_CARD, COL_SELECTED, 0.75) if is_sel \
+                     else (COL_CARD_HOV if is_hov else COL_CARD)
+                pygame.draw.rect(self.screen, bg, r, border_radius=10)
+                if is_sel:
+                    pygame.draw.rect(self.screen, COL_PLAY, r, 2, border_radius=10)
+                    pygame.draw.rect(self.screen, COL_PLAY,
+                                     pygame.Rect(r.x, r.y, 4, r.h), border_radius=2)
 
-            if is_sel:
-                hint = self.font_sm.render("Enter / A -> Launch", True, COL_OK)
-                self.screen.blit(hint, (WIDTH - hint.get_width() - 24, y + 28))
+                # Game name
+                name_s = self.font_mdb.render(
+                    g["name"], True, COL_TEXT if is_sel else COL_TEXT2)
+                self.screen.blit(name_s, (60, y + (card_h - name_s.get_height()) // 2 - 10))
 
-        # Install button in footer (always visible)
-        r = self._play_install_rect()
-        mx2, my2 = self._mouse_pos
-        is_hov2 = r.collidepoint(mx2, my2)
-        btn_col = _lerp_color(COL_CARD, COL_PLAY, 0.4) if is_hov2 else COL_CARD
-        pygame.draw.rect(self.screen, btn_col, r, border_radius=12)
-        pygame.draw.rect(self.screen, COL_PLAY, r, 2, border_radius=12)
-        lbl2 = self.font_mdb.render("+ Install Game", True, COL_PLAY)
-        self.screen.blit(lbl2, (r.x + r.w // 2 - lbl2.get_width() // 2,
-                                 r.y + r.h // 2 - lbl2.get_height() // 2))
+                # ID + version sub-line
+                sub_s = self.font_hint.render(
+                    f"{g.get('id','')}  •  v{g.get('version','?')}",
+                    True, COL_DIM)
+                self.screen.blit(sub_s, (60, y + (card_h - sub_s.get_height()) // 2 + 14))
+
+                # Right side: launch hint (selected) or size badge
+                if is_sel:
+                    lbl = self.font_sm.render("A  ▶  Launch", True, COL_OK)
+                    self.screen.blit(lbl, (r.right - lbl.get_width() - 16,
+                                          y + (card_h - lbl.get_height()) // 2))
+                else:
+                    size_mb = g.get("size_mb", 0)
+                    if not size_mb:
+                        try:
+                            gd = games_mod.game_dir(g["id"])
+                            size_mb = sum(
+                                f.stat().st_size for f in
+                                __import__("pathlib").Path(gd).rglob("*")
+                                if f.is_file()
+                            ) / (1024 * 1024)
+                        except Exception:
+                            size_mb = 0
+                    if size_mb:
+                        sz_s = self.font_hint.render(
+                            f"{size_mb:.1f} MB", True, COL_DIM)
+                        self.screen.blit(sz_s, (r.right - sz_s.get_width() - 16,
+                                                y + (card_h - sz_s.get_height()) // 2))
+
+        # --- Footer action pills ---
+        store_r, inst_r = self._play_footer_rects()
+        for rect, label, col in [
+            (store_r, "\u22c6 Game Store", COL_STORE),
+            (inst_r,  "+ Install .ok", COL_PLAY),
+        ]:
+            hov = rect.collidepoint(mx, my)
+            bg = _lerp_color(COL_CARD, col, 0.4 if hov else 0.12)
+            pygame.draw.rect(self.screen, bg, rect, border_radius=10)
+            pygame.draw.rect(self.screen, col, rect, 2, border_radius=10)
+            lbl_s = self.font_mdb.render(label, True, col)
+            self.screen.blit(lbl_s, (
+                rect.x + rect.w // 2 - lbl_s.get_width() // 2,
+                rect.y + rect.h // 2 - lbl_s.get_height() // 2))
 
     def _draw_settings(self):
         self._draw_section_header("* Settings", COL_SETTINGS)

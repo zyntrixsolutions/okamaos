@@ -8,7 +8,7 @@ REQUIRED_FIELDS = ["name", "id", "version", "runtime", "entry"]
 SUPPORTED_RUNTIMES = {"okama-lite", "okama-python", "okama-sdl2"}
 VALID_AGE_RATINGS = {"Everyone", "Teen", "Mature"}
 VALID_PERMISSIONS = {"controller", "audio", "save_data", "network", "camera"}
-VALID_KEYBOARD_USAGE = {"none", "text_only", "full"}
+VALID_KEYBOARD_USAGE = {"none", "text_only", "full", "supported"}
 ID_RE = re.compile(r"^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+$")
 
 
@@ -63,18 +63,9 @@ def validate(manifest: dict, dev_mode: bool = False) -> None:
             f"Invalid keyboard_usage '{kb}'. Valid: {sorted(VALID_KEYBOARD_USAGE)}"
         )
 
-    if kb == "full" and not dev_mode:
-        raise ManifestError(
-            "keyboard_usage='full' is only allowed in developer mode. "
-            "Set keyboard_usage='text_only' or 'none' for normal packages."
-        )
-
     ctrl_required = manifest.get("controller_required", True)
-    if not ctrl_required and not dev_mode:
-        raise ManifestError(
-            "controller_required=false only allowed in developer mode. "
-            "Games must be designed for controller."
-        )
+    if not isinstance(ctrl_required, bool):
+        raise ManifestError("controller_required must be a boolean.")
 
     entry: str = manifest["entry"]
     if ".." in entry or entry.startswith("/"):

@@ -67,23 +67,67 @@ def cmd_verify(args):
         sys.exit(1)
 
 
+def cmd_bundle(args):
+    source = os.path.abspath(args.game_dir)
+    manifest_path = os.path.join(source, "manifest.ok.json")
+    if not os.path.exists(manifest_path):
+        print(f"ERROR: No manifest.ok.json in {source}", file=sys.stderr)
+        sys.exit(1)
+
+    with open(manifest_path) as f:
+        import json
+        m = json.load(f)
+
+    deps = m.get("python_deps", [])
+    if args.deps:
+        deps = args.deps
+    if not deps:
+        print("No python_deps in manifest and none given via --deps. Nothing to bundle.")
+        sys.exit(0)
+
+    print(f"Bundling {len(deps)} dep(s) into {source}/site-packages/")
+    try:
+        sp = pkg_mod.bundle_deps(source, deps, extra_index=args.extra_index or "")
+        import shutil
+        size_mb = sum(f.stat().st_size for f in __import__("pathlib").Path(sp).rglob("*")
+                      if f.is_file()) / (1024 * 1024)
+        print(f"Bundled: {sp}  ({size_mb:.1f} MB)")
+        print("Run 'okama-pack build' to include site-packages/ in the .ok archive.")
+    except Exception as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
 def main():
     p = argparse.ArgumentParser(prog="okama-pack",
         description="OkamaOS .ok package tool")
     sub = p.add_subparsers(dest="command", required=True)
 
-    pb = sub.add_parser("build")
+    pb = sub.add_parser("build", help="Pack a game directory into a .ok archive")
     pb.add_argument("game_dir")
     pb.add_argument("--output", "-o", default="")
 
-    pi = sub.add_parser("inspect")
+    pi = sub.add_parser("inspect", help="Print manifest from a .ok archive")
     pi.add_argument("ok_file")
 
-    pv = sub.add_parser("verify")
+    pv = sub.add_parser("verify", help="Verify a .ok archive's manifest and paths")
     pv.add_argument("ok_file")
 
+    pbn = sub.add_parser("bundle",
+        help="pip-install python_deps into site-packages/ for standalone packaging")
+    pbn.add_argument("game_dir")
+    pbn.add_argument("--deps", nargs="*", default=[],
+        metavar="PKG", help="Override deps (default: use python_deps from manifest)")
+    pbn.add_argument("--extra-index", default="",
+        metavar="URL", help="Extra PyPI index URL")
+
     args = p.parse_args()
-    {"build": cmd_build, "inspect": cmd_inspect, "verify": cmd_verify}[args.command](args)
+    {
+        "build": cmd_build,
+        "inspect": cmd_inspect,
+        "verify": cmd_verify,
+        "bundle": cmd_bundle,
+    }[args.command](args)
 
 
 if __name__ == "__main__":

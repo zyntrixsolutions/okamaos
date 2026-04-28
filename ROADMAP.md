@@ -54,6 +54,16 @@
 - [ ] SSH access via Dropbear
 - [ ] OTA update system via Install Game browser (from network URL)
 
+### v0.6 — Game Store & Standalone Packages ✅
+- [x] **Game Store UI** (`game_store` state): browse remote catalog, view size/version/category, one-press download+install with live progress bar
+- [x] **`okamaos.store` module**: `fetch_catalog()`, `download_game()` with SHA-256 checksum, `format_size()`
+- [x] **Standalone .ok packages**: `okama-run` prepends `site-packages/` and `lib/` from game dir; games run without system-wide installs
+- [x] **`okama-pack bundle`**: pip-installs `python_deps` from manifest into game's `site-packages/` for self-contained packaging
+- [x] **`okamaos.updates` module**: `current_version()`, `fetch_release_info()`, `is_newer()`, `find_local_updates()`
+- [x] **Settings > Updates** sub-screen: OS version display, remote update check (async), local `.ok-update` file scanner
+- [x] **Polished game library** (`_draw_play`): two-line cards with ID/version sub-line + size badge; footer pills (Store + Install .ok)
+- [x] **`manifest.py`** relaxed: `keyboard_usage="supported"` valid; `controller_required=false` unrestricted
+
 ### v1.0 — Console Polish
 - [x] Silent boot (`quiet loglevel=0`, boot log redirect) — completed in v0.3
 - [ ] Boot time < 8 seconds

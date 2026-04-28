@@ -10,6 +10,6 @@
   "age_rating": "Everyone",
   "supports_save_state": false,
   "controller_required": false,
-  "keyboard_usage": "supported",
+  "keyboard_usage": "full",
   "description": "An open-ended driving simulator with procedurally generated road networks. Drive through infinite scenes in manual control mode using keyboard or joystick. Press H in-game for help."
 }

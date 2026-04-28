@@ -78,6 +78,27 @@ def extract(ok_path: str, dest_dir: str) -> str:
     return str(dest)
 
 
+def bundle_deps(source_dir: str, python_deps: list, extra_index: str = "") -> str:
+    """pip install python_deps into <source_dir>/site-packages/ for self-contained packaging.
+
+    The bundled site-packages directory is automatically included when
+    okama-pack builds the .ok archive.  okama-run prepends it to PYTHONPATH
+    at launch so the game runs without any host-wide pip installs.
+
+    Returns the path to site-packages/.
+    """
+    import subprocess
+    import sys as _sys
+    sp = os.path.join(source_dir, "site-packages")
+    os.makedirs(sp, exist_ok=True)
+    cmd = [_sys.executable, "-m", "pip", "install",
+           "--target", sp, "--quiet"] + list(python_deps)
+    if extra_index:
+        cmd += ["--extra-index-url", extra_index]
+    subprocess.check_call(cmd)
+    return sp
+
+
 def _check_safe_paths(src: Path) -> None:
     for p in src.rglob("*"):
         rel = p.relative_to(src)

@@ -1,4 +1,6 @@
 make: Entering directory '/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/buildroot'
+/usr/bin/make -j1  O=/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output HOSTCC="/usr/bin/gcc" HOSTCXX="/usr/bin/g++" syncconfig
+  GEN     /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/Makefile
 [7m>>>   Finalizing host directory[27m
 [7m>>>   Finalizing target directory[27m
 mkdir -p /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/host/etc/meson
@@ -71,7 +73,7 @@ rm -rf /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/o
 mkdir -p /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs
 printf '   	dbus -1 dbus -1 * /run/dbus - dbus DBus messagebus user\n 	dhcpcd -1 dhcpcd -1 * - - - dhcpcd user\n\n' >> /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/full_users_table.txt
 printf '   	/bin/busybox                     f 4755 0  0 - - - - -\n 	/usr/libexec/dbus-daemon-launch-helper f 4750 0 dbus - - - - -\n\n' > /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/full_devices_table.txt
-cat system/device_table.txt >> /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/full_devices_table.txt
+cat /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/board/okamaos/device_table.txt >> /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/full_devices_table.txt
 [7m>>>   Generating filesystem image rootfs.ext2[27m
 mkdir -p /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/images
 rm -rf /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/ext2
@@ -96,7 +98,7 @@ mke2fs 1.47.0 (5-Feb-2023)
 Creating regular file /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/images/rootfs.ext2
 64-bit filesystem support is not enabled.  The larger fields afforded by this feature enable full-strength checksumming.  Pass -O 64bit to rectify.
 Creating filesystem with 131072 4k blocks and 32768 inodes
-Filesystem UUID: e51216a9-1953-4e4d-8096-bda64d1849d5
+Filesystem UUID: b25160df-d1c7-4240-b55e-fe8aef00bac5
 Superblock backups stored on blocks: 
 	32768, 98304
 
@@ -129,36 +131,34 @@ rootdir=/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/
 table='/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/full_devices_table.txt'
 Parallel mksquashfs: Using 4 processors
 Creating 4.0 filesystem on /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/images/rootfs.squashfs, block size 131072.
-[=============================================================\] 3280/3280 100%
+[=============================================================-] 4193/4193 100%
 
 Exportable Squashfs 4.0 filesystem, gzip compressed, data block size 131072
 	compressed data, compressed metadata, compressed fragments,
 	compressed xattrs, compressed ids
 	duplicates are removed
-Filesystem size 31285.61 Kbytes (30.55 Mbytes)
-	37.44% of uncompressed filesystem size (83566.37 Kbytes)
-Inode table size 35849 bytes (35.01 Kbytes)
-	27.72% of uncompressed inode table size (129343 bytes)
-Directory table size 37742 bytes (36.86 Kbytes)
-	39.91% of uncompressed directory table size (94565 bytes)
-Number of duplicate files found 99
-Number of inodes 3886
-Number of files 3026
-Number of fragments 378
+Filesystem size 43942.12 Kbytes (42.91 Mbytes)
+	37.17% of uncompressed filesystem size (118213.38 Kbytes)
+Inode table size 43985 bytes (42.95 Kbytes)
+	28.10% of uncompressed inode table size (156555 bytes)
+Directory table size 46837 bytes (45.74 Kbytes)
+	40.03% of uncompressed directory table size (116998 bytes)
+Number of duplicate files found 159
+Number of inodes 4710
+Number of files 3798
+Number of fragments 494
 Number of symbolic links 509
-Number of device nodes 0
+Number of device nodes 1
 Number of fifo nodes 0
 Number of socket nodes 0
-Number of directories 351
+Number of directories 402
 Number of hard-links 0
-Number of ids (unique uids + gids) 3
-Number of uids 2
+Number of ids (unique uids + gids) 2
+Number of uids 1
 	root (0)
-	www-data (33)
-Number of gids 3
+Number of gids 2
 	root (0)
 	netdev (101)
-	www-data (33)
 [7m>>>   Generating filesystem image rootfs.tar[27m
 mkdir -p /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/images
 rm -rf /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/tar
@@ -181,40 +181,25 @@ rootdir=/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/
 table='/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/build/buildroot-fs/full_devices_table.txt'
 [7m>>>   Executing post-image script /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/board/okamaos/post-image.sh[27m
 >> okamaos post-image: /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/images
-total 233M
+total 316M
 -rw-r--r-- 1 amakodev amakodev 8.2M Apr 27 23:04 bzImage
--rw-r--r-- 1 amakodev amakodev 512M Apr 27 23:17 rootfs.ext2
-lrwxrwxrwx 1 amakodev amakodev   11 Apr 27 23:17 rootfs.ext4 -> rootfs.ext2
--rw-r--r-- 1 amakodev amakodev  31M Apr 27 23:17 rootfs.squashfs
--rw-r--r-- 1 amakodev amakodev  88M Apr 27 23:17 rootfs.tar
+-rw-r--r-- 1 amakodev amakodev 512M Apr 28 05:35 rootfs.ext2
+lrwxrwxrwx 1 amakodev amakodev   11 Apr 28 05:35 rootfs.ext4 -> rootfs.ext2
+-rw-r--r-- 1 amakodev amakodev  43M Apr 28 05:35 rootfs.squashfs
+-rw-r--r-- 1 amakodev amakodev 123M Apr 28 05:35 rootfs.tar
 drwxr-xr-x 2 amakodev amakodev 4.0K Apr 27 16:23 syslinux
 >>> OkamaOS ISO Generator (GRUB2)
     Kernel : /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/images/bzImage
     Rootfs : /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/images/rootfs.tar
     Output : /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/okamaos.iso
 >>> Building initramfs (~30s)...
-    Initramfs: 31M
->>> Running grub-mkrescue...
-xorriso 1.5.6 : RockRidge filesystem manipulator, libburnia project.
-
-Drive current: -outdev 'stdio:/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/okamaos.iso'
-Media current: stdio file, overwriteable
-Media status : is blank
-Media summary: 0 sessions, 0 data blocks, 0 data, 47.1g free
-Added to ISO image: directory '/'='/tmp/grub.6fmNnQ'
-xorriso : UPDATE :     956 files added in 1 seconds
-Added to ISO image: directory '/'='/tmp/tmp.o3OiRtJ3LU'
-xorriso : UPDATE :     961 files added in 1 seconds
-xorriso : WARNING : -volid text does not comply to ISO 9660 / ECMA 119 rules
-xorriso : NOTE : Copying to System Area: 512 bytes from file '/usr/lib/grub/i386-pc/boot_hybrid.img'
-xorriso : UPDATE :  68.69% done
-ISO image produced: 32027 sectors
-Written to medium : 32027 sectors at LBA 0
-Writing to 'stdio:/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/okamaos.iso' completed successfully.
-
->>> ISO created: /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/okamaos.iso
--rw-rw-r-- 1 amakodev amakodev 63M Apr 27 23:17 /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/okamaos.iso
+tar: ./dev/console: Cannot mknod: Operation not permitted
+tar: Exiting with failure status due to previous errors
+make[1]: *** [Makefile:820: target-post-image] Error 2
+make: *** [Makefile:82: _all] Error 2
 make: Leaving directory '/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/buildroot'
-repos/partners/okamaos_projectX/output/okamaos.iso
--rw-rw-r-- 1 amakodev amakodev 63M Apr 27 23:17 /home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/output/okamaos.iso
+e: Cannot mknod: Operation not permitted
+tar: Exiting with failure status due to previous errors
+make[1]: *** [Makefile:820: target-post-image] Error 2
+make: *** [Makefile:82: _all] Error 2
 make: Leaving directory '/home/amakodev/Desktop/ZyntrixSolutions/repos/partners/okamaos_projectX/buildroot'

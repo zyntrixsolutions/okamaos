@@ -5,6 +5,14 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.2.5] - 2026-04-28
+
+### Fixed
+- `except ImportError` → `except Exception` for pygame import — `OSError` from missing `.so` was not being caught, silently hiding the real error
+- Text-mode shell now prints the actual pygame import error on screen: `Reason: <error>`
+
+---
+
 ## [0.2.4] - 2026-04-28
 
 ### Fixed

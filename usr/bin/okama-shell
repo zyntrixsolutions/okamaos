@@ -37,11 +37,13 @@ import argparse
 # ---------------------------------------------------------------------------
 # Pygame bootstrap — graceful degradation if not available
 # ---------------------------------------------------------------------------
+_PYGAME_ERR = ""
 try:
     import pygame
     PYGAME_OK = True
-except ImportError:
+except Exception as _e:
     PYGAME_OK = False
+    _PYGAME_ERR = str(_e)
 
 from okamaos.input_protocol import InputClient
 import okamaos.config as cfg_mod
@@ -89,6 +91,8 @@ def _text_shell():
     conf = cfg_mod.get()
     print("\n" + "=" * 48)
     print("  OkamaOS Shell  (text mode — Pygame not found)")
+    if _PYGAME_ERR:
+        print(f"  Reason: {_PYGAME_ERR[:80]}")
     print("=" * 48)
 
     while True:

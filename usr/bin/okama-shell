@@ -1783,6 +1783,9 @@ class OkamaShell:
                 self._dev_console_history.append("> Exiting to interactive shell...")
                 self._dev_console_history.append("> Type 'exit' to return to OkamaOS")
                 pygame.quit()
+                # Stop evdev reader so shell can receive keyboard input
+                if _evdev_kb:
+                    _evdev_kb.stop()
                 subprocess.call(["/bin/sh"])
                 os.execv("/usr/bin/okama-shell", ["okama-shell"])
             elif cmd.startswith("cat "):

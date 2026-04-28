@@ -44,6 +44,21 @@ if [ -n "$PYVER" ] && [ ! -d "$SITE/pygame" ]; then
     fi
 fi
 
+# Sync okama-* binaries and libs from source tree into target
+# (Buildroot overlay only runs at first build; this ensures every build gets latest)
+REPO_DIR="$(dirname "$(readlink -f "$0")")/../.."
+if [ -d "$REPO_DIR/usr/bin" ]; then
+    cp -a "$REPO_DIR/usr/bin"/okama-* "$TARGET_DIR/usr/bin/" 2>/dev/null || true
+fi
+if [ -d "$REPO_DIR/usr/lib/okamaos" ]; then
+    mkdir -p "$TARGET_DIR/usr/lib/okamaos"
+    cp -a "$REPO_DIR/usr/lib/okamaos"/. "$TARGET_DIR/usr/lib/okamaos/" 2>/dev/null || true
+fi
+if [ -d "$REPO_DIR/usr/share/okamaos" ]; then
+    mkdir -p "$TARGET_DIR/usr/share/okamaos"
+    cp -a "$REPO_DIR/usr/share/okamaos"/. "$TARGET_DIR/usr/share/okamaos/" 2>/dev/null || true
+fi
+
 # Ensure okama-* tools are executable
 if [ -d "$TARGET_DIR/usr/bin" ]; then
     chmod 0755 "$TARGET_DIR"/usr/bin/okama-* 2>/dev/null || true

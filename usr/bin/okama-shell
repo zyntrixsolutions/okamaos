@@ -177,7 +177,7 @@ class OkamaShell:
         self.message = msg
         self.message_timer = int(duration * FPS)
 
-    def run(self):
+    def run(self, fb=None):
         running = True
         while running:
             dt = self.clock.tick(FPS)
@@ -190,6 +190,8 @@ class OkamaShell:
             self._handle_input(events)
 
             self._draw()
+            if fb:
+                fb.present(self.screen)
 
             if self.message_timer > 0:
                 self.message_timer -= 1
@@ -496,6 +498,48 @@ class OkamaShell:
 
 
 # ---------------------------------------------------------------------------
+# Framebuffer writer — blits an offscreen pygame surface to /dev/fb0
+# ---------------------------------------------------------------------------
+class FbWriter:
+    """Writes pygame surfaces directly to the Linux framebuffer (/dev/fb0)."""
+    def __init__(self, fb_path: str = "/dev/fb0"):
+        import mmap as _mmap
+        try:
+            with open("/sys/class/graphics/fb0/virtual_size") as f:
+                w, h = map(int, f.read().strip().split(','))
+        except Exception:
+            w, h = WIDTH, HEIGHT
+        try:
+            with open("/sys/class/graphics/fb0/bits_per_pixel") as f:
+                bpp = int(f.read().strip())
+        except Exception:
+            bpp = 32
+        self.w, self.h, self.bpp = w, h, bpp
+        self._fb = open(fb_path, "rb+")
+        self._mm = _mmap.mmap(self._fb.fileno(), w * h * (bpp // 8))
+        self._ok = True
+
+    def present(self, surface):
+        if not self._ok:
+            return
+        try:
+            if (surface.get_width(), surface.get_height()) != (self.w, self.h):
+                surface = pygame.transform.scale(surface, (self.w, self.h))
+            raw = pygame.image.tostring(surface, "RGBX")
+            self._mm.seek(0)
+            self._mm.write(raw)
+        except Exception:
+            self._ok = False
+
+    def close(self):
+        try:
+            self._mm.close()
+            self._fb.close()
+        except Exception:
+            pass
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 def main():
@@ -513,17 +557,26 @@ def main():
         _text_shell()
         return
 
-    os.environ.setdefault("SDL_VIDEODRIVER", "fbdev")
-    os.environ.setdefault("SDL_FBDEV",
-                          conf.get("FRAMEBUFFER_DEVICE", "/dev/fb0"))
     os.environ.setdefault("SDL_AUDIODRIVER", "alsa")
 
     if args.windowed:
         os.environ["SDL_VIDEODRIVER"] = "x11"  # dev host
+    else:
+        os.environ["SDL_VIDEODRIVER"] = "offscreen"  # render to memory, present via fb0
 
     pygame.init()
     shell = OkamaShell(windowed=args.windowed, dev_mode=dev)
-    shell.run()
+
+    fb = None
+    if not args.windowed:
+        try:
+            fb = FbWriter(conf.get("FRAMEBUFFER_DEVICE", "/dev/fb0"))
+        except Exception as e:
+            print(f"WARNING: cannot open framebuffer: {e}", file=sys.stderr)
+
+    shell.run(fb=fb)
+    if fb:
+        fb.close()
 
 
 if __name__ == "__main__":

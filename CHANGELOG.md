@@ -5,6 +5,16 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.2.2] - 2026-04-28
+
+### Fixed
+- `pygame.error: fbdev not available` — SDL2 2.28.x dropped fbdev driver entirely
+- SDL2 rebuilt with `--enable-video-offscreen` replacing the previously disabled offscreen driver
+- `okama-shell`: use `SDL_VIDEODRIVER=offscreen` + new `FbWriter` class that blits pygame surface directly to `/dev/fb0` via `mmap` each frame
+- `S99okama-shell`: removed hardcoded SDL env vars, now managed by okama-shell
+
+---
+
 ## [0.2.1] - 2026-04-28
 
 ### Fixed

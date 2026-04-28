@@ -1717,7 +1717,8 @@ class OkamaShell:
                 self._dev_console_cmd = ""
                 return
             if cmd == "help":
-                self._dev_console_history.append("> Commands: exit, clear, help, reboot, poweroff, ip, ps, df, ls, cat <file>")
+                self._dev_console_history.append("> Commands: exit, clear, help, shell, reboot, poweroff, ip, ps, df, ls, cat <file>")
+                self._dev_console_history.append("> 'shell' exits to interactive /bin/sh (type 'exit' to return)")
                 self._dev_console_cmd = ""
                 return
             if cmd == "clear":
@@ -1731,7 +1732,13 @@ class OkamaShell:
 
     def _run_dev_cmd(self, cmd: str):
         try:
-            if cmd.startswith("cat "):
+            if cmd == "shell":
+                self._dev_console_history.append("> Exiting to interactive shell...")
+                self._dev_console_history.append("> Type 'exit' to return to OkamaOS")
+                pygame.quit()
+                subprocess.call(["/bin/sh"])
+                os.execv("/usr/bin/okama-shell", ["okama-shell"])
+            elif cmd.startswith("cat "):
                 path = cmd[4:].strip()
                 try:
                     with open(path) as f:

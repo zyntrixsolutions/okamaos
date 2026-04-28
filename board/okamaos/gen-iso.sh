@@ -58,7 +58,7 @@ echo "    Initramfs: $INITRD_SIZE"
 # GRUB2 config
 cat > "$ISO_WORK/boot/grub/grub.cfg" << 'EOF'
 set default=0
-set timeout=0
+set timeout=3
 
 # Load video drivers and activate gfxterm so gfxpayload=keep passes a real
 # framebuffer to the kernel (screen_info -> SYSFB_SIMPLEFB -> DRM_SIMPLEDRM
@@ -72,7 +72,13 @@ terminal_output gfxterm
 
 menuentry "OkamaOS" {
     set gfxpayload=keep
-    linux  /boot/bzImage rw quiet loglevel=0 console=tty1 rdinit=/sbin/init panic=10 rd.systemd.show_status=false printk.devkmsg=off vt.global_cursor_default=0
+    linux  /boot/bzImage rw quiet loglevel=0 console=ttyS0,115200 console=tty1 rdinit=/sbin/init panic=10 rd.systemd.show_status=false printk.devkmsg=off vt.global_cursor_default=0
+    initrd /boot/rootfs.cpio.gz
+}
+
+menuentry "OkamaOS (debug — verbose)" {
+    set gfxpayload=keep
+    linux  /boot/bzImage rw loglevel=7 console=ttyS0,115200 console=tty1 rdinit=/sbin/init panic=30 vt.global_cursor_default=0
     initrd /boot/rootfs.cpio.gz
 }
 EOF

@@ -1,63 +1,19 @@
 #!/bin/sh
-# S99okama-shell — launch the OkamaOS controller shell on tty1.
-# This is the last init.d script to run. It keeps okama-shell respawning
-# on crash so the console never drops to a login prompt.
-
-DEVMODE_CONF=/etc/okamaos/devmode.conf
-DEV_ENABLED=no
-if [ -f "$DEVMODE_CONF" ]; then
-    DEV_ENABLED=$(grep '^ENABLED=' "$DEVMODE_CONF" | cut -d= -f2 | tr -d '[:space:]')
-fi
-
-respawn_shell() {
-    while true; do
-        PYTHONPATH=/usr/lib/okamaos /usr/bin/okama-shell </dev/tty1 >/dev/tty1 2>&1
-        EXIT_CODE=$?
-        echo "okama-shell exited (code $EXIT_CODE) — restarting in 2s..." \
-             >> /var/okamaos/logs/shell.log
-        sleep 2
-    done
-}
+# S99okama-shell — pre-flight setup before the shell launcher runs on tty1.
+# The shell itself is started by inittab tty1::respawn (not this script).
+# This script only does early setup that must happen during sysinit.
 
 case "$1" in
   start)
-    # Redirect all output to boot log — no messages on screen
     exec >> /var/okamaos/logs/boot.log 2>&1
-    echo "Launching okama-shell on tty1..."
-    # Debug: check framebuffer exists before unbinding
-    if [ ! -e /dev/fb0 ]; then
-        echo "ERROR: /dev/fb0 not found!" > /dev/tty1
-        sleep 5
+    echo "[S99] pre-flight: checking framebuffer..."
+    if [ -e /dev/fb0 ]; then
+        echo "[S99] /dev/fb0 found"
+    else
+        echo "[S99] WARNING: /dev/fb0 not present yet (udev may not have settled)"
     fi
-    # Unbind fbcon from /dev/fb0 so SDL/pygame can own the framebuffer exclusively
-    # vtcon0 is typically the dummy console; vtcon1 is the framebuffer console
-    for vtcon in /sys/class/vtconsole/vtcon*; do
-        [ -f "$vtcon/bind" ] && echo 0 > "$vtcon/bind" 2>/dev/null || true
-    done
-    # Clear the tty1 console of any boot messages before handing it to the shell
-    printf '\033[2J\033[H' > /dev/tty1
-    # Disable the kernel cursor on tty1
-    printf '\033[?25l' > /dev/tty1
-    # Debug: show that we're about to launch the shell
-    printf '\033[1;37mLaunching okama-shell...\033[0m\n' > /dev/tty1
-    # Switch active VT to tty1
-    chvt 1 2>/dev/null || true
-    # Detect installed Python version dynamically for pygame.libs path
-    PYVER=$(ls /usr/lib/ 2>/dev/null | grep -E '^python3\.[0-9]+$' | sort -V | tail -1)
-    PYLIBS_PATH=""
-    if [ -n "$PYVER" ] && [ -d "/usr/lib/$PYVER/site-packages/pygame.libs" ]; then
-        PYLIBS_PATH="/usr/lib/$PYVER/site-packages/pygame.libs:"
-    fi
-    openvt -c 1 -f -w -- sh -c "
-        export PYTHONPATH=/usr/lib/okamaos
-        export LD_LIBRARY_PATH=${PYLIBS_PATH}/usr/lib
-        while true; do
-            /usr/bin/okama-shell 2>> /var/okamaos/logs/shell.log
-            EXIT_CODE=\$?
-            echo \"okama-shell exited (code \$EXIT_CODE) — restarting\" >> /var/okamaos/logs/shell.log
-            sleep 2
-        done
-    " &
+    echo "[S99] pre-flight done — shell will start via inittab tty1::respawn"
+    echo "[S99] pre-flight done" > /dev/ttyS0 2>/dev/null || true
     ;;
   stop)
     killall okama-shell 2>/dev/null || true

@@ -1,0 +1,57 @@
+#!/bin/sh
+# okama-shell-launcher — started by inittab tty1::respawn.
+#
+# BusyBox init opens /dev/tty1 and execs this script with stdin/stdout/stderr
+# already connected to tty1 — no openvt or chvt required.
+#
+# Errors go to shell.log; stdout stays on tty1 (visible during early boot).
+
+# Ensure log dir exists (S10okama-mounts should have created it, but be safe)
+mkdir -p /var/okamaos/logs
+exec 2>>/var/okamaos/logs/shell.log
+
+# Serial console: send diagnostic line so we know we got here
+echo "[okama-shell-launcher] started on tty1" > /dev/ttyS0 2>/dev/null || true
+
+# Hide the text cursor so it doesn't flicker over the framebuffer
+printf '\033[?25l'
+
+# Unbind the framebuffer console driver so SDL/FbWriter can own /dev/fb0
+# without fbcon writing text/cursor blinks on top of our frames.
+for _vtcon in /sys/class/vtconsole/vtcon*; do
+    [ -f "$_vtcon/bind" ] && echo 0 > "$_vtcon/bind" 2>/dev/null || true
+done
+
+# Wait until /dev/fb0 exists (udev may still be settling)
+_fb_wait=0
+while [ ! -e /dev/fb0 ] && [ "$_fb_wait" -lt 10 ]; do
+    echo "[okama-shell-launcher] waiting for /dev/fb0 (${_fb_wait}s)" > /dev/ttyS0 2>/dev/null || true
+    sleep 1
+    _fb_wait=$((_fb_wait + 1))
+done
+
+if [ ! -e /dev/fb0 ]; then
+    echo "[okama-shell-launcher] ERROR: /dev/fb0 not found after 10s" > /dev/ttyS0 2>/dev/null || true
+    # Fall through anyway — okama-shell has its own text fallback
+fi
+
+# Build LD_LIBRARY_PATH: include pygame's bundled .so files if present.
+# The manylinux wheel puts them in site-packages/pygame/.libs/ (note the dot).
+PYVER=$(ls /usr/lib/ 2>/dev/null | grep -E '^python3\.[0-9]+$' | sort -V | tail -1)
+for _d in \
+    "/usr/lib/${PYVER}/site-packages/pygame/.libs" \
+    "/usr/lib/${PYVER}/site-packages/pygame.libs" \
+    "/usr/local/lib/${PYVER}/site-packages/pygame/.libs"; do
+    if [ -d "$_d" ]; then
+        LD_LIBRARY_PATH="${_d}:${LD_LIBRARY_PATH:-}"
+        echo "[okama-shell-launcher] pygame libs: $_d" > /dev/ttyS0 2>/dev/null || true
+        break
+    fi
+done
+export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-/usr/lib}"
+export PYTHONPATH=/usr/lib/okamaos
+export SDL_AUDIODRIVER=alsa
+
+echo "[okama-shell-launcher] exec okama-shell (PYVER=$PYVER)" > /dev/ttyS0 2>/dev/null || true
+
+exec /usr/bin/okama-shell

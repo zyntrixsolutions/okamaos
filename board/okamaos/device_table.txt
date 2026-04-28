@@ -4,5 +4,6 @@
 /dev/tty1   c  620   0    0    4      1      0      0    0
 /dev/tty2   c  620   0    0    4      2      0      0    0
 /dev/fb0    c  660   0    0    29     0      0      0    0
+/dev/ttyS0  c  660   0    0    4      64     0      0    0
 /dev/input  d  755   0    0    -      -      -      -    -
 /dev/input/event c  660  0  0  13   64      0      1    8

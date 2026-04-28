@@ -802,22 +802,56 @@ class OkamaShell:
 # Framebuffer writer — blits an offscreen pygame surface to /dev/fb0
 # ---------------------------------------------------------------------------
 class FbWriter:
-    """Writes pygame surfaces directly to the Linux framebuffer (/dev/fb0)."""
+    """Writes pygame surfaces directly to the Linux framebuffer (/dev/fb0).
+
+    Uses FBIOGET_VSCREENINFO / FBIOGET_FSCREENINFO ioctls for exact geometry
+    and pixel-format detection — no guessing from sysfs filenames.
+    """
+
+    FBIOGET_VSCREENINFO = 0x4600
+    FBIOGET_FSCREENINFO = 0x4602
+
     def __init__(self, fb_path: str = "/dev/fb0"):
         import mmap as _mmap
-        try:
-            with open("/sys/class/graphics/fb0/virtual_size") as f:
-                w, h = map(int, f.read().strip().split(','))
-        except Exception:
-            w, h = WIDTH, HEIGHT
-        try:
-            with open("/sys/class/graphics/fb0/bits_per_pixel") as f:
-                bpp = int(f.read().strip())
-        except Exception:
-            bpp = 32
-        self.w, self.h, self.bpp = w, h, bpp
+        import fcntl as _fcntl
+        import struct as _struct
+
+        with open(fb_path, "rb+") as _probe:
+            # --- variable screen info (160 bytes) ---
+            # Offsets we care about (all __u32 = 4 bytes):
+            #   0  xres          4  yres
+            #  24  bits_per_pixel
+            #  32  red.offset   44  green.offset   56  blue.offset
+            vbuf = bytearray(160)
+            _fcntl.ioctl(_probe, self.FBIOGET_VSCREENINFO, vbuf)
+            self.w   = _struct.unpack_from("=I", vbuf,  0)[0]
+            self.h   = _struct.unpack_from("=I", vbuf,  4)[0]
+            self.bpp = _struct.unpack_from("=I", vbuf, 24)[0]
+            red_off  = _struct.unpack_from("=I", vbuf, 32)[0]
+            blue_off = _struct.unpack_from("=I", vbuf, 56)[0]
+
+            # --- fixed screen info (68 bytes) ---
+            # line_length is at byte offset 48
+            fbuf = bytearray(68)
+            _fcntl.ioctl(_probe, self.FBIOGET_FSCREENINFO, fbuf)
+            self.stride = _struct.unpack_from("=I", fbuf, 48)[0]
+
+        # Determine pygame pixel-format string from hardware channel order
+        if self.bpp == 32:
+            self._fmt = "BGRX" if blue_off == 0 else "RGBX"
+        elif self.bpp == 24:
+            self._fmt = "BGR" if blue_off == 0 else "RGB"
+        else:
+            self._fmt = "RGB"
+
+        # Fall back to safe values if ioctl returned zeros
+        if self.w == 0 or self.h == 0:
+            self.w, self.h = WIDTH, HEIGHT
+        if self.stride == 0:
+            self.stride = self.w * (self.bpp // 8)
+
         self._fb = open(fb_path, "rb+")
-        self._mm = _mmap.mmap(self._fb.fileno(), w * h * (bpp // 8))
+        self._mm = _mmap.mmap(self._fb.fileno(), self.stride * self.h)
         self._ok = True
 
     def present(self, surface):
@@ -826,11 +860,18 @@ class FbWriter:
         try:
             if (surface.get_width(), surface.get_height()) != (self.w, self.h):
                 surface = pygame.transform.scale(surface, (self.w, self.h))
-            # Linux /dev/fb0 32bpp is XRGB8888 (LE) = BGRX in memory order
-            fmt = "BGRX" if self.bpp == 32 else "RGB"
-            raw = pygame.image.tostring(surface, fmt)
-            self._mm.seek(0)
-            self._mm.write(raw)
+            raw = pygame.image.tostring(surface, self._fmt)
+            row_bytes = self.w * (self.bpp // 8)
+            if self.stride == row_bytes:
+                # Fast path: framebuffer rows are tightly packed
+                self._mm.seek(0)
+                self._mm.write(raw)
+            else:
+                # Slow path: framebuffer has per-row padding — write row by row
+                for y in range(self.h):
+                    src = y * row_bytes
+                    self._mm.seek(y * self.stride)
+                    self._mm.write(raw[src:src + row_bytes])
         except Exception:
             self._ok = False
 

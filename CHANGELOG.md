@@ -5,6 +5,14 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.2.6] - 2026-04-28
+
+### Fixed
+- `libSDL2-2-...: cannot open shared object file` — `$ORIGIN` RPATH expansion not working in initramfs environment
+- `S99okama-shell`: export `LD_LIBRARY_PATH=/usr/lib/python3.11/site-packages/pygame.libs:/usr/lib` so linker finds bundled SDL2 explicitly
+
+---
+
 ## [0.2.5] - 2026-04-28
 
 ### Fixed

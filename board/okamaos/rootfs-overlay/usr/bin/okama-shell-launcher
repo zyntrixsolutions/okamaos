@@ -52,7 +52,7 @@ for _d in \
     fi
 done
 export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-/usr/lib}"
-export PYTHONPATH=/usr/lib/okamaos
+export PYTHONPATH=/usr/lib
 export SDL_AUDIODRIVER=alsa
 
 echo "[okama-shell-launcher] exec okama-shell (PYVER=$PYVER)" > /dev/ttyS0 2>/dev/null || true

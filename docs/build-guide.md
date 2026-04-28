@@ -151,7 +151,7 @@ All `okama-*` tools are plain Python 3 scripts. You can run them on any Linux
 host with Python 3.10+:
 
 ```bash
-export PYTHONPATH=$PWD/usr/lib/okamaos
+export PYTHONPATH=$PWD/usr/lib
 export OKAMA_CONF=$PWD/board/okamaos/rootfs-overlay/etc/okamaos/okama.conf
 
 ./usr/bin/okama-cli status
@@ -162,14 +162,14 @@ export OKAMA_CONF=$PWD/board/okamaos/rootfs-overlay/etc/okamaos/okama.conf
 Run the shell in a window (host, requires pygame):
 ```bash
 pip install pygame
-PYTHONPATH=$PWD/usr/lib/okamaos ./usr/bin/okama-shell --windowed
+PYTHONPATH=$PWD/usr/lib ./usr/bin/okama-shell --windowed
 ```
 
 Run the demo game in a window:
 ```bash
 pip install pygame
 cd games/demo
-PYTHONPATH=$PWD/../../usr/lib/okamaos python3 main.py --windowed
+PYTHONPATH=$PWD/../../usr/lib python3 main.py --windowed
 ```
 
 ---

@@ -5,6 +5,18 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.9.2] - 2026-04-29
+
+### Fixed
+- **Game launch from host development shell**: `okama-shell` now resolves `okama-run` from `OKAMA_RUN`, the repo-local sibling script, or the installed `/usr/bin/okama-run` path instead of always hard-coding `/usr/bin/okama-run`.
+- **Unprivileged host runtime state**: `okama-run` now falls back to writable user/tmp locations for the game lock, logs, and saves when `/var/run` or `/var/okamaos` are not writable.
+- **Game imports during launch**: launched games now receive the correct OkamaOS library parent path in `PYTHONPATH`, so `from okamaos...` imports resolve in both the ISO and repo-local host runs.
+- **Save hook imports**: `okama-snapshot` now passes the resolved OkamaOS library parent path to game save/restore hooks.
+- **Host-dev launch docs and boot exports**: README, build guide, rootfs profile, and shell launcher now use the correct `/usr/lib` parent path for OkamaOS imports.
+
+### Changed
+- Version metadata updated to `0.9.2` across the root `VERSION`, runtime package version, shell badge, config defaults, rootfs profile, and OkamaOS library metadata.
+
 ## [0.9.1] - 2026-04-29
 
 ### Fixed

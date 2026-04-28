@@ -34,7 +34,7 @@ To run the shell on a host with Pygame:
 
 ```bash
 pip install pygame
-PYTHONPATH=usr/lib/okamaos ./usr/bin/okama-shell --windowed
+PYTHONPATH=usr/lib ./usr/bin/okama-shell --windowed
 ```
 
 ## Full build (Buildroot)

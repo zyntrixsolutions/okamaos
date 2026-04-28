@@ -17,7 +17,8 @@ import os
 _lib = os.environ.get("OKAMA_LIB", "")
 if not _lib:
     _lib = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../lib")
-sys.path.insert(0, os.path.abspath(_lib))
+OKAMA_LIB_PATH = os.path.abspath(_lib)
+sys.path.insert(0, OKAMA_LIB_PATH)
 
 import argparse
 import json
@@ -39,7 +40,7 @@ def cmd_save(args):
     if os.path.exists(hook):
         result = subprocess.call(
             [sys.executable, hook, "save", gdir],
-            env={**os.environ, "PYTHONPATH": "/usr/lib/okamaos"},
+            env={**os.environ, "PYTHONPATH": OKAMA_LIB_PATH},
         )
         if result != 0:
             print(f"WARNING: save hook exited {result}", file=sys.stderr)
@@ -66,7 +67,7 @@ def cmd_restore(args):
     if os.path.exists(hook):
         subprocess.call(
             [sys.executable, hook, "restore", save_dir(args.game_id)],
-            env={**os.environ, "PYTHONPATH": "/usr/lib/okamaos"},
+            env={**os.environ, "PYTHONPATH": OKAMA_LIB_PATH},
         )
 
     with open(state_path) as f:

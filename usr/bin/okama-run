@@ -16,7 +16,8 @@ import os
 _lib = os.environ.get("OKAMA_LIB", "")
 if not _lib:
     _lib = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../lib")
-sys.path.insert(0, os.path.abspath(_lib))
+OKAMA_LIB_PATH = os.path.abspath(_lib)
+sys.path.insert(0, OKAMA_LIB_PATH)
 
 import argparse
 import json
@@ -30,8 +31,53 @@ import okamaos.config as cfg_mod
 import okamaos.games as games_mod
 import okamaos.manifest as manifest_mod
 
-LOCK_FILE = "/var/run/okama-game.lock"
-LOG_DIR = "/var/okamaos/logs"
+def _fallback_base(kind: str) -> str:
+    if kind == "run":
+        base = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
+    else:
+        base = os.environ.get("XDG_STATE_HOME")
+        if not base and os.environ.get("HOME"):
+            base = os.path.join(os.environ["HOME"], ".local", "state")
+        if not base:
+            base = "/tmp"
+    return os.path.join(base, "okamaos")
+
+
+def _writable_dir(path: str) -> bool:
+    try:
+        os.makedirs(path, exist_ok=True)
+    except OSError:
+        return False
+    return os.access(path, os.W_OK)
+
+
+def _runtime_file(env_name: str, default: str, fallback_name: str) -> str:
+    override = os.environ.get(env_name)
+    if override:
+        return override
+    parent = os.path.dirname(default)
+    if _writable_dir(parent):
+        return default
+    fallback_dir = os.path.join(_fallback_base("run"), "run")
+    os.makedirs(fallback_dir, exist_ok=True)
+    return os.path.join(fallback_dir, fallback_name)
+
+
+def _runtime_dir(env_name: str, default: str, fallback_name: str) -> str:
+    override = os.environ.get(env_name)
+    if override:
+        os.makedirs(override, exist_ok=True)
+        return override
+    if _writable_dir(default):
+        return default
+    fallback_dir = os.path.join(_fallback_base("state"), fallback_name)
+    os.makedirs(fallback_dir, exist_ok=True)
+    return fallback_dir
+
+
+LOCK_FILE = _runtime_file("OKAMA_LOCK_FILE", "/var/run/okama-game.lock", "okama-game.lock")
+LOG_DIR = _runtime_dir("OKAMA_LOG_DIR", "/var/okamaos/logs", "logs")
+SAVES_DIR = _runtime_dir("OKAMA_SAVES", "/var/okamaos/saves", "saves")
 
 SUSPEND_SERVICES = [
     "S40okama-network",
@@ -129,10 +175,11 @@ def main():
     env = os.environ.copy()
     env["OKAMA_GAME_ID"] = game_id
     env["OKAMA_GAME_DIR"] = game_dir
+    env.setdefault("OKAMA_SAVES", SAVES_DIR)
 
     # Self-contained package support: prepend bundled deps so games run
     # without any system-wide pip installs.
-    python_path_parts = ["/usr/lib/okamaos"]
+    python_path_parts = [OKAMA_LIB_PATH]
     bundled_sp = os.path.join(game_dir, "site-packages")
     if os.path.isdir(bundled_sp):
         python_path_parts.insert(0, bundled_sp)

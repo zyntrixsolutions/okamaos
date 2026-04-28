@@ -3,8 +3,8 @@
 # Normal users never see this — okama-shell replaces the login flow.
 
 export PATH="/usr/bin:/usr/sbin:/bin:/sbin"
-export PYTHONPATH="/usr/lib/okamaos"
-export OKAMAOS_VERSION="0.9.1"
+export PYTHONPATH="/usr/lib"
+export OKAMAOS_VERSION="0.9.2"
 export OKAMA_LOG="/var/okamaos/logs"
 export OKAMA_GAMES="/var/okamaos/games"
 export OKAMA_SAVES="/var/okamaos/saves"

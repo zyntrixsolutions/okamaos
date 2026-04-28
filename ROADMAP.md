@@ -110,6 +110,14 @@
 - [x] Track Shift in evdev fallback for command symbols and uppercase input
 - [x] Keep Enter, Backspace, Esc, and F10 as active text-entry controls
 
+### v0.9.2 — Game Launch Runtime Path Fix ✅
+- [x] Resolve `okama-run` from an override, repo-local sibling script, or installed OS path
+- [x] Allow `okama-run` lock, log, and save directories to fall back to writable host locations
+- [x] Pass the correct OkamaOS library parent path to launched games via `PYTHONPATH`
+- [x] Pass the same resolved library parent path to save/restore hooks
+- [x] Align README, build guide, profile, and shell launcher `PYTHONPATH` examples with the runtime import path
+- [x] Preserve `/var/run` and `/var/okamaos` runtime paths for the built OkamaOS image
+
 ### v1.0 — Console Polish
 - [x] Silent boot (`quiet loglevel=0`, boot log redirect) — completed in v0.3
 - [ ] Boot time < 8 seconds

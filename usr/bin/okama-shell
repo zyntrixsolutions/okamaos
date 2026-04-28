@@ -244,6 +244,22 @@ HINT_KB   = "[<>] Navigate   [Enter] Select   [Esc] Back   [Tab] Section"
 HINT_CTRL = "[^v] Navigate   [A] Select   [B] Back   [START] Home"
 
 
+def _okama_run_path() -> str:
+    """Resolve okama-run for both installed OS and repo-local host runs."""
+    override = os.environ.get("OKAMA_RUN")
+    if override:
+        return override
+    sibling = os.path.join(os.path.dirname(os.path.realpath(__file__)), "okama-run")
+    if os.path.exists(sibling):
+        return sibling
+    return "/usr/bin/okama-run"
+
+
+def _exec_okama_run(game_id: str) -> None:
+    run_path = _okama_run_path()
+    os.execv(run_path, ["okama-run", game_id])
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -297,7 +313,7 @@ def _text_shell():
             idx = int(choice) - 1
             if 0 <= idx < len(games):
                 gid = games[idx]["id"]
-                os.execv("/usr/bin/okama-run", ["okama-run", gid])
+                _exec_okama_run(gid)
             else:
                 print("Invalid selection.")
 
@@ -769,7 +785,7 @@ class OkamaShell:
         pygame.display.flip()
         time.sleep(0.5)
         pygame.quit()
-        os.execv("/usr/bin/okama-run", ["okama-run", gid])
+        _exec_okama_run(gid)
 
     def _settings_input(self, action: str, ev: dict = None):
         n = len(SETTINGS_OPTIONS)
@@ -2004,7 +2020,7 @@ class OkamaShell:
         self.screen.blit(brand, (bx, by))
 
         # Version badge
-        ver_txt = self.font_hint.render("v0.9.1", True, COL_DIM)
+        ver_txt = self.font_hint.render("v0.9.2", True, COL_DIM)
         self.screen.blit(ver_txt, (bx + brand.get_width() + 10,
                                    by + brand.get_height() - ver_txt.get_height() - 2))
 

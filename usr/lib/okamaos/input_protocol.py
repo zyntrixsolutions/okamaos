@@ -60,7 +60,10 @@ class InputClient:
         events = []
         try:
             chunk = self._sock.recv(4096)
-            if chunk:
+            if not chunk:
+                # EOF: server closed connection
+                self._connected = False
+            else:
                 self._buf += chunk
                 while b"\n" in self._buf:
                     line, self._buf = self._buf.split(b"\n", 1)

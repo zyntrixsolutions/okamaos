@@ -5,6 +5,13 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.3.2] - 2026-04-28
+
+### Fixed
+- **Input not working**: `InputClient.poll()` did not detect EOF when `okama-inputd` server closes connection; empty `chunk` from `recv()` now properly sets `_connected = False` so clients can detect disconnection and reconnect
+
+---
+
 ## [0.3.1] - 2026-04-28
 
 ### Fixed

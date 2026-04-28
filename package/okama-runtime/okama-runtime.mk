@@ -12,13 +12,6 @@ OKAMA_RUNTIME_SOURCE =
 OKAMA_RUNTIME_LICENSE = Proprietary
 OKAMA_RUNTIME_DEPENDENCIES = python3 python-pip sdl2
 
-define OKAMA_RUNTIME_INSTALL_PYGAME_CMDS
-	# pygame dropped from Buildroot 2024.02 — install from PyPI into target
-	$(HOST_DIR)/bin/pip3 install --target=$(TARGET_DIR)/usr/lib/python3/dist-packages \
-		--no-deps --ignore-requires-python pygame==2.5.2 || true
-endef
-
-OKAMA_RUNTIME_POST_INSTALL_TARGET_HOOKS += OKAMA_RUNTIME_INSTALL_PYGAME_CMDS
 
 define OKAMA_RUNTIME_INSTALL_TARGET_CMDS
 	mkdir -p $(TARGET_DIR)/usr/bin

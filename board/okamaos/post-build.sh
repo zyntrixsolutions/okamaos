@@ -12,6 +12,32 @@ TARGET_DIR="$1"
 
 echo ">> okamaos post-build: $TARGET_DIR"
 
+# Install pygame into target rootfs (dropped from Buildroot 2024.02)
+# Uses system pip3 to download/install the correct manylinux wheel for the target Python version
+PYVER=$(ls "$TARGET_DIR/usr/lib/" | grep -E '^python3\.[0-9]+$' | head -1)
+SITE="$TARGET_DIR/usr/lib/$PYVER/site-packages"
+if [ -n "$PYVER" ] && [ ! -d "$SITE/pygame" ]; then
+    echo ">> Installing pygame into $SITE..."
+    pip3 download \
+        --only-binary=:all: \
+        --python-version "${PYVER#python}" \
+        --platform manylinux_2_17_x86_64 \
+        --abi "cp${PYVER#python}" \
+        -d /tmp/pygame-wheel-dl \
+        pygame 2>&1 || true
+    WHL=$(ls /tmp/pygame-wheel-dl/pygame-*.whl 2>/dev/null | head -1)
+    if [ -n "$WHL" ]; then
+        mkdir -p /tmp/pg-whl-extract
+        unzip -q -o "$WHL" -d /tmp/pg-whl-extract
+        cp -r /tmp/pg-whl-extract/pygame "$SITE/" 2>/dev/null || true
+        cp -r /tmp/pg-whl-extract/pygame.libs "$SITE/" 2>/dev/null || true
+        rm -rf /tmp/pg-whl-extract /tmp/pygame-wheel-dl
+        echo ">> pygame installed from $WHL"
+    else
+        echo ">> WARNING: pygame wheel download failed, skipping"
+    fi
+fi
+
 # Ensure okama-* tools are executable
 if [ -d "$TARGET_DIR/usr/bin" ]; then
     chmod 0755 "$TARGET_DIR"/usr/bin/okama-* 2>/dev/null || true

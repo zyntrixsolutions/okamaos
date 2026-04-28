@@ -5,6 +5,15 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.2.3] - 2026-04-28
+
+### Fixed
+- `NotImplementedError: font module not available` — manylinux `pygame.libs/` bundled `libSDL2_ttf` is ELF-misaligned on Buildroot kernel; removed `pygame.libs/` so pygame uses system SDL2_ttf
+- `post-build.sh`: no longer copies `pygame.libs/` from manylinux wheel
+- `okama-shell._init_fonts()`: wrapped `pygame.font.init()` in try/except so font failure degrades to default font instead of crashing
+
+---
+
 ## [0.2.2] - 2026-04-28
 
 ### Fixed

@@ -30,7 +30,7 @@ if [ -n "$PYVER" ] && [ ! -d "$SITE/pygame" ]; then
         mkdir -p /tmp/pg-whl-extract
         unzip -q -o "$WHL" -d /tmp/pg-whl-extract
         cp -r /tmp/pg-whl-extract/pygame "$SITE/" 2>/dev/null || true
-        cp -r /tmp/pg-whl-extract/pygame.libs "$SITE/" 2>/dev/null || true
+        # Do NOT copy pygame.libs — bundled SDL2/ALSA/ttf conflict with Buildroot system libs
         rm -rf /tmp/pg-whl-extract /tmp/pygame-wheel-dl
         echo ">> pygame installed from $WHL"
     else

@@ -158,7 +158,10 @@ class OkamaShell:
         self._axis_held: dict = {}
 
     def _init_fonts(self):
-        pygame.font.init()
+        try:
+            pygame.font.init()
+        except Exception as e:
+            print(f"WARNING: pygame.font.init failed ({e}), using fallback", file=sys.stderr)
         try:
             self.font_xl  = pygame.font.SysFont("DejaVu Sans", 72, bold=True)
             self.font_lg  = pygame.font.SysFont("DejaVu Sans", 42, bold=True)

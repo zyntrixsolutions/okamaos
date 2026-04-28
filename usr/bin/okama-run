@@ -75,6 +75,11 @@ def build_launch_cmd(manifest: dict, game_dir: str) -> list:
     runtime = manifest["runtime"]
     entry = os.path.join(game_dir, manifest["entry"])
 
+    # Check if game has a venv directory
+    venv_python = os.path.join(game_dir, "venv", "bin", "python3")
+    if os.path.isfile(venv_python):
+        return [venv_python, entry]
+
     if runtime in ("okama-lite", "okama-python", "okama-sdl2"):
         return [sys.executable, entry]
     else:

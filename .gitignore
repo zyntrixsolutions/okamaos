@@ -4,6 +4,11 @@
 buildroot/
 output/
 build/
+# Ignore games directory but allow specific game packages
+games/*
+!games/voidstriker-pkg/
+!games/demo/
+!games/pgdrive-pkg/
 
 # Python cache
 __pycache__/
@@ -35,3 +40,8 @@ Thumbs.db
 *.log
 nohup.out
 build.log
+
+# Large game packages
+*.package
+*.love
+*.tar.bz2

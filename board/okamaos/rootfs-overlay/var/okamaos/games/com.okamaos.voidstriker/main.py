@@ -931,13 +931,28 @@ def draw_gameover(surf, fonts, score: int, hi_score: int, new_hi: bool):
 # ── main loop ─────────────────────────────────────────────────────────────────
 
 def main():
-    pygame.init()
+    try:
+        pygame.init()
+    except Exception as e:
+        print(f"pygame.init() failed: {e}", file=sys.stderr)
+        sys.exit(1)
+    
     flags = pygame.FULLSCREEN | pygame.NOFRAME
     if "--windowed" in sys.argv:
         flags = 0
-    screen = pygame.display.set_mode((W, H), flags)
+    
+    try:
+        screen = pygame.display.set_mode((W, H), flags)
+    except Exception as e:
+        print(f"pygame.display.set_mode() failed: {e}", file=sys.stderr)
+        print(f"SDL_VIDEODRIVER: {os.environ.get('SDL_VIDEODRIVER', 'not set')}", file=sys.stderr)
+        sys.exit(1)
+    
     pygame.display.set_caption("VOID STRIKER — OkamaOS")
     pygame.mouse.set_visible(False)
+    # Force window focus on desktop systems
+    if flags == 0:
+        pygame.event.set_grab(True)
     clock = pygame.time.Clock()
 
     try:

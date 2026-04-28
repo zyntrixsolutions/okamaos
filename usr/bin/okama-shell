@@ -161,6 +161,7 @@ def _text_shell():
 # ---------------------------------------------------------------------------
 class OkamaShell:
     def __init__(self, windowed: bool = False, dev_mode: bool = False):
+        global WIDTH, HEIGHT
         self.windowed = windowed
         self.dev_mode = dev_mode
         self.conf = cfg_mod.get()
@@ -177,7 +178,6 @@ class OkamaShell:
             flags = pygame.FULLSCREEN | pygame.HWSURFACE | pygame.DOUBLEBUF
             self.screen = pygame.display.set_mode((0, 0), flags)
             # Update global layout dimensions to match actual framebuffer size
-            global WIDTH, HEIGHT
             WIDTH, HEIGHT = self.screen.get_size()
         pygame.display.set_caption("OkamaOS")
         pygame.mouse.set_visible(True)

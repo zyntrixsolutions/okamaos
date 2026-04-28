@@ -71,6 +71,7 @@ _EVDEV_KEY_MAP = {
     21:  "Y",          # KEY_Y
     45:  "X",          # KEY_X
     16:  "_QUIT_DEV",  # KEY_Q  (dev-mode quit)
+    68:  "DEV_CONSOLE", # KEY_F10
 }
 
 class _EvdevKeyboardReader:
@@ -342,9 +343,8 @@ class OkamaShell:
         self._prev_section = 0
         self._bg_surf = None
 
-        # Text input & secret dev mode
+        # Text input
         self._char_buf: list = []
-        self._secret_buf = ""
         # Dev console
         self._dev_console_history: list = []
         self._dev_console_cmd = ""
@@ -469,6 +469,7 @@ class OkamaShell:
                     pygame.K_y:      "Y",
                     pygame.K_x:      "X",
                     pygame.K_q:      "QUIT" if self.dev_mode else None,
+                    pygame.K_F10:    "DEV_CONSOLE",
                 }
                 action = mapping.get(k)
                 if action == "QUIT":
@@ -536,6 +537,14 @@ class OkamaShell:
             self._dispatch(action, ev)
 
     def _dispatch(self, action: str, ev: dict = None):
+        # F10 unlocks dev console from any state
+        if action == "DEV_CONSOLE":
+            self._dev_console_cmd = ""
+            self._dev_console_history.append(">>> Dev mode unlocked (F10). Type 'help' for commands.")
+            self._dev_console_history.append("> Root password is 'zyntrix'")
+            self.state = "dev_console"
+            return
+
         if self.state == "home":
             self._home_input(action, ev)
         elif self.state == "play":
@@ -581,18 +590,6 @@ class OkamaShell:
                         self._dev_console_cmd += ch
                     elif self.state == "wifi_psk":
                         self.wifi_psk_input += ch
-        elif self.state == "settings":
-            # Accumulate secret buffer for dev mode unlock
-            for ch in self._char_buf:
-                self._secret_buf += ch.lower()
-            if len(self._secret_buf) > 20:
-                self._secret_buf = self._secret_buf[-20:]
-            if "zyntrix" in self._secret_buf:
-                self._secret_buf = ""
-                self._dev_console_cmd = ""
-                self._dev_console_history.append(">>> Dev mode unlocked. Type 'help' for commands.")
-                self._dev_console_history.append("> Root password is 'zyntrix'")
-                self.state = "dev_console"
 
     def _home_input(self, action: str, ev: dict = None):
         n = len(SECTIONS)
@@ -702,7 +699,6 @@ class OkamaShell:
         n = len(SETTINGS_OPTIONS)
         if action == "B" or action == "START":
             self.state = "home"
-            self._secret_buf = ""
         elif action == "DPAD_DOWN":
             self.settings_idx = (self.settings_idx + 1) % n
         elif action == "DPAD_UP":

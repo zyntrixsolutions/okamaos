@@ -4,6 +4,12 @@
 
 case "$1" in
   start)
+    # Load DRM/KMS modules early so /dev/dri/card0 exists for SDL kmsdrm driver
+    # kmsdrm is required for keyboard input to work in SDL (offscreen driver has no input)
+    modprobe bochs-drm 2>/dev/null || true
+    modprobe drm_kms_helper 2>/dev/null || true
+    modprobe drm 2>/dev/null || true
+    
     if which udevd >/dev/null 2>&1; then
         echo "Starting eudev..."
         udevd --daemon

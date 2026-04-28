@@ -1545,7 +1545,7 @@ class OkamaShell:
         self.screen.blit(brand, (bx, by))
 
         # Version badge
-        ver_txt = self.font_hint.render("v0.6.0", True, COL_DIM)
+        ver_txt = self.font_hint.render("v0.6.1", True, COL_DIM)
         self.screen.blit(ver_txt, (bx + brand.get_width() + 10,
                                    by + brand.get_height() - ver_txt.get_height() - 2))
 

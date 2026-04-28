@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""okama-agent — AI-assisted game creation foundation (MVP: template-based).
+"""okama-agent — AI-assisted game creation and packaging agent.
 
 Usage:
   okama-agent new-game
   okama-agent template list
   okama-agent template create <name>
+  okama-agent auto-pack <game-dir> [--output file.ok] [--bundle] [--skip-bundle]
 """
 
 import sys
 import os
+import re
 
 _lib = os.environ.get("OKAMA_LIB", "")
 if not _lib:
@@ -19,6 +21,11 @@ import argparse
 import json
 import shutil
 import time
+import subprocess
+from pathlib import Path
+
+import okamaos.package as pkg_mod
+import okamaos.manifest as manifest_mod
 
 TEMPLATES_DIR = os.path.join(
     os.path.dirname(__file__), "../../usr/share/okamaos/templates"
@@ -141,6 +148,172 @@ def cmd_new_game(args):
     print(f"  generate game logic, assets, and controller mappings via AI API.")
 
 
+def _detect_game_info(game_dir: str) -> dict:
+    """Analyze game directory and detect entry point, runtime, and dependencies."""
+    path = Path(game_dir)
+    info = {
+        "entry": None,
+        "runtime": "okama-python",
+        "python_deps": [],
+        "has_pygame": False,
+        "has_sdl2": False,
+        "name": path.name.replace("-", " ").title(),
+        "id": f"com.unknown.{path.name.lower().replace(' ', '-')}",
+    }
+
+    # Detect entry point
+    entry_candidates = ["main.py", "index.html", "game.py", "run.py"]
+    for cand in entry_candidates:
+        if (path / cand).exists():
+            info["entry"] = cand
+            break
+
+    # Detect runtime from entry point
+    if info["entry"] and info["entry"].endswith(".html"):
+        info["runtime"] = "okama-lite"
+    elif info["entry"]:
+        info["runtime"] = "okama-python"
+
+    # Detect Python dependencies
+    req_files = ["requirements.txt", "requirements", "pyproject.toml", "setup.py"]
+    for rf in req_files:
+        rf_path = path / rf
+        if rf_path.exists():
+            if rf == "requirements.txt" or rf == "requirements":
+                with open(rf_path) as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith("#"):
+                            pkg = re.split(r"[<>=~!]", line)[0].strip()
+                            if pkg:
+                                info["python_deps"].append(pkg)
+                                if pkg.lower() == "pygame":
+                                    info["has_pygame"] = True
+                                if "sdl2" in pkg.lower():
+                                    info["has_sdl2"] = True
+            elif rf == "pyproject.toml":
+                with open(rf_path) as f:
+                    content = f.read()
+                    deps_match = re.search(r'dependencies\s*=\s*\[(.*?)\]', content, re.DOTALL)
+                    if deps_match:
+                        deps_str = deps_match.group(1)
+                        for dep in re.findall(r'"([^"]+)"', deps_str):
+                            pkg = re.split(r"[<>=~!]", dep)[0].strip()
+                            if pkg:
+                                info["python_deps"].append(pkg)
+            break
+
+    # Auto-detect runtime from dependencies
+    if info["has_pygame"] or info["has_sdl2"]:
+        info["runtime"] = "okama-sdl2"
+
+    return info
+
+
+def _generate_manifest(game_dir: str, info: dict) -> dict:
+    """Generate a manifest.ok.json based on detected info."""
+    manifest = {
+        "name": info["name"],
+        "id": info["id"],
+        "version": "0.1.0",
+        "runtime": info["runtime"],
+        "entry": info["entry"] or "main.py",
+        "min_ram_mb": 128,
+        "target_fps": 30,
+        "permissions": ["controller"],
+        "age_rating": "Everyone",
+        "supports_save_state": False,
+        "controller_required": True,
+        "keyboard_usage": "none",
+        "description": f"Auto-packaged game from {game_dir}",
+    }
+
+    # Add python_deps if detected
+    if info["python_deps"]:
+        manifest["python_deps"] = info["python_deps"]
+
+    # Adjust permissions based on runtime
+    if info["runtime"] == "okama-sdl2":
+        manifest["permissions"] = ["controller", "audio"]
+    elif info["runtime"] == "okama-lite":
+        manifest["permissions"] = []
+
+    return manifest
+
+
+def cmd_auto_pack(args):
+    game_dir = os.path.abspath(args.game_dir)
+    if not os.path.isdir(game_dir):
+        print(f"ERROR: Game directory not found: {game_dir}", file=sys.stderr)
+        sys.exit(1)
+
+    manifest_path = os.path.join(game_dir, "manifest.ok.json")
+    manifest_exists = os.path.exists(manifest_path)
+
+    print(f"Analyzing game directory: {game_dir}")
+    info = _detect_game_info(game_dir)
+
+    print(f"  Detected name:    {info['name']}")
+    print(f"  Detected entry:   {info['entry'] or 'unknown'}")
+    print(f"  Detected runtime: {info['runtime']}")
+    if info["python_deps"]:
+        print(f"  Python deps:     {', '.join(info['python_deps'])}")
+
+    if not manifest_exists:
+        print(f"\nNo manifest.ok.json found. Generating one...")
+        manifest = _generate_manifest(game_dir, info)
+        with open(manifest_path, "w") as f:
+            json.dump(manifest, f, indent=2)
+        print(f"  Created: {manifest_path}")
+    else:
+        print(f"\nUsing existing manifest.ok.json")
+        with open(manifest_path) as f:
+            manifest = json.load(f)
+
+    # Validate manifest
+    try:
+        manifest_mod.validate(manifest, dev_mode=True)
+        print(f"  Manifest is valid")
+    except manifest_mod.ManifestError as e:
+        print(f"ERROR: Manifest validation failed: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Bundle dependencies
+    should_bundle = args.bundle
+    if should_bundle is None:
+        should_bundle = bool(info["python_deps"]) and not args.skip_bundle
+
+    if should_bundle and info["python_deps"]:
+        print(f"\nBundling Python dependencies...")
+        try:
+            sp = pkg_mod.bundle_deps(game_dir, info["python_deps"])
+            size_mb = sum(f.stat().st_size for f in Path(sp).rglob("*")
+                         if f.is_file()) / (1024 * 1024)
+            print(f"  Bundled: {sp} ({size_mb:.1f} MB)")
+        except subprocess.CalledProcessError as e:
+            print(f"WARNING: Failed to bundle dependencies: {e}", file=sys.stderr)
+            print("  Continuing without bundled deps (package may not run standalone)")
+    elif not info["python_deps"]:
+        print(f"\nNo Python dependencies detected; skipping bundle")
+
+    # Build .ok package
+    output = args.output
+    if not output:
+        output = f"{info['name'].lower().replace(' ', '-')}.ok"
+
+    print(f"\nBuilding .ok package...")
+    try:
+        result = pkg_mod.build(game_dir, output, dev_mode=True)
+        size_kb = os.path.getsize(result) // 1024
+        print(f"SUCCESS: Built {result} ({size_kb} KB)")
+        print(f"\nInstall with:")
+        print(f"  okama-run {manifest['id']}  # if already installed to /var/okamaos/games/")
+        print(f"Or copy to USB and use the Install Game browser in OkamaOS")
+    except manifest_mod.ManifestError as e:
+        print(f"ERROR: Build failed: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
 def _scaffold_blank(dest: str) -> None:
     with open(os.path.join(dest, "main.py"), "w") as f:
         f.write(
@@ -169,7 +342,7 @@ def _scaffold_blank(dest: str) -> None:
 
 def main():
     p = argparse.ArgumentParser(prog="okama-agent",
-        description="OkamaOS AI game creation agent (MVP: templates)")
+        description="OkamaOS AI game creation and packaging agent")
     sub = p.add_subparsers(dest="command", required=True)
 
     sub.add_parser("new-game")
@@ -181,6 +354,16 @@ def main():
     tc = tsub.add_parser("create")
     tc.add_argument("name")
 
+    pa = sub.add_parser("auto-pack",
+        help="Analyze and package any game directory into a runnable .ok file")
+    pa.add_argument("game_dir", help="Path to game directory")
+    pa.add_argument("--output", "-o", default="",
+        help="Output .ok file path (default: <name>.ok)")
+    pa.add_argument("--bundle", action="store_true", default=None,
+        help="Force bundle Python dependencies into site-packages/")
+    pa.add_argument("--skip-bundle", action="store_true", default=False,
+        help="Skip dependency bundling even if deps detected")
+
     args = p.parse_args()
 
     if args.command == "new-game":
@@ -190,6 +373,8 @@ def main():
             cmd_template_list(args)
         elif args.template_action == "create":
             cmd_template_create(args)
+    elif args.command == "auto-pack":
+        cmd_auto_pack(args)
 
 
 if __name__ == "__main__":

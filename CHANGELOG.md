@@ -5,6 +5,15 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.6.1] - 2026-04-28
+
+### Added
+- **`okama-agent auto-pack`** subcommand: intelligently analyze any game directory, auto-detect entry point (main.py/index.html/game.py), runtime type (okama-python/okama-sdl2/okama-lite), and Python dependencies (from requirements.txt, pyproject.toml, setup.py); generate manifest.ok.json if missing, validate it, optionally bundle deps via `okamaos.package.bundle_deps()`, and build the .ok package — all in one command
+- **`_detect_game_info()`**: analyzes directory structure and dependency files to infer game metadata
+- **`_generate_manifest()`**: creates sensible manifest defaults based on detected info (runtime, permissions, python_deps)
+
+---
+
 ## [0.6.0] - 2026-04-28
 
 ### Added

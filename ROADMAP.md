@@ -54,6 +54,11 @@
 - [ ] SSH access via Dropbear
 - [ ] OTA update system via Install Game browser (from network URL)
 
+### v0.6.1 — Auto-pack Agent ✅
+- [x] **`okama-agent auto-pack`** subcommand: analyze any game directory, auto-detect entry point/runtime/deps, generate manifest, bundle deps, build .ok — one-command packaging
+- [x] **`_detect_game_info()`**: scans for main.py/index.html/game.py, parses requirements.txt/pyproject.toml/setup.py, infers runtime from pygame/sdl2 deps
+- [x] **`_generate_manifest()`**: creates sensible manifest defaults based on detected info
+
 ### v0.6 — Game Store & Standalone Packages ✅
 - [x] **Game Store UI** (`game_store` state): browse remote catalog, view size/version/category, one-press download+install with live progress bar
 - [x] **`okamaos.store` module**: `fetch_catalog()`, `download_game()` with SHA-256 checksum, `format_size()`

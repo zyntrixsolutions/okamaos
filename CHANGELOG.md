@@ -5,6 +5,26 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.7.0] - 2026-04-28
+
+### Changed
+- **PGDrive rewrite** (`com.okamaos.pgdrive` v0.2.0): replaced the panda3d/gym-based wrapper (which required OpenGL, Cython extensions, and 512 MB RAM) with a self-contained **pygame top-down driving simulator**. The new implementation has zero additional dependencies (only pygame, already on OkamaOS), starts instantly, and runs smoothly at 30 fps on the framebuffer.
+  - Procedurally generated road network via seeded grid graph (12×12 nodes, configurable density)
+  - Arcade-physics car model: acceleration, braking, friction, speed-dependent steering
+  - 10 NPC cars that navigate the road graph autonomously
+  - Smooth camera follow with configurable lerp
+  - Minimap with road network, NPC dots, viewport indicator, and player blip
+  - HUD: speed bar (km/h), D/N/R gear indicator, elapsed timer, control hints
+  - Help overlay (H / X) listing all keyboard and controller bindings
+  - `--seed=N` CLI argument for reproducible maps
+  - Full `okamaos.input_protocol.InputClient` integration (okama-inputd): `LSTICK_X` steer, `R2_AXIS` gas, `L2_AXIS` brake, `DPAD` digital fallback, `Y` new map, `START` quit
+  - pygame joystick fallback when okama-inputd socket is unavailable
+  - `min_ram_mb` reduced from 512 → 64; `permissions` trimmed to `["controller"]`
+- **`games/pgdrive-pkg/`**: lean packaging source (only `main.py` + `manifest.ok.json`) used to build `output/com.okamaos.pgdrive.ok`; avoids bundling the upstream panda3d source tree into the installable package
+- **rootfs-overlay stub** (`board/okamaos/rootfs-overlay/var/okamaos/games/com.okamaos.pgdrive/`): synced to v0.2.0 `main.py` and manifest so the game works correctly on first boot from the pre-installed ISO
+
+---
+
 ## [0.6.1] - 2026-04-28
 
 ### Added

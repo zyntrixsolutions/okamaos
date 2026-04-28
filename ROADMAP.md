@@ -54,6 +54,16 @@
 - [ ] SSH access via Dropbear
 - [ ] OTA update system via Install Game browser (from network URL)
 
+### v0.7.0 — PGDrive Pygame Rewrite ✅
+- [x] **PGDrive rewritten as pure-pygame top-down driving game** (`com.okamaos.pgdrive` v0.2.0): self-contained, no panda3d/gym/Cython, starts instantly, 30 fps on framebuffer
+- [x] Procedurally generated road network (seeded 12×12 grid graph, 85% edge density)
+- [x] Arcade car physics (acceleration, friction, speed-dependent steering, reverse)
+- [x] 10 NPC cars with autonomous road navigation
+- [x] Smooth camera follow, minimap, HUD (speed bar, gear, timer), help overlay
+- [x] okama-inputd (`InputClient`) + pygame keyboard/joystick dual-input stack
+- [x] `games/pgdrive-pkg/` lean packaging source; `output/com.okamaos.pgdrive.ok` (6 KB)
+- [x] rootfs-overlay stub synced to v0.2.0 for first-boot pre-install
+
 ### v0.6.1 — Auto-pack Agent ✅
 - [x] **`okama-agent auto-pack`** subcommand: analyze any game directory, auto-detect entry point/runtime/deps, generate manifest, bundle deps, build .ok — one-command packaging
 - [x] **`_detect_game_info()`**: scans for main.py/index.html/game.py, parses requirements.txt/pyproject.toml/setup.py, infers runtime from pygame/sdl2 deps

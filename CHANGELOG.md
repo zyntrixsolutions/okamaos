@@ -5,6 +5,18 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.9.1] - 2026-04-29
+
+### Fixed
+- **Dev Console keyboard typing**: text-entry states now process typed characters every frame instead of only when a navigation action is dispatched.
+- **Offscreen/evdev keyboard fallback**: dev console and WiFi password entry now drain evdev character input, suppress navigation/action mappings while typing, and support shifted command symbols such as `|`, `_`, `:`, and `?`.
+- **Control-key separation**: Space, `q`, WASD, `x`, and `y` no longer submit, quit, or navigate while typing commands in the dev console; Enter, Backspace, Esc, and F10 remain active controls.
+
+### Changed
+- Version metadata updated to `0.9.1` across the root `VERSION`, runtime package version, shell badge, config defaults, rootfs profile, and OkamaOS library metadata.
+
+---
+
 ## [0.9.0] - 2026-04-28
 
 ### Added

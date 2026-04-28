@@ -103,6 +103,13 @@
 - [x] **Game runtime hardening**: CPU governor, SDL tuning in okama-run
 - [x] Network/BT init scripts support `restart|reload` for live apply
 
+### v0.9.1 — Dev Console Keyboard Fix ✅
+- [x] Process dev console and WiFi password text input independently from navigation/action dispatch
+- [x] Keep Space, `q`, WASD, `x`, and `y` as typed characters in text-entry states
+- [x] Drain evdev/offscreen keyboard characters into text-entry buffers
+- [x] Track Shift in evdev fallback for command symbols and uppercase input
+- [x] Keep Enter, Backspace, Esc, and F10 as active text-entry controls
+
 ### v1.0 — Console Polish
 - [x] Silent boot (`quiet loglevel=0`, boot log redirect) — completed in v0.3
 - [ ] Boot time < 8 seconds

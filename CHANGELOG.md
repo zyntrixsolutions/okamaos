@@ -5,6 +5,13 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.3.3] - 2026-04-28
+
+### Fixed
+- **Keyboard not working on offscreen SDL driver**: When `kmsdrm` is unavailable (e.g. VirtualBox VMSVGA), SDL falls back to `offscreen` which generates no keyboard events. Added `_EvdevKeyboardReader` that reads `/dev/input/event*` directly via evdev in a background thread, feeding key-press codes into `_collect_events()` as a fallback when `SDL_VIDEODRIVER=offscreen`
+
+---
+
 ## [0.3.2] - 2026-04-28
 
 ### Fixed

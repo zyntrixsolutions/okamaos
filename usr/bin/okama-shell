@@ -37,6 +37,77 @@ import subprocess
 import time
 import json
 import argparse
+import struct
+import threading
+import queue
+import glob
+
+# ---------------------------------------------------------------------------
+# Evdev keyboard reader — used when SDL offscreen driver has no input
+# ---------------------------------------------------------------------------
+# Linux input_event struct: timeval(8) + type(2) + code(2) + value(4) = 24 bytes
+_EVDEV_FMT = "llHHi"
+_EVDEV_SZ  = struct.calcsize(_EVDEV_FMT)
+_EV_KEY    = 0x01
+_KEY_PRESS = 1
+
+# evdev keycodes → okama actions
+_EVDEV_KEY_MAP = {
+    103: "DPAD_UP",    # KEY_UP
+    108: "DPAD_DOWN",  # KEY_DOWN
+    105: "DPAD_LEFT",  # KEY_LEFT
+    106: "DPAD_RIGHT", # KEY_RIGHT
+    17:  "DPAD_UP",    # KEY_W
+    31:  "DPAD_DOWN",  # KEY_S
+    30:  "DPAD_LEFT",  # KEY_A
+    32:  "DPAD_RIGHT", # KEY_D
+    28:  "A",          # KEY_ENTER
+    57:  "A",          # KEY_SPACE
+    1:   "B",          # KEY_ESC
+    15:  "DPAD_RIGHT", # KEY_TAB
+    102: "START",      # KEY_HOME
+    16:  "_QUIT_DEV",  # KEY_Q  (dev-mode quit)
+}
+
+class _EvdevKeyboardReader:
+    """Reads keyboard events directly from evdev when SDL can't receive input."""
+    def __init__(self):
+        self._q: queue.Queue = queue.Queue()
+        self._stop = threading.Event()
+        self._threads = []
+
+    def start(self):
+        for path in glob.glob("/dev/input/event*"):
+            t = threading.Thread(target=self._read, args=(path,), daemon=True)
+            t.start()
+            self._threads.append(t)
+
+    def stop(self):
+        self._stop.set()
+
+    def _read(self, path):
+        try:
+            with open(path, "rb") as f:
+                while not self._stop.is_set():
+                    data = f.read(_EVDEV_SZ)
+                    if len(data) < _EVDEV_SZ:
+                        break
+                    _, _, etype, code, value = struct.unpack(_EVDEV_FMT, data)
+                    if etype == _EV_KEY and value == _KEY_PRESS:
+                        self._q.put(code)
+        except OSError:
+            pass
+
+    def drain(self) -> list:
+        codes = []
+        try:
+            while True:
+                codes.append(self._q.get_nowait())
+        except queue.Empty:
+            pass
+        return codes
+
+_evdev_kb: _EvdevKeyboardReader | None = None
 
 # ---------------------------------------------------------------------------
 # Pygame bootstrap — graceful degradation if not available
@@ -188,6 +259,13 @@ class OkamaShell:
         self.input_client = InputClient()
         self.input_client.connect()
 
+        # When using offscreen SDL driver, pygame receives no keyboard events.
+        # Fall back to reading evdev directly.
+        global _evdev_kb
+        if os.environ.get("SDL_VIDEODRIVER") == "offscreen":
+            _evdev_kb = _EvdevKeyboardReader()
+            _evdev_kb.start()
+
         self.state = "home"       # home | play | settings | power | launching
         self.section_idx = 0
         self.list_idx = 0
@@ -292,7 +370,7 @@ class OkamaShell:
             elif ev.get("type") == "axis":
                 self._handle_axis_to_dpad(ev, events)
 
-        # Keyboard + mouse
+        # Keyboard + mouse via SDL (works on kmsdrm / x11 / windowed)
         for pev in pygame.event.get():
             if pev.type == pygame.QUIT:
                 events.append({"type": "QUIT"})
@@ -329,6 +407,15 @@ class OkamaShell:
             elif pev.type == pygame.MOUSEBUTTONDOWN and pev.button == 1:
                 events.append({"src": "mouse", "action": "CLICK",
                                "pos": pev.pos})
+
+        # Evdev keyboard fallback — used when SDL offscreen driver has no input
+        if _evdev_kb is not None:
+            for code in _evdev_kb.drain():
+                action = _EVDEV_KEY_MAP.get(code)
+                if action == "_QUIT_DEV" and self.dev_mode:
+                    events.append({"type": "QUIT"})
+                elif action:
+                    events.append({"src": "keyboard", "action": action})
 
         return events
 

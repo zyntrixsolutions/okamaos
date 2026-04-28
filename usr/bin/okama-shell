@@ -41,6 +41,8 @@ import struct
 import threading
 import queue
 import glob
+import shutil
+from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Evdev keyboard reader — used when SDL offscreen driver has no input
@@ -124,6 +126,8 @@ from okamaos.input_protocol import InputClient
 import okamaos.config as cfg_mod
 import okamaos.games as games_mod
 import okamaos.bluetooth as bt_mod
+import okamaos.package as pkg_mod
+import okamaos.manifest as manifest_mod
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -280,6 +284,23 @@ class OkamaShell:
         self._input_cooldown = 0
         self._axis_threshold = 0.5
         self._axis_held: dict = {}
+
+        # Settings sub-screen state
+        self.ctrl_idx = 0
+        self.controllers_info = []
+        self._bt_action_items = []
+        self._bt_powered = False
+        self.bt_devices = []
+        self.bt_scanning = False
+        self.bt_dev_idx = 0
+        self.audio_volume = 80
+        self.net_info = []
+        self.net_idx = 0
+        self.storage_info = []
+        # Install browse state
+        self.install_files = []
+        self.install_idx = 0
+        self.install_status = ""
 
         # Animation / visual state
         self._tick = 0            # frame counter for animations
@@ -464,6 +485,18 @@ class OkamaShell:
             self._settings_input(action, ev)
         elif self.state == "power":
             self._power_input(action, ev)
+        elif self.state == "settings_controllers":
+            self._settings_controllers_input(action, ev)
+        elif self.state == "settings_bluetooth":
+            self._settings_bluetooth_input(action, ev)
+        elif self.state == "settings_audio":
+            self._settings_audio_input(action, ev)
+        elif self.state == "settings_network":
+            self._settings_network_input(action, ev)
+        elif self.state == "settings_storage":
+            self._settings_storage_input(action, ev)
+        elif self.state == "install_browse":
+            self._install_browse_input(action, ev)
 
     def _home_input(self, action: str, ev: dict = None):
         n = len(SECTIONS)
@@ -526,6 +559,10 @@ class OkamaShell:
             if n:
                 self.list_idx = (self.list_idx - 1) % n
         elif action == "CLICK" and ev:
+            install_r = self._play_install_rect()
+            if install_r and install_r.collidepoint(ev["pos"]):
+                self._enter_install_browse()
+                return
             rects = self._play_game_rects()
             for i, r in enumerate(rects):
                 if r.collidepoint(ev["pos"]):
@@ -537,6 +574,10 @@ class OkamaShell:
         elif action == "A":
             if self.games:
                 self._launch_game(self.games[self.list_idx])
+            else:
+                self._enter_install_browse()
+        elif action == "DPAD_RIGHT" and not self.games:
+            self._enter_install_browse()
 
     def _play_game_rects(self):
         card_h, margin, start_y = 80, 10, 120
@@ -576,20 +617,494 @@ class OkamaShell:
     def _settings_select(self):
         opt = SETTINGS_OPTIONS[self.settings_idx]
         if opt == "Controllers":
-            self._show_message(
-                "Controller: connected (USB HID). "
-                "Bluetooth pairing: use okama-cli bluetooth pair <mac>")
+            self._enter_settings_controllers()
         elif opt == "Bluetooth":
-            s = bt_mod.status()
-            self._show_message(f"Bluetooth powered: {s['powered']}")
-        else:
-            self._show_message(f"{opt} — coming soon")
+            self._enter_settings_bluetooth()
+        elif opt == "Audio":
+            self._enter_settings_audio()
+        elif opt == "Network":
+            self._enter_settings_network()
+        elif opt == "Storage Info":
+            self._enter_settings_storage()
 
     def _settings_rects(self):
         return [
             pygame.Rect(40, 120 + i * 64, WIDTH - 80, 52)
             for i in range(len(SETTINGS_OPTIONS))
         ]
+
+    # -----------------------------------------------------------------------
+    # Shared sub-screen helpers
+    # -----------------------------------------------------------------------
+    def _subscreen_rects(self, n: int) -> list:
+        return [
+            pygame.Rect(40, 120 + i * 64, WIDTH - 80, 52)
+            for i in range(n)
+            if 120 + i * 64 + 52 <= HEIGHT - 60
+        ]
+
+    def _draw_subscreen_list(self, items: list, sel_idx: int, key_fn) -> None:
+        mx, my = self._mouse_pos
+        rects = self._subscreen_rects(len(items))
+        for i, (item, r) in enumerate(zip(items, rects)):
+            is_sel = (i == sel_idx)
+            is_hov = r.collidepoint(mx, my)
+            color = _lerp_color(COL_CARD, COL_SELECTED, 0.7) if is_sel \
+                    else (COL_CARD_HOV if is_hov else COL_CARD)
+            pygame.draw.rect(self.screen, color, r, border_radius=10)
+            if is_sel:
+                pygame.draw.rect(self.screen, COL_SETTINGS, r, 2, border_radius=10)
+                sel_bar = pygame.Rect(r.x, r.y, 4, r.h)
+                pygame.draw.rect(self.screen, COL_SETTINGS, sel_bar,
+                                 border_radius=2)
+            label = self.font_mdb.render(key_fn(item), True,
+                                         COL_TEXT if is_sel else COL_TEXT2)
+            self.screen.blit(label, (60, r.y + (r.h - label.get_height()) // 2))
+            if is_sel:
+                arrow = self.font_md.render(">", True, COL_SETTINGS)
+                self.screen.blit(arrow,
+                                 (WIDTH - 60,
+                                  r.y + (r.h - arrow.get_height()) // 2))
+
+    # -----------------------------------------------------------------------
+    # Settings > Controllers
+    # -----------------------------------------------------------------------
+    def _enter_settings_controllers(self):
+        self.ctrl_idx = 0
+        self.controllers_info = self._collect_controllers()
+        self.state = "settings_controllers"
+
+    def _collect_controllers(self) -> list:
+        items = []
+        for path in sorted(glob.glob("/dev/input/js*")):
+            name = os.path.basename(path)
+            try:
+                with open(f"/sys/class/input/{os.path.basename(path)}/device/name") as f:
+                    name = f.read().strip()
+            except Exception:
+                pass
+            items.append({"type": "usb", "label": f"USB:  {name}"})
+        for p in bt_mod.list_trusted():
+            label = p.get("name") or p.get("mac", "?")
+            items.append({"type": "bt",
+                          "label": f"BT:   {label}",
+                          "mac": p.get("mac", "")})
+        items.append({"type": "action",
+                      "label": "[ Pair New Bluetooth Controller ]"})
+        return items
+
+    def _settings_controllers_input(self, action: str, ev: dict = None):
+        n = len(self.controllers_info)
+        if action in ("B", "START"):
+            self.state = "settings"
+        elif action == "DPAD_UP":
+            self.ctrl_idx = (self.ctrl_idx - 1) % n
+        elif action == "DPAD_DOWN":
+            self.ctrl_idx = (self.ctrl_idx + 1) % n
+        elif action == "CLICK" and ev:
+            rects = self._subscreen_rects(n)
+            for i, r in enumerate(rects):
+                if r.collidepoint(ev["pos"]):
+                    self.ctrl_idx = i
+                    self._controllers_select()
+            return
+        elif action == "A":
+            self._controllers_select()
+
+    def _controllers_select(self):
+        item = self.controllers_info[self.ctrl_idx]
+        if item["type"] == "action":
+            self._enter_settings_bluetooth()
+        elif item["type"] == "bt":
+            self._show_message(f"BT controller paired & trusted: {item['label']}")
+        else:
+            self._show_message(f"Connected: {item['label']}")
+
+    def _draw_settings_controllers(self):
+        self._draw_section_header("* Controllers", COL_SETTINGS)
+        self._draw_subscreen_list(self.controllers_info,
+                                  self.ctrl_idx,
+                                  key_fn=lambda x: x["label"])
+        if not any(x["type"] != "action" for x in self.controllers_info):
+            info = self.font_sm.render(
+                "No controllers detected. Connect via USB or pair via Bluetooth.",
+                True, COL_DIM)
+            self.screen.blit(info, (60, HEIGHT - 90))
+
+    # -----------------------------------------------------------------------
+    # Settings > Bluetooth
+    # -----------------------------------------------------------------------
+    def _enter_settings_bluetooth(self):
+        self.bt_dev_idx = 0
+        self.bt_scanning = False
+        self.bt_devices = []
+        self._bt_action_items = []
+        self._bt_refresh_items()
+        self.state = "settings_bluetooth"
+
+    def _bt_refresh_items(self):
+        s = bt_mod.status()
+        self._bt_powered = (s["powered"] == "yes")
+        items = []
+        if self._bt_powered:
+            items.append({"type": "toggle", "label": "Bluetooth: ON   [ Turn Off ]"})
+            if self.bt_scanning:
+                items.append({"type": "info",
+                               "label": "  Scanning for devices…"})
+            else:
+                items.append({"type": "scan",
+                               "label": "[ Scan for Devices ]"})
+            for d in self.bt_devices:
+                items.append({"type": "device",
+                               "label": f"  {d['name']}  ({d['mac']})",
+                               "mac": d["mac"], "name": d["name"]})
+        else:
+            items.append({"type": "toggle",
+                           "label": "Bluetooth: OFF  [ Turn On ]"})
+        self._bt_action_items = items
+
+    def _settings_bluetooth_input(self, action: str, ev: dict = None):
+        n = max(len(self._bt_action_items), 1)
+        if action in ("B", "START"):
+            self.state = "settings"
+        elif action == "DPAD_UP":
+            self.bt_dev_idx = (self.bt_dev_idx - 1) % n
+        elif action == "DPAD_DOWN":
+            self.bt_dev_idx = (self.bt_dev_idx + 1) % n
+        elif action == "CLICK" and ev:
+            rects = self._subscreen_rects(n)
+            for i, r in enumerate(rects):
+                if r.collidepoint(ev["pos"]):
+                    self.bt_dev_idx = i
+                    self._bt_select()
+            return
+        elif action == "A":
+            self._bt_select()
+
+    def _bt_select(self):
+        if not self._bt_action_items:
+            return
+        item = self._bt_action_items[self.bt_dev_idx]
+        if item["type"] == "toggle":
+            cmd = "on" if not self._bt_powered else "off"
+            subprocess.call(["bluetoothctl", "power", cmd],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self._bt_refresh_items()
+        elif item["type"] == "scan":
+            self._start_bt_scan()
+        elif item["type"] == "device":
+            mac, name = item["mac"], item["name"]
+            self._show_message(f"Pairing {name}…")
+            threading.Thread(target=self._do_bt_pair,
+                             args=(mac, name), daemon=True).start()
+
+    def _start_bt_scan(self):
+        self.bt_scanning = True
+        self.bt_devices = []
+        self._bt_refresh_items()
+        threading.Thread(target=self._do_bt_scan, daemon=True).start()
+
+    def _do_bt_scan(self):
+        self.bt_devices = bt_mod.scan(timeout=10)
+        self.bt_scanning = False
+        self._bt_refresh_items()
+
+    def _do_bt_pair(self, mac: str, name: str):
+        ok = bt_mod.pair(mac)
+        if ok:
+            bt_mod.trust(mac)
+            bt_mod.connect(mac)
+            bt_mod.save_controller_profile(mac, name)
+            self._show_message(f"Paired & connected: {name}")
+        else:
+            self._show_message(f"Pairing failed for {name}")
+
+    def _draw_settings_bluetooth(self):
+        self._draw_section_header("* Bluetooth", COL_SETTINGS)
+        self._draw_subscreen_list(self._bt_action_items,
+                                  self.bt_dev_idx,
+                                  key_fn=lambda x: x["label"])
+
+    # -----------------------------------------------------------------------
+    # Settings > Audio
+    # -----------------------------------------------------------------------
+    def _enter_settings_audio(self):
+        try:
+            self.audio_volume = int(self.conf.get("DEFAULT_VOLUME", "80"))
+        except (ValueError, TypeError):
+            self.audio_volume = 80
+        self.state = "settings_audio"
+
+    def _settings_audio_input(self, action: str, ev: dict = None):
+        if action in ("B", "START"):
+            self.state = "settings"
+        elif action in ("DPAD_RIGHT", "DPAD_UP"):
+            self.audio_volume = min(100, self.audio_volume + 5)
+            self._apply_volume()
+        elif action in ("DPAD_LEFT", "DPAD_DOWN"):
+            self.audio_volume = max(0, self.audio_volume - 5)
+            self._apply_volume()
+        elif action == "A":
+            self._apply_volume()
+            self._show_message(f"Volume saved: {self.audio_volume}%")
+
+    def _apply_volume(self):
+        self.conf.set("DEFAULT_VOLUME", str(self.audio_volume))
+        try:
+            subprocess.call(
+                ["amixer", "sset", "Master", f"{self.audio_volume}%"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+
+    def _draw_settings_audio(self):
+        self._draw_section_header("* Audio", COL_SETTINGS)
+        vol = self.audio_volume
+        bar_x, bar_y = 80, 220
+        bar_w, bar_h = WIDTH - 160, 44
+
+        lbl = self.font_mdb.render(f"Volume:  {vol}%", True, COL_TEXT)
+        self.screen.blit(lbl, (bar_x, 155))
+
+        pygame.draw.rect(self.screen, COL_CARD,
+                         (bar_x, bar_y, bar_w, bar_h), border_radius=10)
+        fill_w = int(bar_w * vol / 100)
+        if fill_w > 0:
+            fill_col = _lerp_color(COL_OK, COL_WARN, vol / 100)
+            pygame.draw.rect(self.screen, fill_col,
+                             (bar_x, bar_y, fill_w, bar_h), border_radius=10)
+        pygame.draw.rect(self.screen, COL_SETTINGS,
+                         (bar_x, bar_y, bar_w, bar_h), 2, border_radius=10)
+
+        backend = self.conf.get("AUDIO_BACKEND", "alsa")
+        hints = [
+            f"Backend: {backend.upper()}",
+            "[Left / Right] or [D-pad] to adjust   [Enter / A] to save",
+        ]
+        for j, line in enumerate(hints):
+            surf = self.font_sm.render(line, True, COL_DIM)
+            self.screen.blit(surf, (bar_x, bar_y + bar_h + 18 + j * 28))
+
+    # -----------------------------------------------------------------------
+    # Settings > Network
+    # -----------------------------------------------------------------------
+    def _enter_settings_network(self):
+        self.net_info = self._collect_net_info()
+        self.net_idx = 0
+        self.state = "settings_network"
+
+    def _collect_net_info(self) -> list:
+        import re as _re
+        lines = []
+        try:
+            result = subprocess.run(["ip", "addr"],
+                                    capture_output=True, text=True, timeout=5)
+            iface = None
+            for line in result.stdout.splitlines():
+                m = _re.match(r"^\d+: (\S+):.*state (\S+)", line)
+                if m:
+                    iface = m.group(1)
+                    state = m.group(2)
+                    lines.append({"label": f"{iface}  [{state}]",
+                                  "type": "iface"})
+                m2 = _re.match(r"^\s+inet (\S+)", line)
+                if m2 and iface:
+                    lines.append({"label": f"   IPv4: {m2.group(1)}",
+                                  "type": "info"})
+                m3 = _re.match(r"^\s+inet6 (\S+) scope global", line)
+                if m3 and iface:
+                    lines.append({"label": f"   IPv6: {m3.group(1)}",
+                                  "type": "info"})
+        except Exception:
+            lines.append({"label": "Network info unavailable", "type": "info"})
+
+        wifi = self.conf.get("WIFI_ENABLED", "no")
+        state_lbl = "ON" if wifi == "yes" else "OFF"
+        lines.append({"label": f"Wi-Fi: {state_lbl}  [ Toggle ]",
+                      "type": "wifi_toggle"})
+        return lines
+
+    def _settings_network_input(self, action: str, ev: dict = None):
+        n = max(len(self.net_info), 1)
+        if action in ("B", "START"):
+            self.state = "settings"
+        elif action == "DPAD_UP":
+            self.net_idx = (self.net_idx - 1) % n
+        elif action == "DPAD_DOWN":
+            self.net_idx = (self.net_idx + 1) % n
+        elif action == "CLICK" and ev:
+            rects = self._subscreen_rects(n)
+            for i, r in enumerate(rects):
+                if r.collidepoint(ev["pos"]):
+                    self.net_idx = i
+                    self._net_select()
+            return
+        elif action == "A":
+            self._net_select()
+
+    def _net_select(self):
+        if not self.net_info:
+            return
+        item = self.net_info[self.net_idx]
+        if item["type"] == "wifi_toggle":
+            current = self.conf.get("WIFI_ENABLED", "no")
+            new_val = "yes" if current != "yes" else "no"
+            self.conf.set("WIFI_ENABLED", new_val)
+            self._show_message(
+                f"Wi-Fi {'enabled' if new_val == 'yes' else 'disabled'}"
+                " — takes effect on reboot")
+            self.net_info = self._collect_net_info()
+
+    def _draw_settings_network(self):
+        self._draw_section_header("* Network", COL_SETTINGS)
+        self._draw_subscreen_list(self.net_info, self.net_idx,
+                                  key_fn=lambda x: x["label"])
+
+    # -----------------------------------------------------------------------
+    # Settings > Storage Info
+    # -----------------------------------------------------------------------
+    def _enter_settings_storage(self):
+        self.storage_info = self._collect_storage_info()
+        self.state = "settings_storage"
+
+    def _collect_storage_info(self) -> list:
+        def _fmt(b):
+            if b >= 1 << 30:
+                return f"{b / (1 << 30):.1f} GB"
+            if b >= 1 << 20:
+                return f"{b / (1 << 20):.1f} MB"
+            return f"{b / (1 << 10):.1f} KB"
+
+        lines = []
+        try:
+            st = os.statvfs("/")
+            total = st.f_blocks * st.f_frsize
+            free  = st.f_bavail * st.f_frsize
+            used  = total - free
+            lines.append({"label": f"Total disk:    {_fmt(total)}"})
+            lines.append({"label": f"Used:          {_fmt(used)}"})
+            lines.append({"label": f"Free:          {_fmt(free)}"})
+        except Exception:
+            lines.append({"label": "Disk info unavailable"})
+
+        installed = games_mod.list_installed()
+        lines.append({"label": f"Games installed: {len(installed)}"})
+        for g in installed:
+            gdir = games_mod.game_dir(g["id"])
+            try:
+                size = sum(f.stat().st_size
+                           for f in Path(gdir).rglob("*") if f.is_file())
+                lines.append({"label": f"  {g['name']}: {_fmt(size)}"})
+            except Exception:
+                lines.append({"label": f"  {g['name']}"})
+        return lines
+
+    def _settings_storage_input(self, action: str, ev: dict = None):
+        if action in ("B", "START", "A"):
+            self.state = "settings"
+
+    def _draw_settings_storage(self):
+        self._draw_section_header("* Storage Info", COL_SETTINGS)
+        for i, item in enumerate(self.storage_info):
+            y = 120 + i * 44
+            if y + 36 > HEIGHT - 60:
+                break
+            lbl = self.font_md.render(item["label"], True, COL_TEXT2)
+            self.screen.blit(lbl, (60, y))
+
+    # -----------------------------------------------------------------------
+    # Play > Install Browse
+    # -----------------------------------------------------------------------
+    def _enter_install_browse(self):
+        self.install_files = self._find_ok_files()
+        self.install_idx = 0
+        self.install_status = ""
+        self.state = "install_browse"
+
+    def _find_ok_files(self) -> list:
+        results = []
+        search_paths = ["/mnt", "/media", "/var/okamaos/updates", "/tmp"]
+        for base in search_paths:
+            try:
+                for root, _dirs, files in os.walk(base):
+                    for fname in sorted(files):
+                        if fname.endswith(".ok"):
+                            results.append(os.path.join(root, fname))
+            except Exception:
+                pass
+        return results
+
+    def _install_browse_input(self, action: str, ev: dict = None):
+        n = len(self.install_files)
+        if action in ("B", "START"):
+            self.state = "play"
+            self._refresh_games()
+        elif action == "DPAD_UP" and n:
+            self.install_idx = (self.install_idx - 1) % n
+        elif action == "DPAD_DOWN" and n:
+            self.install_idx = (self.install_idx + 1) % n
+        elif action == "CLICK" and ev:
+            rects = self._subscreen_rects(max(n, 1))
+            for i, r in enumerate(rects):
+                if r.collidepoint(ev["pos"]) and i < n:
+                    if i == self.install_idx:
+                        self._do_install(self.install_files[i])
+                    else:
+                        self.install_idx = i
+            return
+        elif action == "A" and n:
+            self._do_install(self.install_files[self.install_idx])
+
+    def _do_install(self, path: str):
+        self.install_status = f"Installing {os.path.basename(path)}…"
+        self._draw()
+        pygame.display.flip()
+        try:
+            manifest = pkg_mod.verify(path, dev_mode=self.dev_mode)
+            dest = games_mod.game_dir(manifest["id"])
+            if os.path.exists(dest):
+                shutil.rmtree(dest)
+            pkg_mod.extract(path, dest)
+            self.install_status = (
+                f"Installed: {manifest['name']} v{manifest['version']}")
+            self._refresh_games()
+        except manifest_mod.ManifestError as e:
+            self.install_status = f"Bad package: {str(e)[:60]}"
+        except Exception as e:
+            self.install_status = f"Error: {str(e)[:60]}"
+
+    def _draw_install_browse(self):
+        self._draw_section_header("> Install Game", COL_PLAY)
+
+        if not self.install_files:
+            empty_r = pygame.Rect(40, HEIGHT // 2 - 80, WIDTH - 80, 160)
+            pygame.draw.rect(self.screen, COL_CARD, empty_r, border_radius=14)
+            pygame.draw.rect(self.screen, COL_BORDER, empty_r, 1,
+                             border_radius=14)
+            for j, txt in enumerate([
+                "No .ok packages found",
+                "Place USB drive with .ok files at /mnt or /media",
+                "Or copy packages to /var/okamaos/updates/",
+            ]):
+                col = COL_DIM if j else self.font_md.size(txt)[0] and COL_DIM
+                surf = (self.font_md if j == 0 else self.font_sm).render(
+                    txt, True, COL_DIM)
+                self.screen.blit(
+                    surf,
+                    (WIDTH // 2 - surf.get_width() // 2,
+                     empty_r.y + 20 + j * 44))
+        else:
+            items = [{"label": os.path.basename(f), "path": f}
+                     for f in self.install_files]
+            self._draw_subscreen_list(items, self.install_idx,
+                                      key_fn=lambda x: x["label"])
+
+        if self.install_status:
+            col = COL_ERROR if self.install_status.startswith(
+                ("Error", "Bad")) else COL_OK
+            surf = self.font_sm.render(self.install_status, True, col)
+            self.screen.blit(surf, (WIDTH // 2 - surf.get_width() // 2,
+                                    HEIGHT - 80))
 
     def _power_input(self, action: str, ev: dict = None):
         n = len(POWER_OPTIONS)
@@ -647,6 +1162,18 @@ class OkamaShell:
             self._draw_settings()
         elif self.state == "power":
             self._draw_power()
+        elif self.state == "settings_controllers":
+            self._draw_settings_controllers()
+        elif self.state == "settings_bluetooth":
+            self._draw_settings_bluetooth()
+        elif self.state == "settings_audio":
+            self._draw_settings_audio()
+        elif self.state == "settings_network":
+            self._draw_settings_network()
+        elif self.state == "settings_storage":
+            self._draw_settings_storage()
+        elif self.state == "install_browse":
+            self._draw_install_browse()
 
         self._draw_message()
         self._draw_hints()
@@ -671,7 +1198,7 @@ class OkamaShell:
         self.screen.blit(brand, (bx, by))
 
         # Version badge
-        ver_txt = self.font_hint.render("v0.3.1", True, COL_DIM)
+        ver_txt = self.font_hint.render("v0.4.0", True, COL_DIM)
         self.screen.blit(ver_txt, (bx + brand.get_width() + 10,
                                    by + brand.get_height() - ver_txt.get_height() - 2))
 
@@ -728,21 +1255,38 @@ class OkamaShell:
         sub = self.font_sm.render(sub_txt, True, COL_DIM)
         self.screen.blit(sub, (WIDTH // 2 - sub.get_width() // 2, y_sub))
 
+    def _play_install_rect(self):
+        """Returns the Install Game button rect shown in the play list footer."""
+        btn_w, btn_h = 280, 52
+        return pygame.Rect(WIDTH // 2 - btn_w // 2,
+                           HEIGHT - btn_h - 52, btn_w, btn_h)
+
     def _draw_play(self):
         self._draw_section_header("> Play", COL_PLAY)
 
         if not self.games:
             # Empty state card
-            empty_r = pygame.Rect(40, HEIGHT // 2 - 60, WIDTH - 80, 120)
+            empty_r = pygame.Rect(40, HEIGHT // 2 - 80, WIDTH - 80, 130)
             pygame.draw.rect(self.screen, COL_CARD, empty_r, border_radius=14)
             pygame.draw.rect(self.screen, COL_BORDER, empty_r, 1, border_radius=14)
             msg1 = self.font_md.render("No games installed", True, COL_DIM)
             msg2 = self.font_sm.render(
-                "Use:  okama-cli install <game.ok>", True, COL_DIM)
+                "Select \"Install Game\" below to browse for a .ok package",
+                True, COL_DIM)
             self.screen.blit(msg1, (WIDTH//2 - msg1.get_width()//2,
-                                    empty_r.y + 28))
+                                    empty_r.y + 22))
             self.screen.blit(msg2, (WIDTH//2 - msg2.get_width()//2,
-                                    empty_r.y + 70))
+                                    empty_r.y + 72))
+            # Install button
+            r = self._play_install_rect()
+            mx, my = self._mouse_pos
+            is_hov = r.collidepoint(mx, my)
+            btn_col = _lerp_color(COL_CARD, COL_PLAY, 0.5) if is_hov else COL_CARD
+            pygame.draw.rect(self.screen, btn_col, r, border_radius=12)
+            pygame.draw.rect(self.screen, COL_PLAY, r, 2, border_radius=12)
+            lbl = self.font_mdb.render("+ Install Game", True, COL_PLAY)
+            self.screen.blit(lbl, (r.x + r.w // 2 - lbl.get_width() // 2,
+                                   r.y + r.h // 2 - lbl.get_height() // 2))
             return
 
         card_h = 80
@@ -777,6 +1321,17 @@ class OkamaShell:
             if is_sel:
                 hint = self.font_sm.render("Enter / A -> Launch", True, COL_OK)
                 self.screen.blit(hint, (WIDTH - hint.get_width() - 24, y + 28))
+
+        # Install button in footer (always visible)
+        r = self._play_install_rect()
+        mx2, my2 = self._mouse_pos
+        is_hov2 = r.collidepoint(mx2, my2)
+        btn_col = _lerp_color(COL_CARD, COL_PLAY, 0.4) if is_hov2 else COL_CARD
+        pygame.draw.rect(self.screen, btn_col, r, border_radius=12)
+        pygame.draw.rect(self.screen, COL_PLAY, r, 2, border_radius=12)
+        lbl2 = self.font_mdb.render("+ Install Game", True, COL_PLAY)
+        self.screen.blit(lbl2, (r.x + r.w // 2 - lbl2.get_width() // 2,
+                                 r.y + r.h // 2 - lbl2.get_height() // 2))
 
     def _draw_settings(self):
         self._draw_section_header("* Settings", COL_SETTINGS)

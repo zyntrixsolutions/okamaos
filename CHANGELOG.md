@@ -5,6 +5,26 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.4.0] - 2026-04-28
+
+### Added
+- **Settings > Controllers sub-screen**: lists connected USB joysticks (reads device name from `/sys/class/input/js*/device/name`) and trusted Bluetooth controllers; "Pair New Bluetooth Controller" action launches the Bluetooth screen
+- **Settings > Bluetooth sub-screen**: interactive panel with power On/Off toggle, "Scan for Devices" (10-second background scan via `bluetoothctl`), discovered device list with one-click pair+trust+connect; pairing runs in a daemon thread so the UI stays responsive
+- **Settings > Audio sub-screen**: real-time volume slider (0–100 %, step 5); D-pad Left/Right adjusts volume, Enter saves and calls `amixer sset Master <vol>%`; value persisted to `DEFAULT_VOLUME` in `okama.conf`
+- **Settings > Network sub-screen**: reads live interface/IP data via `ip addr`; shows each interface with state, IPv4, and IPv6; Wi-Fi toggle (persists `WIFI_ENABLED` in `okama.conf` with reboot notice)
+- **Settings > Storage Info sub-screen**: shows total/used/free disk space (`os.statvfs /`) and per-game install sizes
+- **Play > Install Game**: replaces the terminal-only install hint with a UI file browser that scans `/mnt`, `/media`, `/var/okamaos/updates`, `/tmp` for `.ok` packages; select and press Enter/A to verify, extract, and install without touching a terminal; install button visible in both the empty-state and game-list footer
+- **Shared `_draw_subscreen_list` + `_subscreen_rects`**: reusable renderer for all sub-screens with hover/selection highlighting
+- `shutil` and `pathlib.Path` imports added to `okama-shell`
+- `okamaos.package` and `okamaos.manifest` imported in `okama-shell` for in-shell install
+
+### Changed
+- `_settings_select` now transitions to dedicated sub-state screens instead of showing toast messages
+- Play screen empty-state copy updated to mention the Install Game button (no terminal reference)
+- Home screen version badge updated to `v0.4.0`
+
+---
+
 ## [0.3.3] - 2026-04-28
 
 ### Fixed

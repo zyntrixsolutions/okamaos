@@ -5,6 +5,40 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.9.0] - 2026-04-28
+
+### Added
+- **Secret Dev Console**: In Settings, type "zyntrix" to unlock a hidden terminal
+  - Execute system commands directly from the UI (`ip`, `ps`, `dmesg`, `cat`, etc.)
+  - Full shell command execution via `/bin/sh`
+  - Dev console UI with scrollback history and blink cursor
+- **Live WiFi Management** (no reboot required)
+  - Settings > Network shows all interfaces (eth*, wlan*, wlp*) with live IP/status
+  - `[A]` on wireless interface → scan for available networks
+  - WiFi network browser with signal strength display (dBm)
+  - Password entry screen for WPA2-PSK connections
+  - Auto-generates wpa_supplicant.conf and connects immediately
+  - `[A]` on wired interface → renew DHCP live
+- **Live Bluetooth Control** (no reboot required)
+  - Bluetooth init script now supports `restart|reload` actions
+  - Power toggle starts/stops bluetoothd dynamically
+- **Root Password Initialization** (`S90okama-password`)
+  - Sets root password to 'zyntrix' on boot (configurable via `/etc/okamaos/password.conf`)
+- **Game Runtime Performance Hardening**
+  - `okama-run` sets CPU performance governor at game launch
+  - SDL environment tuning: `SDL_HIGHDPI_DISABLED=1`, `PYTHONDONTWRITEBYTECODE=1`
+
+### Changed
+- **UI Overhaul**: Darker futuristic cyber theme
+  - Color palette shifted to ultra-dark with neon cyan accents (`COL_ACCENT = (0,190,255)`)
+  - Deep space backgrounds, neon borders, cyberpunk aesthetic
+- **Settings > Network** completely redesigned
+  - Shows live IP addresses per interface
+  - Per-interface context actions (renew DHCP / scan WiFi)
+- **Network init script** (`S40okama-network`): added `restart|reload` actions for live apply
+
+---
+
 ## [0.8.0] - 2026-04-28
 
 ### Added

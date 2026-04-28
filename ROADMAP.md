@@ -94,6 +94,15 @@
 - [x] `okama-inputd` InputClient + keyboard fallback; `--windowed` dev flag
 - [x] rootfs-overlay preinstalled stub for first-boot appearance in Play screen
 
+### v0.9.0 — Dev Console, Live Network & Cyber UI ✅
+- [x] **Secret Dev Console**: type "zyntrix" in Settings to unlock hidden terminal
+- [x] **Live WiFi Management**: scan, connect, DHCP renew without reboot
+- [x] **Live Bluetooth Control**: start/stop bluetoothd dynamically
+- [x] **Root password**: 'zyntrix' (configurable via password.conf)
+- [x] **Cyber UI overhaul**: ultra-dark palette with neon cyan accents
+- [x] **Game runtime hardening**: CPU governor, SDL tuning in okama-run
+- [x] Network/BT init scripts support `restart|reload` for live apply
+
 ### v1.0 — Console Polish
 - [x] Silent boot (`quiet loglevel=0`, boot log redirect) — completed in v0.3
 - [ ] Boot time < 8 seconds

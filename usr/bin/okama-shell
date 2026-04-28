@@ -63,7 +63,7 @@ _EVDEV_KEY_MAP = {
     31:  "DPAD_DOWN",  # KEY_S
     30:  "DPAD_LEFT",  # KEY_A
     32:  "DPAD_RIGHT", # KEY_D
-    28:  "A",          # KEY_ENTER
+    28:  "ENTER",      # KEY_ENTER
     57:  "A",          # KEY_SPACE
     1:   "B",          # KEY_ESC
     15:  "DPAD_RIGHT", # KEY_TAB
@@ -145,28 +145,29 @@ except ImportError:
 WIDTH, HEIGHT = 1280, 720
 FPS = 60
 
-# -- Color palette (modern dark theme) --
-COL_BG         = (8,   8,  18)
-COL_BG2        = (14,  14,  30)
-COL_ACCENT     = (100,  70, 220)
-COL_ACCENT2    = (160, 110, 255)
-COL_ACCENT_HOT = (200, 150, 255)
-COL_TEXT       = (235, 235, 248)
-COL_TEXT2      = (180, 180, 200)
-COL_DIM        = ( 90,  90, 115)
-COL_SELECTED   = ( 70,  50, 180)
-COL_SEL_HOVER  = ( 90,  65, 210)
-COL_CARD       = ( 18,  18,  40)
-COL_CARD_HOV   = ( 28,  26,  58)
-COL_BORDER     = ( 60,  50, 130)
-COL_WARN       = (235, 130,  40)
-COL_OK         = ( 70, 210,  90)
-COL_ERROR      = (230,  60,  60)
-COL_PLAY       = ( 80, 200, 120)
-COL_POWER      = (220,  80,  80)
-COL_SETTINGS   = ( 80, 160, 220)
-COL_STORE      = (160,  90, 230)
-COL_UPDATE     = (220, 160,  50)
+# -- Color palette (ultra-dark futuristic cyber theme) --
+COL_BG         = (3,    4,   12)
+COL_BG2        = (7,    8,   22)
+COL_ACCENT     = (0,  190, 255)
+COL_ACCENT2    = (40, 215, 255)
+COL_ACCENT_HOT = (110, 240, 255)
+COL_TEXT       = (215, 235, 255)
+COL_TEXT2      = (145, 180, 215)
+COL_DIM        = (62,   90, 130)
+COL_SELECTED   = (0,    52, 100)
+COL_SEL_HOVER  = (0,    68, 120)
+COL_CARD       = (7,    11,  26)
+COL_CARD_HOV   = (13,   19,  42)
+COL_BORDER     = (0,   108, 175)
+COL_WARN       = (255, 165,  20)
+COL_OK         = (0,   220,  90)
+COL_ERROR      = (255,  40,  80)
+COL_PLAY       = (0,   210,  80)
+COL_POWER      = (240,  30,  70)
+COL_SETTINGS   = (0,   185, 255)
+COL_STORE      = (175,  55, 255)
+COL_UPDATE     = (255, 185,  30)
+COL_DEV        = (255,  50, 170)
 
 SECTIONS = ["Play", "Settings", "Power"]
 SECTION_ICONS = [">", "*", "O"]
@@ -340,6 +341,23 @@ class OkamaShell:
         self._sel_anim = 0.0      # selection highlight lerp [0..1]
         self._prev_section = 0
         self._bg_surf = None
+
+        # Text input & secret dev mode
+        self._char_buf: list = []
+        self._secret_buf = ""
+        # Dev console
+        self._dev_console_history: list = []
+        self._dev_console_cmd = ""
+        self._dev_console_scroll = 0
+        # WiFi scan/connect
+        self.wifi_scan_iface = ""
+        self.wifi_networks: list = []
+        self.wifi_scan_idx = 0
+        self.wifi_scanning = False
+        self.wifi_psk_ssid = ""
+        self.wifi_psk_iface = ""
+        self.wifi_psk_input = ""
+        self.wifi_connect_status = ""
         self._build_bg()
 
     def _build_bg(self):
@@ -414,6 +432,9 @@ class OkamaShell:
     def _collect_events(self) -> list:
         events = []
 
+        # Clear char buffer each frame; state handlers will process it
+        self._char_buf.clear()
+
         # Controller events from okama-inputd
         for ev in self.input_client.poll():
             if ev.get("type") == "button" and ev.get("state") == "pressed":
@@ -428,6 +449,9 @@ class OkamaShell:
 
             elif pev.type == pygame.KEYDOWN:
                 k = pev.key
+                # Capture printable chars for text entry (dev console, WiFi PSK)
+                if pev.unicode and 32 <= ord(pev.unicode[0]) <= 126:
+                    self._char_buf.append(pev.unicode)
                 mapping = {
                     pygame.K_UP:     "DPAD_UP",
                     pygame.K_w:      "DPAD_UP",
@@ -437,7 +461,7 @@ class OkamaShell:
                     pygame.K_a:      "DPAD_LEFT",
                     pygame.K_RIGHT:  "DPAD_RIGHT",
                     pygame.K_d:      "DPAD_RIGHT",
-                    pygame.K_RETURN: "A",
+                    pygame.K_RETURN: "ENTER",
                     pygame.K_SPACE:  "A",
                     pygame.K_ESCAPE: "B",
                     pygame.K_TAB:    "DPAD_RIGHT",
@@ -506,6 +530,9 @@ class OkamaShell:
                 continue
             if ev.get("src") != "mouse":
                 self._input_cooldown = max(1, FPS // 8)  # ~125ms
+
+            # Process buffered characters before dispatching if needed
+            self._dispatch_text_entry(ev.get("src"))
             self._dispatch(action, ev)
 
     def _dispatch(self, action: str, ev: dict = None):
@@ -533,6 +560,27 @@ class OkamaShell:
             self._game_store_input(action, ev)
         elif self.state == "settings_updates":
             self._settings_updates_input(action, ev)
+        elif self.state == "dev_console":
+            self._dev_console_input(action, ev)
+        elif self.state == "wifi_psk":
+            self._wifi_psk_input(action, ev)
+        elif self.state == "wifi_networks":
+            self._wifi_networks_input(action, ev)
+
+    def _dispatch_text_entry(self, src: str):
+        """Process accumulated _char_buf for text-entry states."""
+        if self.state == "dev_console" or self.state == "wifi_psk":
+            for ch in self._char_buf:
+                if ord(ch) == 8:  # Backspace handling via special
+                    if self.state == "dev_console" and self._dev_console_cmd:
+                        self._dev_console_cmd = self._dev_console_cmd[:-1]
+                    elif self.state == "wifi_psk" and self.wifi_psk_input:
+                        self.wifi_psk_input = self.wifi_psk_input[:-1]
+                else:
+                    if self.state == "dev_console":
+                        self._dev_console_cmd += ch
+                    elif self.state == "wifi_psk":
+                        self.wifi_psk_input += ch
 
     def _home_input(self, action: str, ev: dict = None):
         n = len(SECTIONS)
@@ -640,8 +688,22 @@ class OkamaShell:
 
     def _settings_input(self, action: str, ev: dict = None):
         n = len(SETTINGS_OPTIONS)
+        # Secret dev mode: accumulate chars, check for 'zyntrix'
+        for ch in self._char_buf:
+            self._secret_buf += ch.lower()
+        if len(self._secret_buf) > 20:
+            self._secret_buf = self._secret_buf[-20:]
+        if "zyntrix" in self._secret_buf:
+            self._secret_buf = ""
+            self._dev_console_cmd = ""
+            self._dev_console_history.append(">>> Dev mode unlocked. Type 'help' for commands.")
+            self._dev_console_history.append("> Root password is 'zyntrix'")
+            self.state = "dev_console"
+            return
+
         if action == "B" or action == "START":
             self.state = "home"
+            self._secret_buf = ""
         elif action == "DPAD_DOWN":
             self.settings_idx = (self.settings_idx + 1) % n
         elif action == "DPAD_UP":
@@ -949,29 +1011,29 @@ class OkamaShell:
                 if m:
                     iface = m.group(1)
                     state = m.group(2)
-                    lines.append({"label": f"{iface}  [{state}]",
-                                  "type": "iface"})
+                    if iface == "lo":
+                        continue
+                    typ = "wireless" if "wlan" in iface or "wlp" in iface else "wired"
+                    lines.append({"iface": iface, "state": state, "type": typ})
                 m2 = _re.match(r"^\s+inet (\S+)", line)
-                if m2 and iface:
-                    lines.append({"label": f"   IPv4: {m2.group(1)}",
-                                  "type": "info"})
+                if m2 and iface and iface != "lo":
+                    if lines:
+                        lines[-1]["ip"] = m2.group(1)
                 m3 = _re.match(r"^\s+inet6 (\S+) scope global", line)
-                if m3 and iface:
-                    lines.append({"label": f"   IPv6: {m3.group(1)}",
-                                  "type": "info"})
-        except Exception:
-            lines.append({"label": "Network info unavailable", "type": "info"})
-
-        wifi = self.conf.get("WIFI_ENABLED", "no")
-        state_lbl = "ON" if wifi == "yes" else "OFF"
-        lines.append({"label": f"Wi-Fi: {state_lbl}  [ Toggle ]",
-                      "type": "wifi_toggle"})
+                if m3 and iface and iface != "lo":
+                    if lines:
+                        lines[-1]["ip6"] = m3.group(1)
+        except Exception as e:
+            lines.append({"iface": "error", "state": "down", "type": "info", "label": f"Error: {e}"})
+        if not lines:
+            lines.append({"iface": "none", "state": "down", "type": "info", "label": "No interfaces found"})
         return lines
 
     def _settings_network_input(self, action: str, ev: dict = None):
         n = max(len(self.net_info), 1)
         if action in ("B", "START"):
             self.state = "settings"
+            return
         elif action == "DPAD_UP":
             self.net_idx = (self.net_idx - 1) % n
         elif action == "DPAD_DOWN":
@@ -990,19 +1052,241 @@ class OkamaShell:
         if not self.net_info:
             return
         item = self.net_info[self.net_idx]
-        if item["type"] == "wifi_toggle":
-            current = self.conf.get("WIFI_ENABLED", "no")
-            new_val = "yes" if current != "yes" else "no"
-            self.conf.set("WIFI_ENABLED", new_val)
-            self._show_message(
-                f"Wi-Fi {'enabled' if new_val == 'yes' else 'disabled'}"
-                " — takes effect on reboot")
-            self.net_info = self._collect_net_info()
+        if item.get("type") == "wired":
+            self._renew_dhcp(item["iface"])
+        elif item.get("type") == "wireless":
+            self._scan_wifi(item["iface"])
+
+    def _renew_dhcp(self, iface: str):
+        self._show_message(f"Renewing DHCP on {iface}...")
+        threading.Thread(target=self._do_dhcp, args=(iface,), daemon=True).start()
+
+    def _do_dhcp(self, iface: str):
+        try:
+            subprocess.run(["ip", "link", "set", iface, "up"], check=False)
+            subprocess.run(["dhcpcd", "-n", iface], capture_output=True, timeout=10)
+        except subprocess.TimeoutExpired:
+            pass
+        except Exception:
+            pass
+        self.net_info = self._collect_net_info()
+
+    def _scan_wifi(self, iface: str):
+        self.wifi_scan_iface = iface
+        self.wifi_scanning = True
+        self.wifi_networks = []
+        self.wifi_scan_idx = 0
+        self.wifi_connect_status = ""
+        threading.Thread(target=self._do_wifi_scan, args=(iface,), daemon=True).start()
+        self.state = "wifi_networks"
+
+    def _do_wifi_scan(self, iface: str):
+        try:
+            subprocess.run(["ip", "link", "set", iface, "up"], capture_output=True, timeout=5)
+            proc = subprocess.Popen(
+                ["iw", "dev", iface, "scan", "ap-force"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            )
+            stdout, _ = proc.communicate(timeout=15)
+            networks = []
+            cur = {}
+            for line in stdout.splitlines():
+                line = line.strip()
+                if line.startswith("BSS "):
+                    if cur.get("ssid"):
+                        networks.append(cur)
+                    cur = {"mac": line.split()[1].rstrip("(")}
+                elif "SSID:" in line:
+                    cur["ssid"] = line.split("SSID:", 1)[1].strip()
+                elif "signal:" in line.lower():
+                    parts = line.split()
+                    for i, p in enumerate(parts):
+                        if p == "signal:":
+                            try:
+                                sig = int(parts[i+1])
+                                cur["signal"] = sig
+                            except (IndexError, ValueError):
+                                pass
+            if cur.get("ssid"):
+                networks.append(cur)
+            uniq = {}
+            for n in sorted(networks, key=lambda x: x.get("signal", -100), reverse=True):
+                ssid = n.get("ssid", "")
+                if ssid and ssid not in uniq:
+                    uniq[ssid] = n
+            self.wifi_networks = list(uniq.values())[:20]
+            self.wifi_connect_status = f"Found {len(self.wifi_networks)} networks"
+        except subprocess.TimeoutExpired:
+            self.wifi_connect_status = "Scan timeout (device busy)"
+        except Exception as e:
+            self.wifi_connect_status = f"Scan error: {str(e)[:40]}"
+        finally:
+            self.wifi_scanning = False
+
+    def _wifi_networks_input(self, action: str, ev: dict = None):
+        n = len(self.wifi_networks)
+        if action in ("B", "START"):
+            self.state = "settings_network"
+            return
+        if n == 0:
+            return
+        if action == "DPAD_UP":
+            self.wifi_scan_idx = (self.wifi_scan_idx - 1) % n
+        elif action == "DPAD_DOWN":
+            self.wifi_scan_idx = (self.wifi_scan_idx + 1) % n
+        elif action == "A":
+            net = self.wifi_networks[self.wifi_scan_idx]
+            self.wifi_psk_ssid = net.get("ssid", "")
+            self.wifi_psk_iface = self.wifi_scan_iface
+            self.wifi_psk_input = ""
+            self.wifi_connect_status = ""
+            self.state = "wifi_psk"
+        elif action == "CLICK" and ev:
+            rects = self._subscreen_rects(n)
+            for i, r in enumerate(rects):
+                if r.collidepoint(ev["pos"]):
+                    if i == self.wifi_scan_idx:
+                        net = self.wifi_networks[i]
+                        self.wifi_psk_ssid = net.get("ssid", "")
+                        self.wifi_psk_iface = self.wifi_scan_iface
+                        self.wifi_psk_input = ""
+                        self.wifi_connect_status = ""
+                        self.state = "wifi_psk"
+                    else:
+                        self.wifi_scan_idx = i
+
+    def _wifi_psk_input(self, action: str, ev: dict = None):
+        if action in ("B", "START"):
+            self.state = "wifi_networks"
+            return
+        if action == "A" or action == "ENTER":
+            ssid = self.wifi_psk_ssid
+            psk = self.wifi_psk_input
+            iface = self.wifi_psk_iface
+            threading.Thread(target=self._connect_wifi, args=(iface, ssid, psk), daemon=True).start()
+
+    def _connect_wifi(self, iface: str, ssid: str, psk: str):
+        self.wifi_connect_status = f"Connecting to {ssid}..."
+        try:
+            conf_dir = "/etc/wpa_supplicant"
+            os.makedirs(conf_dir, exist_ok=True)
+            conf_path = os.path.join(conf_dir, f"{iface}.conf")
+            with open(conf_path, "w") as f:
+                f.write("ctrl_interface=/var/run/wpa_supplicant\n")
+                f.write("update_config=1\n\n")
+                if psk:
+                    f.write(f'network={{\n  ssid="{ssid}"\n  psk="{psk}"\n}}\n')
+                else:
+                    f.write(f'network={{\n  ssid="{ssid}"\n  key_mgmt=NONE\n}}\n')
+            subprocess.run(["killall", "wpa_supplicant"], capture_output=True)
+            time.sleep(0.5)
+            subprocess.run(
+                ["wpa_supplicant", "-B", "-i", iface, "-c", conf_path],
+                capture_output=True
+            )
+            time.sleep(2)
+            res = subprocess.run(["dhcpcd", "-n", iface], capture_output=True, timeout=10)
+            if res.returncode == 0:
+                self.wifi_connect_status = f"Connected to {ssid}"
+                self.conf.set("WIFI_ENABLED", "yes")
+                self.net_info = self._collect_net_info()
+                time.sleep(0.5)
+                self.state = "settings_network"
+            else:
+                self.wifi_connect_status = "DHCP failed; check password"
+        except subprocess.TimeoutExpired:
+            self.wifi_connect_status = "Connection timeout"
+        except Exception as e:
+            self.wifi_connect_status = f"Error: {str(e)[:40]}"
 
     def _draw_settings_network(self):
         self._draw_section_header("* Network", COL_SETTINGS)
-        self._draw_subscreen_list(self.net_info, self.net_idx,
-                                  key_fn=lambda x: x["label"])
+        mx, my = self._mouse_pos
+        items = self.net_info
+        rects = self._subscreen_rects(len(items))
+        for i, (item, r) in enumerate(zip(items, rects)):
+            is_sel = (i == self.net_idx)
+            is_hov = r.collidepoint(mx, my)
+            color = _lerp_color(COL_CARD, COL_SELECTED, 0.7) if is_sel else (COL_CARD_HOV if is_hov else COL_CARD)
+            pygame.draw.rect(self.screen, color, r, border_radius=10)
+            if is_sel:
+                pygame.draw.rect(self.screen, COL_SETTINGS, r, 2, border_radius=10)
+                pygame.draw.rect(self.screen, COL_SETTINGS, pygame.Rect(r.x, r.y, 4, r.h), border_radius=2)
+            typ = item.get("type", "")
+            iface = item.get("iface", "?")
+            state = item.get("state", "?")
+            ip = item.get("ip", "")
+            lbl_text = f"{iface}  [{state}]"
+            if ip:
+                lbl_text += f"  {ip}"
+            lbl = self.font_mdb.render(lbl_text, True, COL_TEXT if is_sel else COL_TEXT2)
+            self.screen.blit(lbl, (60, r.y + (r.h - lbl.get_height()) // 2))
+            if is_sel:
+                arrow = self.font_md.render(">", True, COL_SETTINGS)
+                self.screen.blit(arrow, (WIDTH - 60, r.y + (r.h - arrow.get_height()) // 2))
+            hint_y = r.y + r.h + 2
+            if is_sel and typ == "wired":
+                hint = self.font_sm.render("[A] Renew DHCP", True, COL_DIM)
+                self.screen.blit(hint, (60, hint_y))
+            elif is_sel and typ == "wireless":
+                hint = self.font_sm.render("[A] Scan WiFi networks", True, COL_DIM)
+                self.screen.blit(hint, (60, hint_y))
+        if not items:
+            info = self.font_sm.render("No network interfaces detected.", True, COL_DIM)
+            self.screen.blit(info, (60, HEIGHT // 2))
+
+    def _draw_wifi_networks(self):
+        self._draw_section_header("* WiFi Networks", COL_SETTINGS)
+        mx, my = self._mouse_pos
+        if self.wifi_scanning:
+            spin = ["/", "-", "\\", "|"][(self._tick // 8) % 4]
+            txt = self.font_md.render(f"Scanning {self.wifi_scan_iface}... {spin}", True, COL_ACCENT)
+            self.screen.blit(txt, (WIDTH // 2 - txt.get_width() // 2, 180))
+        n = len(self.wifi_networks)
+        if n == 0 and not self.wifi_scanning:
+            empty = self.font_md.render("No networks found", True, COL_DIM)
+            self.screen.blit(empty, (WIDTH // 2 - empty.get_width() // 2, 180))
+        else:
+            rects = self._subscreen_rects(n)
+            for i, (net, r) in enumerate(zip(self.wifi_networks, rects)):
+                is_sel = (i == self.wifi_scan_idx)
+                is_hov = r.collidepoint(mx, my)
+                color = _lerp_color(COL_CARD, COL_SELECTED, 0.7) if is_sel else (COL_CARD_HOV if is_hov else COL_CARD)
+                pygame.draw.rect(self.screen, color, r, border_radius=10)
+                if is_sel:
+                    pygame.draw.rect(self.screen, COL_SETTINGS, r, 2, border_radius=10)
+                    pygame.draw.rect(self.screen, COL_SETTINGS, pygame.Rect(r.x, r.y, 4, r.h), border_radius=2)
+                ssid = net.get("ssid", "?")
+                sig = net.get("signal", -100)
+                sig_dbm = f"{sig} dBm" if isinstance(sig, int) else "?"
+                lbl = self.font_mdb.render(f"{ssid}  ({sig_dbm})", True, COL_TEXT if is_sel else COL_TEXT2)
+                self.screen.blit(lbl, (60, r.y + (r.h - lbl.get_height()) // 2))
+                if is_sel:
+                    arrow = self.font_sm.render("A > Enter Password", True, COL_SETTINGS)
+                    self.screen.blit(arrow, (WIDTH - arrow.get_width() - 16, r.y + (r.h - arrow.get_height()) // 2))
+        if self.wifi_connect_status:
+            st = self.font_sm.render(self.wifi_connect_status, True, COL_DIM)
+            self.screen.blit(st, (WIDTH // 2 - st.get_width() // 2, HEIGHT - 80))
+
+    def _draw_wifi_psk(self):
+        self._draw_section_header("* WiFi Password", COL_SETTINGS)
+        ssid = self.wifi_psk_ssid
+        hint = self.font_sm.render(f"Enter password for \"{ssid}\" (empty = open)", True, COL_DIM)
+        self.screen.blit(hint, (60, 120))
+        input_r = pygame.Rect(60, 160, WIDTH - 120, 50)
+        pygame.draw.rect(self.screen, COL_CARD, input_r, border_radius=10)
+        pygame.draw.rect(self.screen, COL_SETTINGS, input_r, 2, border_radius=10)
+        dots = "*" * len(self.wifi_psk_input)
+        if (self._tick // 30) % 2 == 0:
+            dots += "_"
+        txt = self.font_mdb.render(dots, True, COL_TEXT)
+        self.screen.blit(txt, (input_r.x + 12, input_r.y + (input_r.h - txt.get_height()) // 2))
+        if self.wifi_connect_status:
+            col = COL_OK if "connected" in self.wifi_connect_status.lower() else COL_DIM
+            st = self.font_sm.render(self.wifi_connect_status, True, col)
+            self.screen.blit(st, (60, 230))
+        hints = self.font_sm.render("[Enter] Connect    [Esc/B] Cancel", True, COL_DIM)
+        self.screen.blit(hints, (60, HEIGHT - 80))
 
     # -----------------------------------------------------------------------
     # Settings > Storage Info
@@ -1420,6 +1704,93 @@ class OkamaShell:
             key_fn=lambda x: x["label"])
 
     # -----------------------------------------------------------------------
+    # Dev Console (secret mode)
+    # -----------------------------------------------------------------------
+    def _dev_console_input(self, action: str, ev: dict = None):
+        if action in ("B", "START"):
+            self.state = "settings"
+            return
+        if action == "ENTER" or action == "A":
+            cmd = self._dev_console_cmd.strip()
+            if cmd == "exit":
+                self.state = "settings"
+                self._dev_console_cmd = ""
+                return
+            if cmd == "help":
+                self._dev_console_history.append("> Commands: exit, clear, help, reboot, poweroff, ip, ps, df, ls, cat <file>")
+                self._dev_console_cmd = ""
+                return
+            if cmd == "clear":
+                self._dev_console_history.clear()
+                self._dev_console_cmd = ""
+                return
+            if cmd:
+                self._dev_console_history.append(f"> {cmd}")
+                threading.Thread(target=self._run_dev_cmd, args=(cmd,), daemon=True).start()
+            self._dev_console_cmd = ""
+
+    def _run_dev_cmd(self, cmd: str):
+        try:
+            if cmd.startswith("cat "):
+                path = cmd[4:].strip()
+                try:
+                    with open(path) as f:
+                        out = f.read()[:1000]
+                    for line in out.splitlines()[:20]:
+                        self._dev_console_history.append(line[:100])
+                except Exception as e:
+                    self._dev_console_history.append(f"Error: {e}")
+            elif cmd in ["ip", "ps", "df", "ls", "lsusb", "lsmod", "dmesg", "free"]:
+                try:
+                    res = subprocess.run(cmd.split(), capture_output=True, text=True, timeout=5)
+                    out = res.stdout if res.stdout else res.stderr
+                    for line in out.splitlines()[:30]:
+                        self._dev_console_history.append(line[:100])
+                except Exception as e:
+                    self._dev_console_history.append(f"Error: {e}")
+            elif cmd in ["reboot", "poweroff"]:
+                self._dev_console_history.append("> Executing...")
+                time.sleep(0.5)
+                subprocess.Popen([cmd])
+            else:
+                try:
+                    res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=10)
+                    out = res.stdout if res.stdout else res.stderr
+                    for line in out.splitlines()[:30]:
+                        self._dev_console_history.append(line[:100])
+                except Exception as e:
+                    self._dev_console_history.append(f"Error: {e}")
+        finally:
+            while len(self._dev_console_history) > 100:
+                self._dev_console_history.pop(0)
+            self._dev_console_scroll = max(0, len(self._dev_console_history) - 10)
+
+    def _draw_dev_console(self):
+        self._draw_section_header("$ Dev Console", COL_DEV)
+        bg = pygame.Rect(40, 64, WIDTH - 80, HEIGHT - 128)
+        pygame.draw.rect(self.screen, (0, 0, 0), bg, border_radius=8)
+        pygame.draw.rect(self.screen, COL_DEV, bg, 2, border_radius=8)
+        start_y = 74
+        line_h = 20
+        max_lines = (HEIGHT - 180) // line_h
+        hist = self._dev_console_history[-max_lines:] if self._dev_console_history else []
+        for i, line in enumerate(hist):
+            col = COL_DEV if line.startswith(">") else COL_TEXT
+            s = self.font_sm.render(line, True, col)
+            self.screen.blit(s, (50, start_y + i * line_h))
+        input_y = HEIGHT - 100
+        pygame.draw.line(self.screen, COL_BORDER, (50, input_y - 8), (WIDTH - 50, input_y - 8), 1)
+        prompt = self.font_sm.render(">>> ", True, COL_DEV)
+        self.screen.blit(prompt, (50, input_y))
+        cmd_txt = self._dev_console_cmd
+        if (self._tick // 30) % 2 == 0:
+            cmd_txt += "_"
+        cmd_surf = self.font_sm.render(cmd_txt, True, COL_TEXT)
+        self.screen.blit(cmd_surf, (50 + prompt.get_width(), input_y))
+        hint = self.font_hint.render("[Enter] Run   [Esc/B] Exit   [clear/exit/help]", True, COL_DIM)
+        self.screen.blit(hint, (50, HEIGHT - 70))
+
+    # -----------------------------------------------------------------------
     def _draw_install_browse(self):
         self._draw_section_header("> Install Game", COL_PLAY)
 
@@ -1521,6 +1892,12 @@ class OkamaShell:
             self._draw_game_store()
         elif self.state == "settings_updates":
             self._draw_settings_updates()
+        elif self.state == "dev_console":
+            self._draw_dev_console()
+        elif self.state == "wifi_networks":
+            self._draw_wifi_networks()
+        elif self.state == "wifi_psk":
+            self._draw_wifi_psk()
 
         # Separator lines drawn after state content so they appear on top
         pygame.draw.line(self.screen, COL_BORDER, (0, 56), (WIDTH, 56), 1)
@@ -1549,7 +1926,7 @@ class OkamaShell:
         self.screen.blit(brand, (bx, by))
 
         # Version badge
-        ver_txt = self.font_hint.render("v0.6.1", True, COL_DIM)
+        ver_txt = self.font_hint.render("v0.9.0", True, COL_DIM)
         self.screen.blit(ver_txt, (bx + brand.get_width() + 10,
                                    by + brand.get_height() - ver_txt.get_height() - 2))
 

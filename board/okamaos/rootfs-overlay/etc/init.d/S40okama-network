@@ -34,8 +34,13 @@ case "$1" in
     killall udhcpc 2>/dev/null || true
     killall wpa_supplicant 2>/dev/null || true
     ;;
+  restart|reload)
+    $0 stop
+    sleep 1
+    $0 start
+    ;;
   *)
-    echo "Usage: $0 {start|stop}"
+    echo "Usage: $0 {start|stop|restart|reload}"
     exit 1
     ;;
 esac

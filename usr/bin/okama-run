@@ -151,6 +151,14 @@ def main():
         env["SDL_FBDEV"] = fb_dev
     env["SDL_AUDIODRIVER"] = "alsa"
 
+    # Performance hardening for games
+    # Lock to single CPU to reduce scheduler jitter, enable performance governor
+    env["SDL_HIGHDPI_DISABLED"] = "1"
+    env["SDL_VIDEO_X11_NODIRECTCOLOR"] = "1"
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    # Reduce input latency hints
+    env["SDL_MOUSE_FOCUS_CLICKTHROUGH"] = "1"
+
     try:
         cmd = build_launch_cmd(manifest, game_dir)
     except ValueError as e:
@@ -161,6 +169,13 @@ def main():
     print(f"Launching: {manifest['name']} ({game_id})")
     log_path = os.path.join(LOG_DIR, f"{game_id}.log")
     os.makedirs(LOG_DIR, exist_ok=True)
+
+    # Set CPU governor to performance if available
+    try:
+        with open("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor", "w") as f:
+            f.write("performance\n")
+    except Exception:
+        pass
 
     proc = None
     exit_code = 0

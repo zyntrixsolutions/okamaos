@@ -818,23 +818,27 @@ class FbWriter:
 
         with open(fb_path, "rb+") as _probe:
             # --- variable screen info (160 bytes) ---
-            # Offsets we care about (all __u32 = 4 bytes):
-            #   0  xres          4  yres
+            # struct fb_var_screeninfo offsets:
+            #   0  xres           4  yres
             #  24  bits_per_pixel
-            #  32  red.offset   44  green.offset   56  blue.offset
+            #  32  red.offset (struct fb_bitfield)
+            #  40  green.offset
+            #  48  blue.offset
             vbuf = bytearray(160)
             _fcntl.ioctl(_probe, self.FBIOGET_VSCREENINFO, vbuf)
             self.w   = _struct.unpack_from("=I", vbuf,  0)[0]
             self.h   = _struct.unpack_from("=I", vbuf,  4)[0]
             self.bpp = _struct.unpack_from("=I", vbuf, 24)[0]
             red_off  = _struct.unpack_from("=I", vbuf, 32)[0]
-            blue_off = _struct.unpack_from("=I", vbuf, 56)[0]
+            blue_off = _struct.unpack_from("=I", vbuf, 48)[0]
 
             # --- fixed screen info (68 bytes) ---
-            # line_length is at byte offset 48
+            # struct fb_fix_screeninfo:
+            #   0-15  id[16]
+            #  32    line_length (smem_line_length)
             fbuf = bytearray(68)
             _fcntl.ioctl(_probe, self.FBIOGET_FSCREENINFO, fbuf)
-            self.stride = _struct.unpack_from("=I", fbuf, 48)[0]
+            self.stride = _struct.unpack_from("=I", fbuf, 32)[0]
 
         # Determine pygame pixel-format string from hardware channel order
         if self.bpp == 32:

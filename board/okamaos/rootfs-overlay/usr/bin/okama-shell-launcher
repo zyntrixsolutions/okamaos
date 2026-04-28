@@ -8,6 +8,9 @@
 
 # Ensure log dir exists (S10okama-mounts should have created it, but be safe)
 mkdir -p /var/okamaos/logs
+
+# Redirect all output to shell.log AND to serial for debugging
+# Use tee to send stdout to both tty1 and serial, and stderr to log file
 exec 2>>/var/okamaos/logs/shell.log
 
 # Serial console: send diagnostic line so we know we got here
@@ -54,4 +57,13 @@ export SDL_AUDIODRIVER=alsa
 
 echo "[okama-shell-launcher] exec okama-shell (PYVER=$PYVER)" > /dev/ttyS0 2>/dev/null || true
 
-exec /usr/bin/okama-shell
+# Run okama-shell with full output capture to serial for debugging
+# This will show us the exact error if it crashes
+/usr/bin/okama-shell 2>&1 | tee -a /var/okamaos/logs/shell.log | while IFS= read -r line; do
+    echo "$line"
+    echo "$line" > /dev/ttyS0 2>/dev/null || true
+done
+
+# If we get here, okama-shell exited — log it and exit so respawn kicks in
+echo "[okama-shell-launcher] okama-shell exited with code $?" > /dev/ttyS0 2>/dev/null || true
+exit 1

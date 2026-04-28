@@ -61,8 +61,8 @@ set default=0
 set timeout=0
 
 menuentry "OkamaOS" {
-    set gfxpayload=text
-    linux  /boot/bzImage rw console=tty1 console=ttyS0,115200 nomodeset rdinit=/sbin/init panic=10
+    set gfxpayload=keep
+    linux  /boot/bzImage rw console=tty1 console=ttyS0,115200 rdinit=/sbin/init panic=10
     initrd /boot/rootfs.cpio.gz
 }
 EOF

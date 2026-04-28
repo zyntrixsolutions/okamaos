@@ -5,6 +5,15 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.2.8] - 2026-04-28
+
+### Fixed
+- `/dev/fb0` not created — `nomodeset` kernel param was preventing `bochs-drm` from activating KMS, so `DRM_FBDEV_EMULATION` never created `/dev/fb0`
+- `gen-iso.sh`: removed `nomodeset`, changed `gfxpayload=text` to `gfxpayload=keep`
+- `S99okama-shell`: unbind fbcon from `/dev/fb0` before shell starts (`/sys/class/vtconsole/vtcon1/bind`), then `chvt 1` to own the VT
+
+---
+
 ## [0.2.7] - 2026-04-28
 
 ### Fixed

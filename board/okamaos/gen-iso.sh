@@ -72,7 +72,7 @@ terminal_output gfxterm
 
 menuentry "OkamaOS" {
     set gfxpayload=keep
-    linux  /boot/bzImage rw console=tty1 console=ttyS0,115200 rdinit=/sbin/init panic=10
+    linux  /boot/bzImage rw quiet loglevel=0 console=tty1 rdinit=/sbin/init panic=10 rd.systemd.show_status=false printk.devkmsg=off vt.global_cursor_default=0
     initrd /boot/rootfs.cpio.gz
 }
 EOF

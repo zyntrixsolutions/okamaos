@@ -21,10 +21,15 @@ respawn_shell() {
 
 case "$1" in
   start)
+    # Redirect all output to boot log — no messages on screen
+    exec >> /var/okamaos/logs/boot.log 2>&1
     echo "Launching okama-shell on tty1..."
-    # Run on tty1 in the background (init will not wait for it)
     # Unbind fbcon from /dev/fb0 so pygame can own the framebuffer exclusively
     [ -d /sys/class/vtconsole/vtcon1 ] && echo 0 > /sys/class/vtconsole/vtcon1/bind || true
+    # Clear the tty1 console of any boot messages before handing it to the shell
+    printf '\033[2J\033[H' > /dev/tty1
+    # Disable the kernel cursor on tty1
+    printf '\033[?25l' > /dev/tty1
     # Switch active VT to tty1
     chvt 1 2>/dev/null || true
     openvt -c 1 -f -w -- sh -c "

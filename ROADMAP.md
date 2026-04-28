@@ -22,12 +22,16 @@
 - [x] pygame 2.6.1 installed into rootfs (manylinux wheel)
 - [x] ALSA utils (amixer, aplay, alsactl) included
 
-### v0.3 — Pygame Shell ⏳
+### v0.3 — Pygame Shell ✅
 - [x] `/dev/fb0` framebuffer created at boot (GRUB gfxmode + kernel SYSFB/DRM_SIMPLEDRM/FB_VESA)
-- [ ] pygame fullscreen shell renders on framebuffer (SDL_VIDEODRIVER=fbcon)
-- [ ] Controller D-pad navigation in pygame shell
-- [ ] Play / Settings / Power sections functional
-- [ ] Game launch via `okama-run` with fade-to-black transition
+- [x] pygame fullscreen shell renders on framebuffer (`SDL_VIDEODRIVER=offscreen` + `FbWriter`)
+- [x] Controller D-pad navigation in pygame shell
+- [x] Keyboard navigation (Arrow/WASD/Tab/Enter/Space/Esc/Home)
+- [x] Mouse hover + click navigation
+- [x] Play / Settings / Power sections functional
+- [x] Game launch via `okama-run`
+- [x] Silent boot: kernel `quiet loglevel=0`, init.d output redirected to boot log
+- [x] Modern UI: gradient bg, section colors, pulsing logo, hover effects, live clock
 
 ### v0.4 — Game Runtime
 - [ ] `.ok` package install via `okama-cli install <file.ok>`
@@ -42,7 +46,7 @@
 - [ ] SSH access via Dropbear
 
 ### v1.0 — Console Polish
-- [ ] Silent boot (`quiet loglevel=0`, framebuffer splash)
+- [x] Silent boot (`quiet loglevel=0`, boot log redirect) — completed in v0.3
 - [ ] Boot time < 8 seconds
 - [ ] Controller rumble via evdev FF API
 - [ ] Battery level on HUD

@@ -5,6 +5,36 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.3.0] - 2026-04-28
+
+### Added
+- **Silent boot**: kernel cmdline now includes `quiet loglevel=0 vt.global_cursor_default=0 printk.devkmsg=off`; serial console (`ttyS0`) removed from cmdline so no output leaks to screen
+- **Custom `rcS`** in rootfs-overlay: all init.d output redirected to `/var/okamaos/logs/boot.log`; screen stays blank during boot
+- `S99okama-shell`: `exec >> boot.log 2>&1` at start, tty1 cleared with ANSI escape (`\033[2J`) and cursor hidden (`\033[?25l`) before pygame takes over
+- **Keyboard navigation** in `okama-shell`: Arrow keys, WASD, Tab (cycle section), Space (select), Home (go home) — full parity with controller
+- **Mouse support** in `okama-shell`: hover highlights all interactive elements (cards, buttons); left-click selects; `pygame.mouse.set_visible(True)` toggled on movement
+- **Modern UI redesign**:
+  - Deep-space gradient background (`COL_BG` → `COL_BG2`) pre-rendered at startup
+  - Section-specific accent colors: Play (green), Settings (blue), Power (red)
+  - Home screen: large pulsing animated logo with glow, icon + label cards with colored top-bar indicator on selection
+  - Per-section colored left accent bar on selected list items
+  - Section header rendered in section color with back-hint on right
+  - Message toasts: pill-shaped with border, rendered above hint bar
+  - Live clock (`HH:MM`) in top-right corner
+  - FPS bumped to 60 for smooth animations
+  - Extended font stack with bold variant (`font_mdb`) for labels
+  - Version badge next to logo
+
+### Changed
+- `okama-shell` `_dispatch` now accepts `ev` dict so mouse click position is available at every handler
+- `_input_cooldown` recalculated as `FPS // 8` (~125 ms) instead of hardcoded `4` frames
+- Mouse `CLICK` events bypass cooldown; keyboard/controller events respect it
+- Power menu buttons widened to 320×68; vertically centred with 90 px stride
+- Settings menu items now show `›` arrow when selected
+- Play list: double-click-select pattern — first click selects item, second click (or Enter) launches
+
+---
+
 ## [0.2.10] - 2026-04-28
 
 ### Fixed

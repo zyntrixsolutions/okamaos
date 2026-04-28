@@ -2,7 +2,6 @@
 """okama-shell — OkamaOS fullscreen controller-first UI shell.
 
 Designed for Pygame on a framebuffer. No window manager, no desktop.
-Keyboard is secondary: only used for text entry and emergency navigation.
 
 Boot flow: init → S99okama-shell → okama-shell (loops forever)
 In-shell flow: home → navigate sections → launch game → game exits → home
@@ -17,12 +16,17 @@ Controller mapping (reads from okama-inputd socket):
   START: home
   HOME: quick-menu
 
-Keyboard (emergency fallback only):
-  Arrow keys → navigation, Enter → select, Esc → back
+Keyboard:
+  Arrow / WASD → navigate, Enter / Space → select, Esc → back, Tab → next section
+
+Mouse:
+  Hover highlights buttons, left-click selects
 """
 
 import sys
 import os
+import math
+import time as _time_mod
 
 _lib = os.environ.get("OKAMA_LIB", "")
 if not _lib:
@@ -54,33 +58,59 @@ import okamaos.bluetooth as bt_mod
 # Constants
 # ---------------------------------------------------------------------------
 WIDTH, HEIGHT = 1280, 720
-FPS = 30
+FPS = 60
 
-COL_BG        = (10,  10,  24)
-COL_ACCENT    = (80,  60, 200)
-COL_ACCENT2   = (140, 100, 255)
-COL_TEXT      = (230, 230, 240)
-COL_DIM       = (100, 100, 120)
-COL_SELECTED  = (60,  50, 160)
-COL_CARD      = (20,  20,  44)
-COL_WARN      = (220, 100,  30)
-COL_OK        = (60,  200,  80)
-COL_ERROR     = (220,  50,  50)
+# -- Color palette (modern dark theme) --
+COL_BG         = (8,   8,  18)
+COL_BG2        = (14,  14,  30)
+COL_ACCENT     = (100,  70, 220)
+COL_ACCENT2    = (160, 110, 255)
+COL_ACCENT_HOT = (200, 150, 255)
+COL_TEXT       = (235, 235, 248)
+COL_TEXT2      = (180, 180, 200)
+COL_DIM        = ( 90,  90, 115)
+COL_SELECTED   = ( 70,  50, 180)
+COL_SEL_HOVER  = ( 90,  65, 210)
+COL_CARD       = ( 18,  18,  40)
+COL_CARD_HOV   = ( 28,  26,  58)
+COL_BORDER     = ( 60,  50, 130)
+COL_WARN       = (235, 130,  40)
+COL_OK         = ( 70, 210,  90)
+COL_ERROR      = (230,  60,  60)
+COL_PLAY       = ( 80, 200, 120)
+COL_POWER      = (220,  80,  80)
+COL_SETTINGS   = ( 80, 160, 220)
 
 SECTIONS = ["Play", "Settings", "Power"]
-POWER_OPTIONS = ["Restart", "Shut Down", "Cancel"]
+SECTION_ICONS = ["▶", "⚙", "⏻"]
+SECTION_COLORS = [COL_PLAY, COL_SETTINGS, COL_POWER]
+
+POWER_OPTIONS  = ["Restart", "Shut Down", "Cancel"]
 SETTINGS_OPTIONS = [
     "Controllers",
     "Bluetooth",
-    "Audio (placeholder)",
-    "Network (placeholder)",
-    "Storage info",
+    "Audio",
+    "Network",
+    "Storage Info",
 ]
 
-BUTTON_HINT_A = "[A] Select"
-BUTTON_HINT_B = "[B] Back"
-BUTTON_HINT_DPAD = "[↕] Navigate"
-BUTTON_HINT_START = "[START] Home"
+HINT_KB   = "[←→] Navigate   [Enter] Select   [Esc] Back   [Tab] Section"
+HINT_CTRL = "[↕] Navigate   [A] Select   [B] Back   [START] Home"
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+def _lerp_color(a, b, t):
+    t = max(0.0, min(1.0, t))
+    return (int(a[0] + (b[0]-a[0])*t),
+            int(a[1] + (b[1]-a[1])*t),
+            int(a[2] + (b[2]-a[2])*t))
+
+def _alpha_surf(w, h, color, alpha):
+    s = pygame.Surface((w, h), pygame.SRCALPHA)
+    s.fill((*color, alpha))
+    return s
 
 
 # ---------------------------------------------------------------------------
@@ -138,7 +168,7 @@ class OkamaShell:
         flags = 0 if windowed else pygame.FULLSCREEN | pygame.NOFRAME
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT), flags)
         pygame.display.set_caption("OkamaOS")
-        pygame.mouse.set_visible(False)
+        pygame.mouse.set_visible(True)
 
         self.clock = pygame.time.Clock()
         self._init_fonts()
@@ -161,21 +191,52 @@ class OkamaShell:
         self._axis_threshold = 0.5
         self._axis_held: dict = {}
 
+        # Animation / visual state
+        self._tick = 0            # frame counter for animations
+        self._mouse_pos = (0, 0)
+        self._mouse_moved = False
+        self._hovered = None      # currently hovered widget id
+        self._sel_anim = 0.0      # selection highlight lerp [0..1]
+        self._prev_section = 0
+        self._bg_surf = None
+        self._build_bg()
+
+    def _build_bg(self):
+        """Pre-render a subtle gradient background."""
+        surf = pygame.Surface((WIDTH, HEIGHT))
+        for y in range(HEIGHT):
+            t = y / HEIGHT
+            r = int(COL_BG[0] + (COL_BG2[0]-COL_BG[0]) * t)
+            g = int(COL_BG[1] + (COL_BG2[1]-COL_BG[1]) * t)
+            b = int(COL_BG[2] + (COL_BG2[2]-COL_BG[2]) * t)
+            pygame.draw.line(surf, (r, g, b), (0, y), (WIDTH, y))
+        self._bg_surf = surf
+
     def _init_fonts(self):
         try:
             pygame.font.init()
         except Exception as e:
             print(f"WARNING: pygame.font.init failed ({e}), using fallback", file=sys.stderr)
+        fonts = ["DejaVu Sans", "Liberation Sans", "Arial", "FreeSans"]
+        def _sys(size, bold=False):
+            for name in fonts:
+                try:
+                    return pygame.font.SysFont(name, size, bold=bold)
+                except Exception:
+                    pass
+            return pygame.font.Font(None, size)
         try:
-            self.font_xl  = pygame.font.SysFont("DejaVu Sans", 72, bold=True)
-            self.font_lg  = pygame.font.SysFont("DejaVu Sans", 42, bold=True)
-            self.font_md  = pygame.font.SysFont("DejaVu Sans", 28)
-            self.font_sm  = pygame.font.SysFont("DejaVu Sans", 20)
-            self.font_hint= pygame.font.SysFont("DejaVu Sans", 18)
+            self.font_xl   = _sys(68, bold=True)
+            self.font_lg   = _sys(38, bold=True)
+            self.font_md   = _sys(26)
+            self.font_mdb  = _sys(26, bold=True)
+            self.font_sm   = _sys(20)
+            self.font_hint = _sys(17)
+            self.font_icon = _sys(32)
         except Exception:
             default = pygame.font.Font(None, 36)
-            self.font_xl = self.font_lg = self.font_md = \
-                self.font_sm = self.font_hint = default
+            self.font_xl = self.font_lg = self.font_md = self.font_mdb = \
+                self.font_sm = self.font_hint = self.font_icon = default
 
     def _refresh_games(self):
         self.games = games_mod.list_installed()
@@ -187,7 +248,8 @@ class OkamaShell:
     def run(self, fb=None):
         running = True
         while running:
-            dt = self.clock.tick(FPS)
+            self.clock.tick(FPS)
+            self._tick += 1
             events = self._collect_events()
 
             for e in events:
@@ -206,7 +268,7 @@ class OkamaShell:
         pygame.quit()
 
     # -----------------------------------------------------------------------
-    # Input collection (controller socket + keyboard fallback)
+    # Input collection (controller socket + keyboard + mouse)
     # -----------------------------------------------------------------------
     def _collect_events(self) -> list:
         events = []
@@ -218,19 +280,27 @@ class OkamaShell:
             elif ev.get("type") == "axis":
                 self._handle_axis_to_dpad(ev, events)
 
-        # Keyboard fallback (low priority)
+        # Keyboard + mouse
         for pev in pygame.event.get():
             if pev.type == pygame.QUIT:
                 events.append({"type": "QUIT"})
+
             elif pev.type == pygame.KEYDOWN:
                 k = pev.key
                 mapping = {
                     pygame.K_UP:     "DPAD_UP",
+                    pygame.K_w:      "DPAD_UP",
                     pygame.K_DOWN:   "DPAD_DOWN",
+                    pygame.K_s:      "DPAD_DOWN",
                     pygame.K_LEFT:   "DPAD_LEFT",
+                    pygame.K_a:      "DPAD_LEFT",
                     pygame.K_RIGHT:  "DPAD_RIGHT",
+                    pygame.K_d:      "DPAD_RIGHT",
                     pygame.K_RETURN: "A",
+                    pygame.K_SPACE:  "A",
                     pygame.K_ESCAPE: "B",
+                    pygame.K_TAB:    "DPAD_RIGHT",
+                    pygame.K_HOME:   "START",
                     pygame.K_q:      "QUIT" if self.dev_mode else None,
                 }
                 action = mapping.get(k)
@@ -238,6 +308,15 @@ class OkamaShell:
                     events.append({"type": "QUIT"})
                 elif action:
                     events.append({"src": "keyboard", "action": action})
+
+            elif pev.type == pygame.MOUSEMOTION:
+                self._mouse_pos = pev.pos
+                self._mouse_moved = True
+                pygame.mouse.set_visible(True)
+
+            elif pev.type == pygame.MOUSEBUTTONDOWN and pev.button == 1:
+                events.append({"src": "mouse", "action": "CLICK",
+                               "pos": pev.pos})
 
         return events
 
@@ -265,45 +344,79 @@ class OkamaShell:
     def _handle_input(self, events: list):
         if self._input_cooldown > 0:
             self._input_cooldown -= 1
-            return
 
         for ev in events:
             action = ev.get("action")
             if not action:
                 continue
-            self._input_cooldown = 4  # ~130ms at 30 fps
-            self._dispatch(action)
+            # Mouse clicks bypass cooldown; d-pad/keyboard respect it
+            if ev.get("src") != "mouse" and self._input_cooldown > 0:
+                continue
+            if ev.get("src") != "mouse":
+                self._input_cooldown = max(1, FPS // 8)  # ~125ms
+            self._dispatch(action, ev)
 
-    def _dispatch(self, action: str):
+    def _dispatch(self, action: str, ev: dict = None):
         if self.state == "home":
-            self._home_input(action)
+            self._home_input(action, ev)
         elif self.state == "play":
-            self._play_input(action)
+            self._play_input(action, ev)
         elif self.state == "settings":
-            self._settings_input(action)
+            self._settings_input(action, ev)
         elif self.state == "power":
-            self._power_input(action)
+            self._power_input(action, ev)
 
-    def _home_input(self, action: str):
+    def _home_input(self, action: str, ev: dict = None):
         n = len(SECTIONS)
         if action == "DPAD_RIGHT":
+            self._prev_section = self.section_idx
             self.section_idx = (self.section_idx + 1) % n
         elif action == "DPAD_LEFT":
+            self._prev_section = self.section_idx
             self.section_idx = (self.section_idx - 1) % n
+        elif action == "CLICK" and ev:
+            hit = self._home_hittest(ev["pos"])
+            if hit is not None:
+                self._prev_section = self.section_idx
+                self.section_idx = hit
+                self._home_select()
+            return
         elif action == "A":
-            section = SECTIONS[self.section_idx]
-            if section == "Play":
-                self._refresh_games()
-                self.list_idx = 0
-                self.state = "play"
-            elif section == "Settings":
-                self.settings_idx = 0
-                self.state = "settings"
-            elif section == "Power":
-                self.power_idx = 0
-                self.state = "power"
+            self._home_select()
 
-    def _play_input(self, action: str):
+    def _home_select(self):
+        section = SECTIONS[self.section_idx]
+        if section == "Play":
+            self._refresh_games()
+            self.list_idx = 0
+            self.state = "play"
+        elif section == "Settings":
+            self.settings_idx = 0
+            self.state = "settings"
+        elif section == "Power":
+            self.power_idx = 0
+            self.state = "power"
+
+    def _home_hittest(self, pos):
+        """Return section index if pos is inside a section button, else None."""
+        rects = self._home_section_rects()
+        for i, r in enumerate(rects):
+            if r.collidepoint(pos):
+                return i
+        return None
+
+    def _home_section_rects(self):
+        pill_w, pill_h = 240, 80
+        gap = 28
+        total_w = len(SECTIONS) * pill_w + (len(SECTIONS)-1) * gap
+        start_x = WIDTH // 2 - total_w // 2
+        y = HEIGHT // 2 - pill_h // 2 + 30
+        return [
+            pygame.Rect(start_x + i * (pill_w + gap), y, pill_w, pill_h)
+            for i in range(len(SECTIONS))
+        ]
+
+    def _play_input(self, action: str, ev: dict = None):
         n = len(self.games)
         if action == "B" or action == "START":
             self.state = "home"
@@ -313,9 +426,26 @@ class OkamaShell:
         elif action == "DPAD_UP":
             if n:
                 self.list_idx = (self.list_idx - 1) % n
+        elif action == "CLICK" and ev:
+            rects = self._play_game_rects()
+            for i, r in enumerate(rects):
+                if r.collidepoint(ev["pos"]):
+                    if i == self.list_idx:
+                        self._launch_game(self.games[i])
+                    else:
+                        self.list_idx = i
+            return
         elif action == "A":
             if self.games:
                 self._launch_game(self.games[self.list_idx])
+
+    def _play_game_rects(self):
+        card_h, margin, start_y = 80, 10, 120
+        return [
+            pygame.Rect(40, start_y + i * (card_h + margin), WIDTH - 80, card_h)
+            for i in range(len(self.games))
+            if start_y + i * (card_h + margin) + card_h <= HEIGHT - 60
+        ]
 
     def _launch_game(self, game: dict):
         gid = game["id"]
@@ -326,7 +456,7 @@ class OkamaShell:
         pygame.quit()
         os.execv("/usr/bin/okama-run", ["okama-run", gid])
 
-    def _settings_input(self, action: str):
+    def _settings_input(self, action: str, ev: dict = None):
         n = len(SETTINGS_OPTIONS)
         if action == "B" or action == "START":
             self.state = "home"
@@ -334,40 +464,81 @@ class OkamaShell:
             self.settings_idx = (self.settings_idx + 1) % n
         elif action == "DPAD_UP":
             self.settings_idx = (self.settings_idx - 1) % n
+        elif action == "CLICK" and ev:
+            rects = self._settings_rects()
+            for i, r in enumerate(rects):
+                if r.collidepoint(ev["pos"]):
+                    self.settings_idx = i
+                    self._settings_select()
+            return
         elif action == "A":
-            opt = SETTINGS_OPTIONS[self.settings_idx]
-            if opt == "Controllers":
-                self._show_message(
-                    "Controller: connected (USB HID). "
-                    "Bluetooth pairing: use okama-cli bluetooth pair <mac>")
-            elif opt == "Bluetooth":
-                s = bt_mod.status()
-                self._show_message(f"Bluetooth powered: {s['powered']}")
-            else:
-                self._show_message(f"{opt} — coming in v1")
+            self._settings_select()
 
-    def _power_input(self, action: str):
+    def _settings_select(self):
+        opt = SETTINGS_OPTIONS[self.settings_idx]
+        if opt == "Controllers":
+            self._show_message(
+                "Controller: connected (USB HID). "
+                "Bluetooth pairing: use okama-cli bluetooth pair <mac>")
+        elif opt == "Bluetooth":
+            s = bt_mod.status()
+            self._show_message(f"Bluetooth powered: {s['powered']}")
+        else:
+            self._show_message(f"{opt} — coming soon")
+
+    def _settings_rects(self):
+        return [
+            pygame.Rect(40, 120 + i * 64, WIDTH - 80, 52)
+            for i in range(len(SETTINGS_OPTIONS))
+        ]
+
+    def _power_input(self, action: str, ev: dict = None):
         n = len(POWER_OPTIONS)
         if action == "DPAD_DOWN":
             self.power_idx = (self.power_idx + 1) % n
         elif action == "DPAD_UP":
             self.power_idx = (self.power_idx - 1) % n
+        elif action == "CLICK" and ev:
+            rects = self._power_rects()
+            for i, r in enumerate(rects):
+                if r.collidepoint(ev["pos"]):
+                    self.power_idx = i
+                    self._power_select()
+            return
         elif action == "A":
-            opt = POWER_OPTIONS[self.power_idx]
-            if opt == "Restart":
-                subprocess.call(["reboot"])
-            elif opt == "Shut Down":
-                subprocess.call(["poweroff"])
-            elif opt == "Cancel":
-                self.state = "home"
+            self._power_select()
         elif action == "B":
             self.state = "home"
+
+    def _power_select(self):
+        opt = POWER_OPTIONS[self.power_idx]
+        if opt == "Restart":
+            subprocess.call(["reboot"])
+        elif opt == "Shut Down":
+            subprocess.call(["poweroff"])
+        elif opt == "Cancel":
+            self.state = "home"
+
+    def _power_rects(self):
+        btn_w, btn_h = 320, 68
+        return [
+            pygame.Rect(WIDTH // 2 - btn_w // 2, 260 + i * 90, btn_w, btn_h)
+            for i in range(len(POWER_OPTIONS))
+        ]
 
     # -----------------------------------------------------------------------
     # Drawing
     # -----------------------------------------------------------------------
     def _draw(self):
-        self.screen.fill(COL_BG)
+        # Background gradient
+        if self._bg_surf:
+            self.screen.blit(self._bg_surf, (0, 0))
+        else:
+            self.screen.fill(COL_BG)
+
+        # Subtle scanline-style horizontal rule at the top and bottom
+        pygame.draw.line(self.screen, COL_BORDER, (0, 56), (WIDTH, 56), 1)
+        pygame.draw.line(self.screen, COL_BORDER, (0, HEIGHT-44), (WIDTH, HEIGHT-44), 1)
 
         if self.state == "home":
             self._draw_home()
@@ -380,6 +551,7 @@ class OkamaShell:
 
         self._draw_message()
         self._draw_hints()
+        self._draw_clock()
 
         if self.dev_mode:
             self._draw_debug_overlay()
@@ -387,105 +559,216 @@ class OkamaShell:
         pygame.display.flip()
 
     def _draw_home(self):
-        # Brand bar
-        brand = self.font_xl.render("OkamaOS", True, COL_ACCENT2)
-        self.screen.blit(brand, (WIDTH // 2 - brand.get_width() // 2, 60))
+        # --- Logo / brand ---
+        pulse = 0.04 * math.sin(self._tick * 0.04)
+        logo_color = _lerp_color(COL_ACCENT2, COL_ACCENT_HOT, 0.5 + pulse)
+        brand = self.font_xl.render("OkamaOS", True, logo_color)
+        bx = WIDTH // 2 - brand.get_width() // 2
+        by = 120
+        # Subtle glow behind logo
+        glow = _alpha_surf(brand.get_width() + 40, brand.get_height() + 20,
+                           COL_ACCENT, 40)
+        self.screen.blit(glow, (bx - 20, by - 10))
+        self.screen.blit(brand, (bx, by))
 
-        # Section pills
-        pill_w, pill_h = 200, 60
-        total_w = len(SECTIONS) * pill_w + (len(SECTIONS) - 1) * 20
-        start_x = WIDTH // 2 - total_w // 2
-        y = HEIGHT // 2 - pill_h // 2
+        # Version badge
+        ver_txt = self.font_hint.render("v0.3.0", True, COL_DIM)
+        self.screen.blit(ver_txt, (bx + brand.get_width() + 10,
+                                   by + brand.get_height() - ver_txt.get_height() - 2))
 
-        for i, section in enumerate(SECTIONS):
-            x = start_x + i * (pill_w + 20)
-            color = COL_ACCENT if i == self.section_idx else COL_CARD
-            pygame.draw.rect(self.screen, color, (x, y, pill_w, pill_h),
-                             border_radius=12)
-            if i == self.section_idx:
-                pygame.draw.rect(self.screen, COL_ACCENT2,
-                                 (x, y, pill_w, pill_h), 2, border_radius=12)
-            label = self.font_md.render(section, True, COL_TEXT)
+        # --- Section cards ---
+        rects = self._home_section_rects()
+        mx, my = self._mouse_pos
+
+        for i, (section, icon, col) in enumerate(
+                zip(SECTIONS, SECTION_ICONS, SECTION_COLORS)):
+            r = rects[i]
+            is_sel = (i == self.section_idx)
+            is_hov = r.collidepoint(mx, my)
+
+            # Card fill
+            if is_sel:
+                card_col = _lerp_color(COL_SELECTED, col, 0.4)
+            elif is_hov:
+                card_col = COL_CARD_HOV
+            else:
+                card_col = COL_CARD
+            pygame.draw.rect(self.screen, card_col, r, border_radius=16)
+
+            # Selected: colored top bar
+            if is_sel:
+                bar = pygame.Rect(r.x + 12, r.y, r.w - 24, 3)
+                pygame.draw.rect(self.screen, col, bar, border_radius=2)
+
+            # Border
+            border_col = col if is_sel else (COL_BORDER if is_hov else (30, 28, 55))
+            pygame.draw.rect(self.screen, border_col, r, 2, border_radius=16)
+
+            # Icon
+            icon_surf = self.font_icon.render(icon, True, col if is_sel else COL_DIM)
+            self.screen.blit(icon_surf,
+                (r.x + r.w // 2 - icon_surf.get_width() // 2,
+                 r.y + 12))
+
+            # Label
+            lbl_col = COL_TEXT if is_sel else (COL_TEXT2 if is_hov else COL_DIM)
+            label = self.font_mdb.render(section, True, lbl_col)
             self.screen.blit(label,
-                (x + pill_w // 2 - label.get_width() // 2,
-                 y + pill_h // 2 - label.get_height() // 2))
+                (r.x + r.w // 2 - label.get_width() // 2,
+                 r.y + r.h - label.get_height() - 14))
 
-        # Sub-hint
+        # Sub-hint below cards
+        y_sub = rects[0].bottom + 22
         if SECTIONS[self.section_idx] == "Play":
-            sub = self.font_sm.render(
-                f"{len(self.games)} game(s) installed", True, COL_DIM)
-            self.screen.blit(sub, (WIDTH // 2 - sub.get_width() // 2, y + 80))
+            n = len(self.games)
+            sub_txt = f"{n} game{'s' if n != 1 else ''} installed"
+        elif SECTIONS[self.section_idx] == "Settings":
+            sub_txt = "System configuration"
+        else:
+            sub_txt = "Restart  ·  Shutdown"
+        sub = self.font_sm.render(sub_txt, True, COL_DIM)
+        self.screen.blit(sub, (WIDTH // 2 - sub.get_width() // 2, y_sub))
 
     def _draw_play(self):
-        title = self.font_lg.render("Play", True, COL_ACCENT2)
-        self.screen.blit(title, (60, 40))
+        self._draw_section_header("▶  Play", COL_PLAY)
 
         if not self.games:
-            msg = self.font_md.render(
-                "No games installed.  Use okama-cli install <game.ok>",
-                True, COL_DIM)
-            self.screen.blit(msg, (60, HEIGHT // 2 - 20))
+            # Empty state card
+            empty_r = pygame.Rect(40, HEIGHT // 2 - 60, WIDTH - 80, 120)
+            pygame.draw.rect(self.screen, COL_CARD, empty_r, border_radius=14)
+            pygame.draw.rect(self.screen, COL_BORDER, empty_r, 1, border_radius=14)
+            msg1 = self.font_md.render("No games installed", True, COL_DIM)
+            msg2 = self.font_sm.render(
+                "Use:  okama-cli install <game.ok>", True, COL_DIM)
+            self.screen.blit(msg1, (WIDTH//2 - msg1.get_width()//2,
+                                    empty_r.y + 28))
+            self.screen.blit(msg2, (WIDTH//2 - msg2.get_width()//2,
+                                    empty_r.y + 70))
             return
 
         card_h = 80
         margin = 10
         start_y = 120
+        mx, my = self._mouse_pos
 
         for i, g in enumerate(self.games):
             y = start_y + i * (card_h + margin)
             if y + card_h > HEIGHT - 60:
                 break
-            color = COL_SELECTED if i == self.list_idx else COL_CARD
-            pygame.draw.rect(self.screen, color, (40, y, WIDTH - 80, card_h),
-                             border_radius=10)
+            r = pygame.Rect(40, y, WIDTH - 80, card_h)
+            is_sel = (i == self.list_idx)
+            is_hov = r.collidepoint(mx, my)
 
-            name = self.font_md.render(g["name"], True, COL_TEXT)
+            color = _lerp_color(COL_CARD, COL_SELECTED, 0.8) if is_sel \
+                    else (COL_CARD_HOV if is_hov else COL_CARD)
+            pygame.draw.rect(self.screen, color, r, border_radius=12)
+            if is_sel:
+                pygame.draw.rect(self.screen, COL_PLAY, r, 2, border_radius=12)
+                sel_bar = pygame.Rect(r.x, r.y, 4, r.h)
+                pygame.draw.rect(self.screen, COL_PLAY, sel_bar,
+                                 border_radius=2)
+
+            name = self.font_mdb.render(g["name"], True,
+                                        COL_TEXT if is_sel else COL_TEXT2)
             ver  = self.font_sm.render(
-                f"v{g.get('version','?')} · {g.get('id','')}", True, COL_DIM)
-            self.screen.blit(name, (60, y + 12))
-            self.screen.blit(ver,  (60, y + 46))
+                f"v{g.get('version','?')}  ·  {g.get('id','')}", True, COL_DIM)
+            self.screen.blit(name, (66, y + 12))
+            self.screen.blit(ver,  (66, y + 46))
 
-            if i == self.list_idx:
-                hint = self.font_sm.render("[A] Launch", True, COL_OK)
-                self.screen.blit(hint, (WIDTH - 160, y + 28))
+            if is_sel:
+                hint = self.font_sm.render("Enter / A  →  Launch", True, COL_OK)
+                self.screen.blit(hint, (WIDTH - hint.get_width() - 24, y + 28))
 
     def _draw_settings(self):
-        title = self.font_lg.render("Settings", True, COL_ACCENT2)
-        self.screen.blit(title, (60, 40))
+        self._draw_section_header("⚙  Settings", COL_SETTINGS)
+        mx, my = self._mouse_pos
+        rects = self._settings_rects()
 
         for i, opt in enumerate(SETTINGS_OPTIONS):
-            y = 120 + i * 64
-            color = COL_SELECTED if i == self.settings_idx else COL_CARD
-            pygame.draw.rect(self.screen, color, (40, y, WIDTH - 80, 52),
-                             border_radius=8)
-            label = self.font_md.render(opt, True, COL_TEXT)
-            self.screen.blit(label, (60, y + 12))
+            r = rects[i]
+            is_sel = (i == self.settings_idx)
+            is_hov = r.collidepoint(mx, my)
+
+            color = _lerp_color(COL_CARD, COL_SELECTED, 0.7) if is_sel \
+                    else (COL_CARD_HOV if is_hov else COL_CARD)
+            pygame.draw.rect(self.screen, color, r, border_radius=10)
+            if is_sel:
+                pygame.draw.rect(self.screen, COL_SETTINGS, r, 2, border_radius=10)
+                sel_bar = pygame.Rect(r.x, r.y, 4, r.h)
+                pygame.draw.rect(self.screen, COL_SETTINGS, sel_bar,
+                                 border_radius=2)
+
+            label = self.font_mdb.render(opt, True,
+                                         COL_TEXT if is_sel else COL_TEXT2)
+            self.screen.blit(label, (60, r.y + (r.h - label.get_height()) // 2))
+
+            if is_sel:
+                arrow = self.font_md.render("›", True, COL_SETTINGS)
+                self.screen.blit(arrow, (WIDTH - 60, r.y + (r.h - arrow.get_height()) // 2))
 
     def _draw_power(self):
-        title = self.font_lg.render("Power", True, COL_WARN)
-        self.screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 120))
+        self._draw_section_header("⏻  Power", COL_POWER)
+        mx, my = self._mouse_pos
+        rects = self._power_rects()
+
+        pow_colors = [COL_WARN, COL_POWER, COL_DIM]
 
         for i, opt in enumerate(POWER_OPTIONS):
-            y = 240 + i * 80
-            color = COL_WARN if i == self.power_idx else COL_CARD
-            pygame.draw.rect(self.screen, color,
-                             (WIDTH // 2 - 150, y, 300, 60), border_radius=10)
-            label = self.font_md.render(opt, True, COL_TEXT)
+            r = rects[i]
+            is_sel = (i == self.power_idx)
+            is_hov = r.collidepoint(mx, my)
+            pc = pow_colors[i]
+
+            if is_sel:
+                card_col = _lerp_color(COL_CARD, pc, 0.35)
+            elif is_hov:
+                card_col = COL_CARD_HOV
+            else:
+                card_col = COL_CARD
+            pygame.draw.rect(self.screen, card_col, r, border_radius=14)
+            border = pc if is_sel else (COL_BORDER if is_hov else (30, 28, 55))
+            pygame.draw.rect(self.screen, border, r, 2, border_radius=14)
+
+            label = self.font_mdb.render(opt, True,
+                                         COL_TEXT if is_sel else COL_TEXT2)
             self.screen.blit(label,
-                (WIDTH // 2 - label.get_width() // 2, y + 15))
+                (r.x + r.w // 2 - label.get_width() // 2,
+                 r.y + r.h // 2 - label.get_height() // 2))
+
+    def _draw_section_header(self, title: str, color):
+        """Draw a colored section title at the top."""
+        surf = self.font_lg.render(title, True, color)
+        self.screen.blit(surf, (60, 14))
+        # back hint
+        back = self.font_hint.render("Esc / B  →  Back", True, COL_DIM)
+        self.screen.blit(back, (WIDTH - back.get_width() - 24, 22))
 
     def _draw_message(self):
         if self.message and self.message_timer > 0:
-            alpha = min(255, self.message_timer * 12)
             surf = self.font_sm.render(self.message, True, COL_TEXT)
-            bg = pygame.Surface((surf.get_width() + 24, surf.get_height() + 16),
-                                 pygame.SRCALPHA)
-            bg.fill((30, 30, 60, 200))
-            self.screen.blit(bg, (WIDTH // 2 - bg.get_width() // 2, HEIGHT - 90))
-            self.screen.blit(surf, (WIDTH // 2 - surf.get_width() // 2, HEIGHT - 82))
+            pad_x, pad_y = 20, 12
+            bw = surf.get_width() + pad_x * 2
+            bh = surf.get_height() + pad_y * 2
+            bg = pygame.Surface((bw, bh), pygame.SRCALPHA)
+            bg.fill((20, 18, 48, 230))
+            bx = WIDTH // 2 - bw // 2
+            by = HEIGHT - bh - 52
+            pygame.draw.rect(bg, COL_ACCENT, (0, 0, bw, bh), 1, border_radius=8)
+            self.screen.blit(bg, (bx, by))
+            self.screen.blit(surf, (bx + pad_x, by + pad_y))
+
+    def _draw_clock(self):
+        """Show current time top-right (if available)."""
+        try:
+            import datetime
+            now = datetime.datetime.now().strftime("%H:%M")
+            ts = self.font_hint.render(now, True, COL_DIM)
+            self.screen.blit(ts, (WIDTH - ts.get_width() - 20, 20))
+        except Exception:
+            pass
 
     def _draw_hints(self):
-        hints = f"  {BUTTON_HINT_DPAD}   {BUTTON_HINT_A}   {BUTTON_HINT_B}   {BUTTON_HINT_START}"
+        hints = HINT_KB
         h = self.font_hint.render(hints, True, COL_DIM)
         self.screen.blit(h, (20, HEIGHT - 28))
 
@@ -494,9 +777,8 @@ class OkamaShell:
             with open("/proc/meminfo") as f:
                 lines = {l.split(":")[0]: l.split(":")[1].strip()
                          for l in f if ":" in l}
-            used = lines.get("MemTotal", "?")
             avail = lines.get("MemAvailable", "?")
-            debug = f"DEV | RAM total:{used} avail:{avail} | FPS:{self.clock.get_fps():.0f}"
+            debug = f"DEV | RAM avail:{avail} | FPS:{self.clock.get_fps():.0f}"
         except Exception:
             debug = f"DEV | FPS:{self.clock.get_fps():.0f}"
 

@@ -1,0 +1,16 @@
+#!/bin/sh
+# OkamaOS rcS — silent boot init runner.
+# Runs all S??* init scripts in order, capturing output to boot log.
+# Phase 1: S10 (mounts) must run first so /var/okamaos/logs exists.
+
+BOOT_LOG=/var/okamaos/logs/boot.log
+
+# Phase 1 — mounts (log dir not yet available, discard output)
+/etc/init.d/S10okama-mounts start > /dev/null 2>&1
+
+# Phase 2 — remaining services, all output to boot log
+for i in /etc/init.d/S??* ; do
+    [ ! -f "$i" ] && continue
+    [ "$i" = "/etc/init.d/S10okama-mounts" ] && continue
+    "$i" start >> "$BOOT_LOG" 2>&1
+done

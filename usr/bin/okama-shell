@@ -74,10 +74,20 @@ _EVDEV_KEY_MAP = {
     68:  "DEV_CONSOLE", # KEY_F10
 }
 
+# evdev keycodes → characters for typing (basic alphanumeric)
+_EVDEV_CHAR_MAP = {
+    2: "1", 3: "2", 4: "3", 5: "4", 6: "5", 7: "6", 8: "7", 9: "8", 10: "9", 11: "0",
+    16: "q", 17: "w", 18: "e", 19: "r", 20: "t", 21: "y", 22: "u", 23: "i", 24: "o", 25: "p",
+    30: "a", 31: "s", 32: "d", 33: "f", 34: "g", 35: "h", 36: "j", 37: "k", 38: "l",
+    44: "z", 45: "x", 46: "c", 47: "v", 48: "b", 49: "n", 50: "m",
+    57: " ",  # space
+}
+
 class _EvdevKeyboardReader:
     """Reads keyboard events directly from evdev when SDL can't receive input."""
     def __init__(self):
         self._q: queue.Queue = queue.Queue()
+        self._char_q: queue.Queue = queue.Queue()
         self._stop = threading.Event()
         self._threads = []
 
@@ -100,6 +110,10 @@ class _EvdevKeyboardReader:
                     _, _, etype, code, value = struct.unpack(_EVDEV_FMT, data)
                     if etype == _EV_KEY and value == _KEY_PRESS:
                         self._q.put(code)
+                        # Map common keycodes to characters for typing
+                        char = _EVDEV_CHAR_MAP.get(code)
+                        if char:
+                            self._char_q.put(char)
         except OSError:
             pass
 
@@ -111,6 +125,15 @@ class _EvdevKeyboardReader:
         except queue.Empty:
             pass
         return codes
+
+    def drain_chars(self) -> list:
+        chars = []
+        try:
+            while True:
+                chars.append(self._char_q.get_nowait())
+        except queue.Empty:
+            pass
+        return chars
 
 _evdev_kb: _EvdevKeyboardReader | None = None
 
@@ -494,6 +517,9 @@ class OkamaShell:
                     events.append({"type": "QUIT"})
                 elif action:
                     events.append({"src": "keyboard", "action": action})
+            # Capture characters for typing
+            for ch in _evdev_kb.drain_chars():
+                self._char_buf.append(ch)
 
         return events
 

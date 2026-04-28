@@ -32,9 +32,11 @@ if [ -n "$PYVER" ] && [ ! -d "$SITE/pygame" ]; then
         cp -r /tmp/pg-whl-extract/pygame "$SITE/" 2>/dev/null || true
         # Keep pygame.libs (needed by pygame .so RPATH for SDL2, SDL2_image, SDL2_mixer)
         cp -r /tmp/pg-whl-extract/pygame.libs "$SITE/" 2>/dev/null || true
-        # Remove ONLY libSDL2_ttf — bundled version is ELF-misaligned on this kernel
-        # pygame will fall back to the system SDL2_ttf from Buildroot (/usr/lib)
+        # Replace bundled (ELF-misaligned) libSDL2_ttf with a symlink to the
+        # system Buildroot-built libSDL2_ttf — same ABI, page-aligned
         rm -f "$SITE/pygame.libs/libSDL2_ttf"*.so* 2>/dev/null || true
+        ln -sf /usr/lib/libSDL2_ttf-2.0.so.0 \
+            "$SITE/pygame.libs/libSDL2_ttf-2-e6bdbc24.0.so.0.2000.1" 2>/dev/null || true
         rm -rf /tmp/pg-whl-extract /tmp/pygame-wheel-dl
         echo ">> pygame installed from $WHL"
     else

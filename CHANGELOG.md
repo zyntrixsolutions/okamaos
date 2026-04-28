@@ -5,6 +5,15 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.2.7] - 2026-04-28
+
+### Fixed
+- `libSDL2_ttf-2-e6bdbc24.0.so.0.2000.1: cannot open shared object file` — pygame `font.so` NEEDED entry is the hash-named bundled library
+- `post-build.sh`: instead of removing `libSDL2_ttf` from `pygame.libs/`, create symlink `libSDL2_ttf-2-e6bdbc24.0.so.0.2000.1` → `/usr/lib/libSDL2_ttf-2.0.so.0` so the linker resolves the exact name using the system (page-aligned) library
+- Symlink chain in ISO: `pygame.libs/libSDL2_ttf-2-e6bdbc24.0.so.0.2000.1` → `/usr/lib/libSDL2_ttf-2.0.so.0` → `libSDL2_ttf-2.0.so.0.2200.0`
+
+---
+
 ## [0.2.6] - 2026-04-28
 
 ### Fixed

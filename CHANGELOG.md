@@ -5,6 +5,14 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.2.10] - 2026-04-28
+
+### Fixed
+- `touch: /var/lock/subsys/dbus-daemon` persisted — root cause confirmed: Buildroot FHS skeleton has `/var/lock -> ../run/lock` (symlink); `S10okama-mounts` was creating `/run/lock/subsys` then mounting a **fresh** tmpfs on `/run`, wiping the dirs before `S30dbus` ran; `S30dbus` then hit a dangling symlink and `mkdir -p` failed; fixed by mounting `/run` tmpfs **first** then creating dirs directly under `/run/lock`
+- `/dev/fb0` still missing despite kernel rebuild — root cause: GRUB `set gfxmode=1024x768x32` alone only sets a variable; `terminal_output gfxterm` is required to actually switch GRUB into graphics mode; without it `gfxpayload=keep` silently keeps VGA text mode and `screen_info` contains no framebuffer → `DRM_SIMPLEDRM`/`SYSFB_SIMPLEFB` have nothing to attach to; added `insmod all_video`, `insmod vbe`, `insmod gfxterm`, `terminal_output gfxterm` to GRUB config
+
+---
+
 ## [0.2.9] - 2026-04-28
 
 ### Fixed

@@ -12,9 +12,13 @@ case "$1" in
     mkdir -p /dev/pts
     mount -t devpts none /dev/pts 2>/dev/null || true
 
-    # tmpfs for run-time state
-    mkdir -p /run /var/run /var/lock /var/lock/subsys
+    # tmpfs for run-time state — mount first, then create dirs ON the tmpfs.
+    # /var/lock and /var/run are symlinks to /run/lock and /run in the
+    # Buildroot FHS skeleton; dirs must be created AFTER the mount or they
+    # are wiped when the fresh tmpfs overlays /run.
+    mkdir -p /run
     mount -t tmpfs -o size=32m tmpfs /run 2>/dev/null || true
+    mkdir -p /run/lock /run/lock/subsys /run/dbus /run/network
 
     # /var/okamaos lives on the data partition; ensure dirs exist
     mkdir -p /var/okamaos/games \

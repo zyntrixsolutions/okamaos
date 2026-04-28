@@ -59,7 +59,16 @@ echo "    Initramfs: $INITRD_SIZE"
 cat > "$ISO_WORK/boot/grub/grub.cfg" << 'EOF'
 set default=0
 set timeout=0
-set gfxmode=1024x768x32
+
+# Load video drivers and activate gfxterm so gfxpayload=keep passes a real
+# framebuffer to the kernel (screen_info -> SYSFB_SIMPLEFB -> DRM_SIMPLEDRM
+# -> /dev/fb0).  Without terminal_output gfxterm, set gfxmode only sets a
+# variable and gfxpayload=keep silently keeps VGA text mode.
+insmod all_video
+insmod vbe
+insmod gfxterm
+set gfxmode=1024x768x32,1024x768x16,800x600x32,auto
+terminal_output gfxterm
 
 menuentry "OkamaOS" {
     set gfxpayload=keep

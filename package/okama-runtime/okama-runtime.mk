@@ -6,7 +6,7 @@
 # tree under usr/bin and usr/lib/okamaos.
 ################################################################################
 
-OKAMA_RUNTIME_VERSION = 0.3.0
+OKAMA_RUNTIME_VERSION = 0.3.1
 OKAMA_RUNTIME_SOURCE =
 # No SITE/SITE_METHOD — this is an install-only meta-package that copies files directly
 OKAMA_RUNTIME_LICENSE = Proprietary

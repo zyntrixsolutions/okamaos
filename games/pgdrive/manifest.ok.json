@@ -1,0 +1,15 @@
+{
+  "name": "PGDrive",
+  "id": "com.okamaos.pgdrive",
+  "version": "0.1.4",
+  "runtime": "okama-python",
+  "entry": "main.py",
+  "min_ram_mb": 512,
+  "target_fps": 30,
+  "permissions": ["controller", "audio", "save_data"],
+  "age_rating": "Everyone",
+  "supports_save_state": false,
+  "controller_required": false,
+  "keyboard_usage": "supported",
+  "description": "An open-ended driving simulator with procedurally generated road networks. Drive through infinite scenes in manual control mode using keyboard or joystick. Press H in-game for help."
+}

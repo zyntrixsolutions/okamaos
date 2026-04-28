@@ -5,6 +5,22 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.5.0] - 2026-04-28
+
+### Fixed
+- **Header text overlap**: `_draw_section_header` and `_draw_clock` both rendered to the same top-right region, causing the clock digits to paint over the "Esc / B → Back" hint. Fixed by embedding the clock directly inside `_draw_section_header` with precise left-of-clock placement, and guarding `_draw_clock` to only render on the home screen.
+
+### Changed
+- **`_draw_section_header` — polished header bar**: now draws a subtle semi-transparent background panel, a 4 px left accent stripe in the section colour, the title vertically centred in the 56 px band, a thin vertical separator, and the clock on the far right — all within a single cohesive row with no overlap.
+- **Bottom hint bar**: `_draw_hints` now blits a matching semi-transparent background behind the hint text for better legibility.
+- **Separator draw order**: header and footer separator lines are now drawn *after* the state-specific content so they sit on top of any background panels painted by sub-screens.
+- **Home screen version badge**: updated to `v0.5.0`.
+
+### Added
+- **PGDrive preinstalled game** (`com.okamaos.pgdrive`): packaged the `games/pgdrive` open-ended driving simulator as an OkamaOS `.ok`-compatible game with `manifest.ok.json` and `main.py` entry point; the game stub is placed in `board/okamaos/rootfs-overlay/var/okamaos/games/com.okamaos.pgdrive/` so it appears in the Play screen on first boot. Supports joystick (default) and keyboard (pass `--keyboard`); auto-resets on destination arrival or crash.
+
+---
+
 ## [0.4.0] - 2026-04-28
 
 ### Added

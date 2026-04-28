@@ -1150,10 +1150,6 @@ class OkamaShell:
         else:
             self.screen.fill(COL_BG)
 
-        # Subtle scanline-style horizontal rule at the top and bottom
-        pygame.draw.line(self.screen, COL_BORDER, (0, 56), (WIDTH, 56), 1)
-        pygame.draw.line(self.screen, COL_BORDER, (0, HEIGHT-44), (WIDTH, HEIGHT-44), 1)
-
         if self.state == "home":
             self._draw_home()
         elif self.state == "play":
@@ -1174,6 +1170,10 @@ class OkamaShell:
             self._draw_settings_storage()
         elif self.state == "install_browse":
             self._draw_install_browse()
+
+        # Separator lines drawn after state content so they appear on top
+        pygame.draw.line(self.screen, COL_BORDER, (0, 56), (WIDTH, 56), 1)
+        pygame.draw.line(self.screen, COL_BORDER, (0, HEIGHT-44), (WIDTH, HEIGHT-44), 1)
 
         self._draw_message()
         self._draw_hints()
@@ -1198,7 +1198,7 @@ class OkamaShell:
         self.screen.blit(brand, (bx, by))
 
         # Version badge
-        ver_txt = self.font_hint.render("v0.4.0", True, COL_DIM)
+        ver_txt = self.font_hint.render("v0.5.0", True, COL_DIM)
         self.screen.blit(ver_txt, (bx + brand.get_width() + 10,
                                    by + brand.get_height() - ver_txt.get_height() - 2))
 
@@ -1390,12 +1390,42 @@ class OkamaShell:
                  r.y + r.h // 2 - label.get_height() // 2))
 
     def _draw_section_header(self, title: str, color):
-        """Draw a colored section title at the top."""
+        """Draw a polished header bar: left accent stripe, title, back hint, and clock."""
+        hdr_h = 56
+        # Subtle header background
+        hdr_bg = _alpha_surf(WIDTH, hdr_h, (0, 0, 8), 110)
+        self.screen.blit(hdr_bg, (0, 0))
+        # Left color accent stripe
+        pygame.draw.rect(self.screen, color, (0, 0, 4, hdr_h))
+
+        # Title — vertically centered in header band
         surf = self.font_lg.render(title, True, color)
-        self.screen.blit(surf, (60, 14))
-        # back hint
-        back = self.font_hint.render("Esc / B -> Back", True, COL_DIM)
-        self.screen.blit(back, (WIDTH - back.get_width() - 24, 22))
+        title_y = (hdr_h - surf.get_height()) // 2
+        self.screen.blit(surf, (18, title_y))
+
+        # Clock (embedded in header, far right)
+        clock_surf = None
+        try:
+            import datetime
+            now = datetime.datetime.now().strftime("%H:%M")
+            clock_surf = self.font_hint.render(now, True, COL_DIM)
+        except Exception:
+            pass
+
+        # Back hint — positioned to the left of the clock with a separator
+        back = self.font_hint.render("Esc / B  ←  Back", True, COL_DIM)
+        hint_y = (hdr_h - back.get_height()) // 2
+
+        if clock_surf:
+            clock_x = WIDTH - clock_surf.get_width() - 14
+            self.screen.blit(clock_surf, (clock_x, hint_y))
+            sep_x = clock_x - 12
+            pygame.draw.line(self.screen, (55, 52, 88),
+                             (sep_x, hint_y + 2),
+                             (sep_x, hint_y + back.get_height() - 2), 1)
+            self.screen.blit(back, (sep_x - back.get_width() - 10, hint_y))
+        else:
+            self.screen.blit(back, (WIDTH - back.get_width() - 14, hint_y))
 
     def _draw_message(self):
         if self.message and self.message_timer > 0:
@@ -1412,7 +1442,11 @@ class OkamaShell:
             self.screen.blit(surf, (bx + pad_x, by + pad_y))
 
     def _draw_clock(self):
-        """Show current time top-right (if available)."""
+        """Show current time top-right on home screen only.
+        Sub-screens embed the clock directly in their section header.
+        """
+        if self.state != "home":
+            return
         try:
             import datetime
             now = datetime.datetime.now().strftime("%H:%M")
@@ -1424,6 +1458,9 @@ class OkamaShell:
     def _draw_hints(self):
         hints = HINT_KB
         h = self.font_hint.render(hints, True, COL_DIM)
+        # Subtle bottom bar background
+        bar = _alpha_surf(WIDTH, 44, (0, 0, 8), 110)
+        self.screen.blit(bar, (0, HEIGHT - 44))
         self.screen.blit(h, (20, HEIGHT - 28))
 
     def _draw_debug_overlay(self):

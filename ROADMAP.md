@@ -45,7 +45,10 @@
 - [x] Settings > Storage Info: disk usage and per-game install sizes
 - [ ] Per-game controller button overlay from `controller.json`
 
-### v0.5 — System Services
+### v0.5 — System Services & UI Polish ✅
+- [x] **Header overlap fix**: clock and back hint no longer overlap — embedded in a unified polished header bar with left accent stripe, vertical separator, and correct layout
+- [x] **UI polish**: semi-transparent header background, bottom hint bar background, separator lines drawn after content to stay on top
+- [x] **PGDrive preinstalled game** (`com.okamaos.pgdrive`): manifest + entry point packaged, preinstalled stub in rootfs-overlay
 - [ ] ALSA audio device selection (multi-device support)
 - [ ] Network: DHCP on boot, Wi-Fi via `wpa_supplicant` UI
 - [ ] SSH access via Dropbear

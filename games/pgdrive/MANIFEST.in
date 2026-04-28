@@ -1,0 +1,2 @@
+recursive-include pgdrive/assets/ *
+recursive-include pgdrive/examples/ *

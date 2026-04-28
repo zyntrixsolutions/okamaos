@@ -5,6 +5,14 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.2.4] - 2026-04-28
+
+### Fixed
+- `Pygame not found` regression — removing all of `pygame.libs/` broke `import pygame` because pygame `.so` modules use RPATH `$ORIGIN/../pygame.libs` to find `libSDL2`, `libSDL2_image`, `libSDL2_mixer`
+- `post-build.sh`: restore `pygame.libs/` copy, but remove **only** `libSDL2_ttf` from it; pygame falls back to system `/usr/lib/libSDL2_ttf` (Buildroot-built, page-aligned)
+
+---
+
 ## [0.2.3] - 2026-04-28
 
 ### Fixed

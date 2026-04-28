@@ -5,6 +5,13 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.7.2] - 2026-04-28
+
+### Fixed
+- **PGDrive crash on launch**: Removed `DOUBLEBUF` flag from pygame display initialization and used `pygame.FULLSCREEN` directly (matching the demo game pattern). The original implementation caused the game to crash immediately and return to the home screen on OkamaOS. Also added `--windowed` flag support for development testing.
+
+---
+
 ## [0.7.1] - 2026-04-28
 
 ### Fixed

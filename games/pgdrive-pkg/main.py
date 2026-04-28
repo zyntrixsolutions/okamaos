@@ -33,7 +33,7 @@ sys.path.insert(0, "/usr/lib/okamaos")
 try:
     import pygame
     from pygame.locals import (
-        QUIT, KEYDOWN, FULLSCREEN, NOFRAME, DOUBLEBUF,
+        QUIT, KEYDOWN,
         K_ESCAPE, K_q, K_h, K_r,
         K_w, K_a, K_s, K_d,
         K_UP, K_DOWN, K_LEFT, K_RIGHT,
@@ -534,12 +534,10 @@ def main():
     pygame.init()
     pygame.display.set_caption("PGDrive — OkamaOS")
 
-    flags = FULLSCREEN | NOFRAME | DOUBLEBUF
-    try:
-        screen = pygame.display.set_mode((WIDTH, HEIGHT), flags)
-    except Exception:
-        screen = pygame.display.set_mode((WIDTH, HEIGHT), DOUBLEBUF)
-
+    flags = pygame.FULLSCREEN | pygame.NOFRAME
+    if "--windowed" in sys.argv:
+        flags = 0
+    screen = pygame.display.set_mode((WIDTH, HEIGHT), flags)
     pygame.mouse.set_visible(False)
 
     game = Game(screen, seed=seed)

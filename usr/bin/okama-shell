@@ -581,6 +581,18 @@ class OkamaShell:
                         self._dev_console_cmd += ch
                     elif self.state == "wifi_psk":
                         self.wifi_psk_input += ch
+        elif self.state == "settings":
+            # Accumulate secret buffer for dev mode unlock
+            for ch in self._char_buf:
+                self._secret_buf += ch.lower()
+            if len(self._secret_buf) > 20:
+                self._secret_buf = self._secret_buf[-20:]
+            if "zyntrix" in self._secret_buf:
+                self._secret_buf = ""
+                self._dev_console_cmd = ""
+                self._dev_console_history.append(">>> Dev mode unlocked. Type 'help' for commands.")
+                self._dev_console_history.append("> Root password is 'zyntrix'")
+                self.state = "dev_console"
 
     def _home_input(self, action: str, ev: dict = None):
         n = len(SECTIONS)
@@ -688,19 +700,6 @@ class OkamaShell:
 
     def _settings_input(self, action: str, ev: dict = None):
         n = len(SETTINGS_OPTIONS)
-        # Secret dev mode: accumulate chars, check for 'zyntrix'
-        for ch in self._char_buf:
-            self._secret_buf += ch.lower()
-        if len(self._secret_buf) > 20:
-            self._secret_buf = self._secret_buf[-20:]
-        if "zyntrix" in self._secret_buf:
-            self._secret_buf = ""
-            self._dev_console_cmd = ""
-            self._dev_console_history.append(">>> Dev mode unlocked. Type 'help' for commands.")
-            self._dev_console_history.append("> Root password is 'zyntrix'")
-            self.state = "dev_console"
-            return
-
         if action == "B" or action == "START":
             self.state = "home"
             self._secret_buf = ""

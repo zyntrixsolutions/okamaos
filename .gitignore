@@ -30,3 +30,8 @@ board/okamaos/rootfs-overlay/etc/okamaos/parent.conf
 # OS
 .DS_Store
 Thumbs.db
+
+# VirtualBox VM session logs (auto-generated in CWD by VBoxManage / VirtualBox)
+*.log
+nohup.out
+build.log

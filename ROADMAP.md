@@ -7,6 +7,8 @@
 - [x] Publish a static update feed for release and OS update metadata.
 - [x] Include at least one real `.ok` package download in the portal.
 - [x] Add Pages deployment automation.
+- [x] Publish a downloadable v1 `.okupdate` manifest from the repo.
+- [x] Add branded boot and home logo treatment for v1.
 - [ ] Attach production OS image artifacts to GitHub Releases and update `pages/updates/feed.json` with signed asset URLs and hashes.
 - [ ] Add creator submission workflow for community `.ok` game drops.
 - [ ] Wire in-OS store/update clients to the public catalog and update feed URLs.

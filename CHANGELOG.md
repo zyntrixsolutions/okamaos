@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.0.0] - 2026-04-29
+
+### Added
+
+- Added an early OkamaOS boot splash init script for tty1 before the shell starts.
+- Added shared OkamaOS logo assets for runtime branding and Pages branding.
+- Added a downloadable `pages/updates/okamaos-v1.0.0.okupdate` manifest for the public update channel.
+
+### Changed
+
+- Replaced the shell home text wordmark with a logo treatment.
+- Replaced the Pages header and hero text branding with the OkamaOS logo asset.
+- Updated the public update feed to advertise `1.0.0 First Wave`.
+- Bumped runtime and package version tracking to `1.0.0`.
+
 ## [0.1.1] - 2026-04-29
 
 ### Added

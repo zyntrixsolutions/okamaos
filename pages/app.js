@@ -23,22 +23,22 @@ const fallbackCatalog = {
 
 const fallbackUpdates = {
   latest: {
-    version: "0.1.1",
-    codename: "Launch Hub",
+    version: "1.0.0",
+    codename: "First Wave",
     date: "2026-04-29",
     status: "preview",
     priority: "recommended",
-    title: "Public portal, app catalog, and update feed",
+    title: "V1 boot logo, branded home, and public update download",
     summary:
-      "OkamaOS now has a public Pages portal for game downloads, release notes, creator momentum, and future OS update artifacts.",
+      "OkamaOS v1 adds a branded boot screen, replaces the home wordmark with the OkamaOS logo treatment, and publishes a downloadable update manifest from the repo.",
     notes: [
-      "Adds a launch landing page for public traffic.",
-      "Adds a static app catalog with a real downloadable demo .ok package.",
-      "Adds a machine-readable update feed for future in-OS update clients."
+      "Adds an early tty1 boot splash before the game shell starts.",
+      "Replaces home-screen text branding with the OkamaOS logo treatment.",
+      "Publishes a downloadable v1 .okupdate manifest from the Pages portal."
     ],
     release_notes_url: "CHANGELOG.md",
-    download_url: "https://github.com/amakodev/okamaos_projectX/releases",
-    artifact_status: "release-assets-required"
+    download_url: "updates/okamaos-v1.0.0.okupdate",
+    artifact_status: "manifest-ready"
   }
 };
 
@@ -104,6 +104,10 @@ function renderCatalog(data) {
 function renderUpdate(data) {
   const latest = data.latest || {};
   const notes = latest.notes || [];
+  const downloadLabel =
+    latest.artifact_status === "manifest-ready"
+      ? "Download v1 update"
+      : "Release assets";
   $("#updateCard").innerHTML = `
     <span class="status-pill">${latest.priority || "update"}</span>
     <h3>${latest.version || "TBD"} ${latest.codename || ""}</h3>
@@ -117,7 +121,7 @@ function renderUpdate(data) {
       ${notes.map((note) => `<li>${note}</li>`).join("")}
     </ul>
     <div class="download-row">
-      <a class="button primary" href="${latest.download_url || "#"}">Release assets</a>
+      <a class="button primary" href="${latest.download_url || "#"}">${downloadLabel}</a>
       <a class="button secondary" href="${latest.release_notes_url || "CHANGELOG.md"}">Release notes</a>
     </div>
   `;

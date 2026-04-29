@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.abspath(_lib))
 
 import argparse
 
-UPDATE_SERVER = "https://updates.okamalabs.com/v1"
+UPDATE_SERVER = "https://amakodev.github.io/okamaos_projectX/updates/feed.json"
 UPDATES_DIR = os.environ.get("OKAMA_UPDATES", "/var/okamaos/updates")
 
 
@@ -27,7 +27,7 @@ def cmd_check(args):
     print("  Status        : not implemented in MVP")
     print("")
     print("v1 design:")
-    print("  1. Download signed manifest from update server.")
+    print("  1. Download signed manifest from update feed.")
     print("  2. Verify signature against OkamaLabs public key.")
     print("  3. Download delta or full .okupdate bundle.")
     print("  4. Apply to inactive A/B root partition.")

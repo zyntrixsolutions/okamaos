@@ -3,24 +3,24 @@
   "channel": "public-preview",
   "updated_at": "2026-04-29T00:00:00Z",
   "latest": {
-    "version": "0.1.1",
-    "codename": "Launch Hub",
+    "version": "1.0.0",
+    "codename": "First Wave",
     "date": "2026-04-29",
     "status": "preview",
     "priority": "recommended",
     "minimum_supported_version": "0.1.0",
-    "title": "Public portal, app catalog, and update feed",
-    "summary": "OkamaOS now has a public Pages portal for game downloads, release notes, creator momentum, and future OS update artifacts.",
+    "title": "V1 boot logo, branded home, and public update download",
+    "summary": "OkamaOS v1 adds a branded boot screen, replaces the home wordmark with the OkamaOS logo treatment, and publishes a downloadable update manifest from the repo.",
     "notes": [
-      "Adds a launch landing page for public traffic.",
-      "Adds a static app catalog with a real downloadable demo .ok package.",
-      "Adds a machine-readable update feed for future in-OS update clients."
+      "Adds an early tty1 boot splash before the game shell starts.",
+      "Replaces home-screen text branding with the OkamaOS logo treatment.",
+      "Publishes a downloadable v1 .okupdate manifest from the Pages portal."
     ],
     "release_notes_url": "CHANGELOG.md",
-    "download_url": "https://github.com/amakodev/okamaos_projectX/releases",
-    "artifact_status": "release-assets-required",
-    "sha256": "",
-    "size_bytes": 0
+    "download_url": "updates/okamaos-v1.0.0.okupdate",
+    "artifact_status": "manifest-ready",
+    "sha256": "632e3b696e370aec70fe0f4e529270cc44db8223829a6a419016526017ed462f",
+    "size_bytes": 1248
   },
   "channels": [
     {

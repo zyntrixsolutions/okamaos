@@ -16,8 +16,7 @@
     <canvas id="signalCanvas" aria-hidden="true"></canvas>
     <header class="site-header">
       <a class="brand" href="#top" aria-label="OkamaOS home">
-        <img src="assets/okama-mark.svg" width="32" height="32" alt="">
-        <span>OkamaOS</span>
+        <img src="assets/okama-logo.svg" width="144" height="42" alt="OkamaOS">
       </a>
       <nav aria-label="Primary navigation">
         <a href="#games">Games</a>
@@ -31,7 +30,9 @@
       <section class="hero" aria-labelledby="hero-title">
         <div class="hero-copy">
           <p class="eyebrow">Public preview channel open</p>
-          <h1 id="hero-title">OkamaOS</h1>
+          <h1 id="hero-title" class="hero-logo-title">
+            <img src="assets/okama-logo.svg" width="560" height="160" alt="OkamaOS">
+          </h1>
           <p class="hero-text">
             A controller-first Linux console for low-cost PCs. Games install as
             `.ok` drops, updates land in public, and the first wave is small
@@ -45,7 +46,7 @@
         <div class="hero-panel" aria-label="Launch status">
           <div>
             <span class="panel-label">Build</span>
-            <strong>0.1.1 Launch Hub</strong>
+            <strong>1.0.0 First Wave</strong>
           </div>
           <div>
             <span class="panel-label">Catalog</span>
@@ -145,23 +146,24 @@
           </div>
           <div class="update-card" id="updateCard" aria-live="polite">
             <span class="status-pill">recommended</span>
-            <h3>0.1.1 Launch Hub</h3>
+            <h3>1.0.0 First Wave</h3>
             <p>
-              OkamaOS now has a public Pages portal for game downloads, release
-              notes, creator momentum, and future OS update artifacts.
+              OkamaOS v1 adds a branded boot screen, replaces the home wordmark
+              with the OkamaOS logo treatment, and publishes a downloadable
+              update manifest from the repo.
             </p>
             <div class="card-meta">
               <span>2026-04-29</span>
               <span>preview</span>
-              <span>release-assets-required</span>
+              <span>manifest-ready</span>
             </div>
             <ul class="update-list">
-              <li>Adds a launch landing page for public traffic.</li>
-              <li>Adds a static app catalog with a real downloadable demo .ok package.</li>
-              <li>Adds a machine-readable update feed for future in-OS update clients.</li>
+              <li>Adds an early tty1 boot splash before the game shell starts.</li>
+              <li>Replaces home-screen text branding with the OkamaOS logo treatment.</li>
+              <li>Publishes a downloadable v1 .okupdate manifest from the Pages portal.</li>
             </ul>
             <div class="download-row">
-              <a class="button primary" href="https://github.com/amakodev/okamaos_projectX/releases">Release assets</a>
+              <a class="button primary" href="updates/okamaos-v1.0.0.okupdate" download>Download v1 update</a>
               <a class="button secondary" href="CHANGELOG.md">Release notes</a>
             </div>
           </div>
@@ -197,7 +199,7 @@
 
     <footer class="site-footer">
       <div>
-        <strong>OkamaOS</strong>
+        <img class="footer-logo" src="assets/okama-logo.svg" width="160" height="46" alt="OkamaOS">
         <span>Console-grade Linux for low-cost x86_64 PCs.</span>
       </div>
       <nav aria-label="Footer navigation">

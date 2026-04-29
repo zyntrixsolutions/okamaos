@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "type": "okamaos-update-manifest",
+  "version": "1.0.0",
+  "codename": "First Wave",
+  "channel": "public-preview",
+  "date": "2026-04-29",
+  "minimum_supported_version": "0.1.0",
+  "summary": "Branded v1 update with a boot splash, logo-based home screen, and public repository update metadata.",
+  "changes": [
+    "Show the OkamaOS logo during the BusyBox init boot path before okama-shell starts.",
+    "Replace the shell home text wordmark with the OkamaOS logo treatment.",
+    "Replace the Pages landing hero/header text treatment with the logo asset.",
+    "Publish this v1 update manifest as a downloadable repository artifact."
+  ],
+  "assets": [
+    {
+      "path": "usr/share/okamaos/brand/okama-logo.svg",
+      "purpose": "runtime-logo"
+    },
+    {
+      "path": "usr/share/okamaos/brand/okama-logo.txt",
+      "purpose": "boot-tty-splash"
+    },
+    {
+      "path": "board/okamaos/rootfs-overlay/etc/init.d/S01okama-boot-splash",
+      "purpose": "boot-screen-init-script"
+    }
+  ],
+  "install_status": "manual-preview",
+  "download_note": "Current okama-update apply support is still a stub. This file is the public v1 update manifest and download target for the repository-hosted update channel."
+}

@@ -37,7 +37,7 @@
       "manifest_url": "",
       "sha256": "",
       "size_bytes": 0,
-      "min_os_version": "0.1.1",
+      "min_os_version": "1.0.0",
       "min_ram_mb": 64,
       "target_fps": 30,
       "permissions": ["controller"],

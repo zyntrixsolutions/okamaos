@@ -94,6 +94,8 @@ body::before {
 }
 
 .brand img {
+  width: 144px;
+  height: auto;
   border-radius: 6px;
 }
 
@@ -188,6 +190,13 @@ h1 {
   line-height: 0.9;
   overflow-wrap: normal;
   word-break: keep-all;
+}
+
+.hero-logo-title img {
+  display: block;
+  width: min(560px, 100%);
+  height: auto;
+  border-radius: 8px;
 }
 
 h2 {
@@ -458,8 +467,10 @@ h3 {
   gap: 4px;
 }
 
-.site-footer strong {
-  color: var(--paper);
+.footer-logo {
+  width: 160px;
+  height: auto;
+  border-radius: 6px;
 }
 
 @media (max-width: 860px) {

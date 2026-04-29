@@ -41,7 +41,8 @@ GitHub Releases and set `download_url` to the release asset.
 
 ## Update feed
 
-`updates/feed.json` describes the public update channel. OS images should ship
+`updates/feed.json` describes the public update channel. Small preview
+manifests can live in `updates/` as `.okupdate` files. OS images should ship
 through GitHub Releases; this feed should point to the release page or exact
 asset URL and include `sha256` when artifacts are final.
 

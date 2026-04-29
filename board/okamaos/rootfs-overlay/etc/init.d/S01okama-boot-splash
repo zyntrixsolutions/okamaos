@@ -1,0 +1,28 @@
+#!/bin/sh
+# S01okama-boot-splash — show the OkamaOS brand before the shell starts.
+
+LOGO=/usr/share/okamaos/brand/okama-logo.txt
+TTY=/dev/tty1
+
+case "$1" in
+  start)
+    if [ -w "$TTY" ]; then
+      {
+        printf '\033[2J\033[H'
+        if [ -f "$LOGO" ]; then
+          cat "$LOGO"
+        else
+          printf 'OkamaOS\n'
+        fi
+        printf '\n  Booting OkamaOS 1.0.0 First Wave\n'
+        printf '  Controller-first game shell loading...\n'
+      } > "$TTY"
+    fi
+    ;;
+  stop)
+    ;;
+  *)
+    echo "Usage: $0 {start|stop}"
+    exit 1
+    ;;
+esac

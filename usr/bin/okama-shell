@@ -170,6 +170,38 @@ class OkamaShell:
             self.font_xl = self.font_lg = self.font_md = \
                 self.font_sm = self.font_hint = default
 
+    def _draw_logo(self, center_x: int, y: int, scale: float = 1.0):
+        width = int(520 * scale)
+        mark_w = int(112 * scale)
+        mark_h = int(82 * scale)
+        x = center_x - width // 2
+
+        pygame.draw.rect(self.screen, COL_TEXT, (x, y, mark_w, mark_h),
+                         border_radius=max(3, int(5 * scale)))
+        inset = max(6, int(9 * scale))
+        pygame.draw.rect(self.screen, COL_BG,
+                         (x + inset, y + inset, mark_w - inset * 2,
+                          mark_h - inset * 3), border_radius=2)
+        pygame.draw.circle(self.screen, COL_OK,
+                           (x + int(34 * scale), y + int(34 * scale)),
+                           max(5, int(9 * scale)))
+        pygame.draw.rect(self.screen, COL_WARN,
+                         (x + int(56 * scale), y + int(27 * scale),
+                          int(35 * scale), max(4, int(5 * scale))))
+        pygame.draw.rect(self.screen, COL_ACCENT2,
+                         (x + int(56 * scale), y + int(43 * scale),
+                          int(26 * scale), max(4, int(5 * scale))))
+        pygame.draw.rect(self.screen, COL_TEXT,
+                         (x + int(18 * scale), y + int(91 * scale),
+                          int(76 * scale), int(15 * scale)))
+
+        logo = self.font_xl.render("OkamaOS", True, COL_TEXT)
+        word_x = x + mark_w + int(28 * scale)
+        self.screen.blit(logo, (word_x, y + int(3 * scale)))
+        wave = self.font_sm.render("FIRST WAVE", True, COL_OK)
+        self.screen.blit(wave, (word_x + int(6 * scale),
+                                y + int(72 * scale)))
+
     def _refresh_games(self):
         self.games = games_mod.list_installed()
 
@@ -378,9 +410,8 @@ class OkamaShell:
         pygame.display.flip()
 
     def _draw_home(self):
-        # Brand bar
-        brand = self.font_xl.render("OkamaOS", True, COL_ACCENT2)
-        self.screen.blit(brand, (WIDTH // 2 - brand.get_width() // 2, 60))
+        # Brand mark
+        self._draw_logo(WIDTH // 2, 46, 1.0)
 
         # Section pills
         pill_w, pill_h = 200, 60

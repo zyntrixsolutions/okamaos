@@ -4,7 +4,7 @@ import os
 import re
 
 _DEFAULTS = {
-    "VERSION": "0.9.3",
+    "VERSION": "0.9.4",
     "DISPLAY_MODE": "framebuffer",
     "FRAMEBUFFER_DEVICE": "/dev/fb0",
     "TARGET_FPS": "30",
@@ -43,7 +43,8 @@ def _parse_kv(path: str) -> dict:
                     continue
                 m = re.match(r"^([A-Z_]+)=(.*)$", line)
                 if m:
-                    result[m.group(1)] = m.group(2).strip()
+                    value = m.group(2).split("#", 1)[0].strip()
+                    result[m.group(1)] = value
     except FileNotFoundError:
         pass
     return result

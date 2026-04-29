@@ -5,6 +5,12 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.9.4] - 2026-04-29
+
+### Fixed
+- **Keyboard game control**: inline comments in `okama.conf` values are now stripped by the config parser, so `KEYBOARD_FALLBACK=yes          # ...` correctly enables `okama-inputd` keyboard events for launched games.
+- **Version metadata**: bumped runtime, shell, rootfs profile, config defaults, and package metadata to `0.9.4`.
+
 ## [0.9.3] - 2026-04-29
 
 ### Added

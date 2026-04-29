@@ -128,6 +128,11 @@
 - [x] Include CA certificates for HTTPS store/update requests
 - [x] Resync rootfs overlay during incremental post-builds
 
+### v0.9.4 — Keyboard Game Control ✅
+- [x] Strip inline comments from OkamaOS config values before runtime checks
+- [x] Ensure `KEYBOARD_FALLBACK=yes` enables keyboard events in `okama-inputd`
+- [x] Validate QEMU keyboard events reach the input socket for launched games
+
 ### v1.0 — Console Polish
 - [x] Silent boot (`quiet loglevel=0`, boot log redirect) — completed in v0.3
 - [ ] Boot time < 8 seconds

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">OkamaOS mark</title>
+  <desc id="desc">A compact geometric console mark for OkamaOS.</desc>
+  <rect width="128" height="128" rx="8" fill="#10120f"/>
+  <path d="M24 34h80v42H24z" fill="#f3efe4"/>
+  <path d="M31 41h66v28H31z" fill="#10120f"/>
+  <path d="M39 84h50l10 16H29z" fill="#f3efe4"/>
+  <circle cx="47" cy="55" r="8" fill="#8df77f"/>
+  <rect x="62" y="49" width="26" height="4" fill="#ffcf4a"/>
+  <rect x="62" y="58" width="18" height="4" fill="#53d9e6"/>
+  <circle cx="92" cy="88" r="5" fill="#f26d5b"/>
+  <circle cx="36" cy="88" r="5" fill="#53d9e6"/>
+</svg>

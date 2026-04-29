@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0",
+  "channel": "public-preview",
+  "updated_at": "2026-04-29T00:00:00Z",
+  "latest": {
+    "version": "0.1.1",
+    "codename": "Launch Hub",
+    "date": "2026-04-29",
+    "status": "preview",
+    "priority": "recommended",
+    "minimum_supported_version": "0.1.0",
+    "title": "Public portal, app catalog, and update feed",
+    "summary": "OkamaOS now has a public Pages portal for game downloads, release notes, creator momentum, and future OS update artifacts.",
+    "notes": [
+      "Adds a launch landing page for public traffic.",
+      "Adds a static app catalog with a real downloadable demo .ok package.",
+      "Adds a machine-readable update feed for future in-OS update clients."
+    ],
+    "release_notes_url": "CHANGELOG.md",
+    "download_url": "https://github.com/amakodev/okamaos_projectX/releases",
+    "artifact_status": "release-assets-required",
+    "sha256": "",
+    "size_bytes": 0
+  },
+  "channels": [
+    {
+      "name": "public-preview",
+      "description": "Fast-moving public preview channel for early OkamaOS users and creators.",
+      "feed_url": "updates/feed.json"
+    },
+    {
+      "name": "stable",
+      "description": "Reserved for signed production images after validation.",
+      "feed_url": ""
+    }
+  ]
+}

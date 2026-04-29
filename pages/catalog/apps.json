@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0",
+  "catalog_version": "2026.04.29",
+  "updated_at": "2026-04-29T00:00:00Z",
+  "publisher": "OkamaLabs",
+  "apps": [
+    {
+      "id": "com.okamalabs.demo",
+      "name": "Okama Demo Game",
+      "version": "0.1.0",
+      "runtime": "okama-sdl2",
+      "category": "Starter",
+      "status": "available",
+      "tagline": "The first controller-first drop for every fresh OkamaOS build.",
+      "description": "Reference demo game showing sprite movement, pause handling, save state, audio permissions, and clean return to the OkamaOS shell.",
+      "download_url": "downloads/games/com.okamalabs.demo-0.1.0.ok",
+      "manifest_url": "catalog/manifests/com.okamalabs.demo.json",
+      "sha256": "372ded0cb3615d266b48ab80d8e33bc8ced062cab120606e00b4dfbfbd4c9cf3",
+      "size_bytes": 13518,
+      "min_os_version": "0.1.0",
+      "min_ram_mb": 48,
+      "target_fps": 30,
+      "permissions": ["controller", "audio", "save_data"],
+      "age_rating": "Everyone",
+      "featured": true
+    },
+    {
+      "id": "com.okamaos.firstwave",
+      "name": "First Wave Slot",
+      "version": "0.0.0",
+      "runtime": "okama-sdl2",
+      "category": "Creator Call",
+      "status": "coming-soon",
+      "tagline": "The catalog is still small, which means early games can stand out.",
+      "description": "Reserved listing for the first community-ready OkamaOS game drop.",
+      "download_url": "",
+      "manifest_url": "",
+      "sha256": "",
+      "size_bytes": 0,
+      "min_os_version": "0.1.1",
+      "min_ram_mb": 64,
+      "target_fps": 30,
+      "permissions": ["controller"],
+      "age_rating": "Pending",
+      "featured": false
+    }
+  ]
+}

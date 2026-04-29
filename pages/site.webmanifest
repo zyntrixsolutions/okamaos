@@ -1,0 +1,9 @@
+{
+  "name": "OkamaOS",
+  "short_name": "OkamaOS",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#10120f",
+  "theme_color": "#10120f",
+  "description": "OkamaOS public download, app catalog, and update hub."
+}

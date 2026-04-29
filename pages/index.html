@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#10120f">
+    <meta
+      name="description"
+      content="OkamaOS public download, app catalog, and update hub for controller-first games on low-cost PCs.">
+    <title>OkamaOS | Console-grade Linux for the first wave</title>
+    <link rel="manifest" href="site.webmanifest">
+    <link rel="icon" href="assets/okama-mark.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <canvas id="signalCanvas" aria-hidden="true"></canvas>
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="OkamaOS home">
+        <img src="assets/okama-mark.svg" width="32" height="32" alt="">
+        <span>OkamaOS</span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="#games">Games</a>
+        <a href="#updates">Updates</a>
+        <a href="#creators">Creators</a>
+      </nav>
+      <a class="header-action" href="updates/feed.json">Feed</a>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow">Public preview channel open</p>
+          <h1 id="hero-title">OkamaOS</h1>
+          <p class="hero-text">
+            A controller-first Linux console for low-cost PCs. Games install as
+            `.ok` drops, updates land in public, and the first wave is small
+            enough for every great game to get noticed.
+          </p>
+          <div class="hero-actions" aria-label="Primary actions">
+            <a class="button primary" href="#games">Download games</a>
+            <a class="button secondary" href="#updates">Track updates</a>
+          </div>
+        </div>
+        <div class="hero-panel" aria-label="Launch status">
+          <div>
+            <span class="panel-label">Build</span>
+            <strong>0.1.1 Launch Hub</strong>
+          </div>
+          <div>
+            <span class="panel-label">Catalog</span>
+            <strong id="heroCatalogCount">1 live drop</strong>
+          </div>
+          <div>
+            <span class="panel-label">Channel</span>
+            <strong>Public preview</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="band intro-band" aria-label="Launch position">
+        <div class="section-inner intro-grid">
+          <div>
+            <p class="eyebrow">Why this matters now</p>
+            <h2>The catalog is early. That is the opportunity.</h2>
+          </div>
+          <p>
+            OkamaOS is not another desktop trying to become a console. It boots
+            into a focused game shell, expects a controller, and treats every
+            `.ok` package like a console cartridge. Early players get the first
+            drops. Early creators get the cleanest shelf space.
+          </p>
+        </div>
+      </section>
+
+      <section class="band" id="games" aria-labelledby="games-title">
+        <div class="section-inner">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">App catalog</p>
+              <h2 id="games-title">Download the first drops</h2>
+            </div>
+            <a class="text-link" href="catalog/apps.json">View catalog JSON</a>
+          </div>
+          <div class="catalog-grid" id="catalogGrid" aria-live="polite">
+            <article class="catalog-card featured">
+              <div class="status-row">
+                <span class="status-pill available">available</span>
+                <span class="meta-label">Starter</span>
+              </div>
+              <h3>Okama Demo Game</h3>
+              <p><strong>The first controller-first drop for every fresh OkamaOS build.</strong></p>
+              <p class="description">
+                Reference demo game showing sprite movement, pause handling,
+                save state, audio permissions, and clean return to the OkamaOS shell.
+              </p>
+              <div class="card-meta">
+                <span>v0.1.0</span>
+                <span>okama-sdl2</span>
+                <span>13 KB</span>
+              </div>
+              <div class="download-row">
+                <a class="button primary" href="downloads/games/com.okamalabs.demo-0.1.0.ok" download>Download .ok</a>
+                <a class="button secondary" href="catalog/manifests/com.okamalabs.demo.json">Manifest</a>
+              </div>
+            </article>
+            <article class="catalog-card">
+              <div class="status-row">
+                <span class="status-pill coming-soon">coming soon</span>
+                <span class="meta-label">Creator Call</span>
+              </div>
+              <h3>First Wave Slot</h3>
+              <p><strong>The catalog is still small, which means early games can stand out.</strong></p>
+              <p class="description">
+                Reserved listing for the first community-ready OkamaOS game drop.
+              </p>
+              <div class="card-meta">
+                <span>v0.0.0</span>
+                <span>okama-sdl2</span>
+                <span>TBD</span>
+              </div>
+              <div class="download-row">
+                <a class="button primary" href="#" aria-disabled="true">Download .ok</a>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="band split-band" id="updates" aria-labelledby="updates-title">
+        <div class="section-inner split-grid">
+          <div>
+            <p class="eyebrow">Update channel</p>
+            <h2 id="updates-title">Keep every box close to the launch line.</h2>
+            <p>
+              The public feed gives current users a single place to check what
+              is live, what needs a release asset, and which channel is moving.
+              OS images stay in GitHub Releases; this page keeps the signal
+              clear.
+            </p>
+            <div class="inline-actions">
+              <a class="button primary" href="updates/feed.json">Open update feed</a>
+              <a class="button secondary" href="CHANGELOG.md">Portal changelog</a>
+            </div>
+          </div>
+          <div class="update-card" id="updateCard" aria-live="polite">
+            <span class="status-pill">recommended</span>
+            <h3>0.1.1 Launch Hub</h3>
+            <p>
+              OkamaOS now has a public Pages portal for game downloads, release
+              notes, creator momentum, and future OS update artifacts.
+            </p>
+            <div class="card-meta">
+              <span>2026-04-29</span>
+              <span>preview</span>
+              <span>release-assets-required</span>
+            </div>
+            <ul class="update-list">
+              <li>Adds a launch landing page for public traffic.</li>
+              <li>Adds a static app catalog with a real downloadable demo .ok package.</li>
+              <li>Adds a machine-readable update feed for future in-OS update clients.</li>
+            </ul>
+            <div class="download-row">
+              <a class="button primary" href="https://github.com/amakodev/okamaos_projectX/releases">Release assets</a>
+              <a class="button secondary" href="CHANGELOG.md">Release notes</a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="band creator-band" id="creators" aria-labelledby="creators-title">
+        <div class="section-inner creator-grid">
+          <div>
+            <p class="eyebrow">Creator call</p>
+            <h2 id="creators-title">Ship while the shelf is still uncrowded.</h2>
+          </div>
+          <div class="creator-steps">
+            <article>
+              <span>01</span>
+              <h3>Build controller-first</h3>
+              <p>Target 30 FPS, clear input, fast exit back to the shell.</p>
+            </article>
+            <article>
+              <span>02</span>
+              <h3>Package as `.ok`</h3>
+              <p>Use the existing manifest format so installs stay predictable.</p>
+            </article>
+            <article>
+              <span>03</span>
+              <h3>Drop into catalog</h3>
+              <p>Every release gets metadata, hashes, and a visible landing spot.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div>
+        <strong>OkamaOS</strong>
+        <span>Console-grade Linux for low-cost x86_64 PCs.</span>
+      </div>
+      <nav aria-label="Footer navigation">
+        <a href="README.md">Portal README</a>
+        <a href="catalog/apps.json">Catalog</a>
+        <a href="updates/feed.json">Updates</a>
+      </nav>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>

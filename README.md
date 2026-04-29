@@ -5,6 +5,9 @@ partnership with **OkamaLabs**. OkamaOS boots straight into a fullscreen
 controller-driven shell, runs one game at a time, and is designed to feel like
 a dedicated console — not a PC.
 
+> Version: **0.1.1 Launch Hub**. Public download and update portal files live in
+> `pages/` and deploy through GitHub Pages.
+
 > Status: **MVP foundation**. Buildable rootfs overlay, working CLI tooling,
 > `.ok` package format, demo game, controller daemon stub, and a Pygame-based
 > shell. Buildroot integration is wired via `configs/okamaos_x86_64_defconfig`
@@ -20,6 +23,19 @@ a dedicated console — not a PC.
 - Idle RAM target: **<250MB**
 - Parent mode (PIN-gated risky actions) and Developer mode (off by default)
 - AI game-creation foundation via `okama-agent` (templates today, LLM later)
+
+## Public portal
+
+The GitHub Pages portal in `pages/` is the public-facing OkamaOS hub for:
+
+- launch marketing and community momentum
+- downloadable `.ok` games
+- static app catalog metadata
+- static update-feed metadata for current and future OS builds
+- release notes that non-developers can understand
+
+The included Pages workflow publishes `pages/` as a static site when changes
+land on `main`. See `pages/README.md` for catalog and update feed contracts.
 
 ## Quick start (host dev, no Buildroot needed for tooling)
 

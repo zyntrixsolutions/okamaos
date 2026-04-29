@@ -174,6 +174,13 @@
 - [x] Harden laptop framebuffer output by honoring framebuffer offsets and using a safer default ISO graphics mode
 - [x] Bump version metadata to `0.9.9`
 
+### v0.9.10 — Default Safe Boot & Startup Splash ✅
+- [x] Boot generated ISOs directly into safe graphics mode by default
+- [x] Hide the GRUB menu unless the user explicitly reveals it with Shift or Esc
+- [x] Keep standard and debug GRUB entries available for explicit recovery/dev access
+- [x] Show an OkamaOS splash on tty1 before the shell UI starts
+- [x] Bump version metadata to `0.9.10`
+
 ### v1.0 — Console Polish
 - [x] Silent boot (`quiet loglevel=0`, boot log redirect) — completed in v0.3
 - [ ] Boot time < 8 seconds

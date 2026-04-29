@@ -58,7 +58,8 @@ echo "    Initramfs: $INITRD_SIZE"
 # GRUB2 config
 cat > "$ISO_WORK/boot/grub/grub.cfg" << 'EOF'
 set default=0
-set timeout=3
+set timeout=0
+set timeout_style=hidden
 
 # Load video drivers and activate gfxterm so gfxpayload=keep passes a real
 # framebuffer to the kernel (screen_info -> SYSFB_SIMPLEFB -> DRM_SIMPLEDRM
@@ -70,19 +71,21 @@ insmod gfxterm
 set gfxmode=1024x768x32,1280x720x32,800x600x32,1024x768x16,800x600x16,auto
 terminal_output gfxterm
 
+# Hidden by default for demo hardware: hold Shift or press Esc during boot to
+# show the GRUB menu and choose the standard or debug entries.
+menuentry "OkamaOS (safe graphics default)" {
+    set gfxpayload=800x600x32
+    linux  /boot/bzImage rw quiet loglevel=0 console=ttyS0,115200 console=tty1 rdinit=/sbin/init panic=10 rd.systemd.show_status=false printk.devkmsg=off vt.global_cursor_default=0 nomodeset video=vesafb:mtrr:3
+    initrd /boot/rootfs.cpio.gz
+}
+
 menuentry "OkamaOS" {
     set gfxpayload=keep
     linux  /boot/bzImage rw quiet loglevel=0 console=ttyS0,115200 console=tty1 rdinit=/sbin/init panic=10 rd.systemd.show_status=false printk.devkmsg=off vt.global_cursor_default=0
     initrd /boot/rootfs.cpio.gz
 }
 
-menuentry "OkamaOS (safe graphics)" {
-    set gfxpayload=800x600x32
-    linux  /boot/bzImage rw quiet loglevel=0 console=ttyS0,115200 console=tty1 rdinit=/sbin/init panic=10 rd.systemd.show_status=false printk.devkmsg=off vt.global_cursor_default=0 nomodeset video=vesafb:mtrr:3
-    initrd /boot/rootfs.cpio.gz
-}
-
-menuentry "OkamaOS (debug — verbose)" {
+menuentry "OkamaOS (debug - verbose)" {
     set gfxpayload=keep
     linux  /boot/bzImage rw loglevel=7 console=ttyS0,115200 console=tty1 rdinit=/sbin/init panic=30 vt.global_cursor_default=0
     initrd /boot/rootfs.cpio.gz

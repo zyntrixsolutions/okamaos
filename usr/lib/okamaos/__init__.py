@@ -1,4 +1,4 @@
 """okamaos — shared Python library for OkamaOS userland tools."""
 
-VERSION = "0.9.9"
+VERSION = "0.9.10"
 CODENAME = "Cyber Red"

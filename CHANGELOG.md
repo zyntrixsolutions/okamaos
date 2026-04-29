@@ -5,6 +5,16 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.9.10] - 2026-04-29
+
+### Changed
+- **Default safe boot**: generated ISOs now boot directly into the safe graphics entry with `nomodeset` and an 800x600x32 framebuffer payload.
+- **Hidden GRUB menu**: GRUB now uses a hidden zero-second timeout by default; hold Shift or press Esc during boot to show standard and debug entries explicitly.
+- **Version metadata**: bumped runtime, shell badge, rootfs profile, config defaults, package metadata, and library metadata to `0.9.10`.
+
+### Added
+- **Pre-UI splash**: tty1 now shows an OkamaOS startup splash while the launcher prepares framebuffer ownership and starts the shell.
+
 ## [0.9.9] - 2026-04-29
 
 ### Fixed

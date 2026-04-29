@@ -11,16 +11,16 @@ not just a description.
 | MVP State                         | v1 Target                                     |
 |-----------------------------------|-----------------------------------------------|
 | Linux boot messages visible       | Silent boot: `quiet loglevel=0 splash`        |
-| No splash screen                  | Plymouth or custom framebuffer splash         |
+| tty1 launcher splash active       | Plymouth or custom framebuffer splash         |
 | Boot: ~15 s                       | Boot: <8 s (optimise init order, ramdisk)    |
-| Bootloader menu visible           | SYSLINUX hidden; recovery only via hold key   |
+| GRUB menu hidden by default       | Recovery menu only via explicit hold key      |
 | tty2 getty always running         | tty2 getty spawned only when dev mode active  |
 
 **Implementation path:**
-1. Add Plymouth or a custom C framebuffer splash that runs from initrd
+1. Replace the tty1 launcher splash with a framebuffer/initrd splash if deeper boot polish is needed
 2. Use `bootchart` to identify slowest boot services; parallelize where safe
 3. Freeze the rootfs as a squashfs on a fast partition; overlay `/var`
-4. SYSLINUX: `TIMEOUT 0` + `DEFAULT okamaos` — no menu unless F12 held
+4. Keep GRUB hidden by default with a zero-second timeout and recovery entries available via Shift/Esc
 
 ---
 

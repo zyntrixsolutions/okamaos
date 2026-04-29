@@ -19,6 +19,17 @@ echo "[okama-shell-launcher] started on tty1" > /dev/ttyS0 2>/dev/null || true
 # Hide the text cursor so it doesn't flicker over the framebuffer
 printf '\033[?25l'
 
+show_splash() {
+    printf '\033[2J\033[H'
+    printf '\n\n\n'
+    printf '              OKAMAOS\n'
+    printf '        Console-grade game OS\n\n'
+    printf '        Starting safe graphics...\n'
+    printf '        Please wait.\n'
+}
+
+show_splash
+
 # Unbind the framebuffer console driver so SDL/FbWriter can own /dev/fb0
 # without fbcon writing text/cursor blinks on top of our frames.
 for _vtcon in /sys/class/vtconsole/vtcon*; do

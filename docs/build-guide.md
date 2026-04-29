@@ -190,6 +190,24 @@ correct device before running.
 For production: use the hybrid ISO (v1 target) which supports both USB boot
 and CDROM boot without additional setup.
 
+## Installing to a Hard Drive
+
+`okama-install` is included in the live root filesystem. It installs the running
+OkamaOS system to a whole disk and sets up a legacy BIOS Extlinux bootloader.
+
+From a live boot in developer mode:
+
+```bash
+okama-install --list-disks
+okama-install --target /dev/sdX --dry-run
+okama-install --target /dev/sdX
+```
+
+Replace `/dev/sdX` with the target disk. The installer refuses the current root
+disk, refuses mounted target disks, and requires typing `ERASE /dev/sdX` before
+partitioning. See `docs/hard-drive-installer.md` for QEMU install testing and
+boot-mode details.
+
 ---
 
 ## Makefile Reference

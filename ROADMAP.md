@@ -20,5 +20,17 @@
 ## Runtime And Distribution
 
 - [x] Maintain version tracking through root `VERSION`, package version files, and runtime config.
+- [x] Add a guided hard-drive installer for live images and VM disks.
+- [x] Package bootloader and kernel assets needed by installed-disk boots.
 - [ ] Add signed update verification before automatic OS updates.
 - [ ] Publish a stable public release channel after hardware validation.
+
+## Installer And Hardware Setup
+
+- [x] Provide `okama-install --list-disks` for operator-safe disk discovery.
+- [x] Refuse installation over the currently running root disk.
+- [x] Require explicit confirmation before partitioning and formatting a target disk.
+- [x] Copy the live root filesystem to a new target partition.
+- [x] Install a legacy BIOS Extlinux boot path for local disks.
+- [ ] Add UEFI boot support for newer hardware.
+- [ ] Add controller-driven installer access from Settings after hardware validation.

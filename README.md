@@ -5,7 +5,7 @@ partnership with **OkamaLabs**. OkamaOS boots straight into a fullscreen
 controller-driven shell, runs one game at a time, and is designed to feel like
 a dedicated console — not a PC.
 
-> Version: **1.0.2 Safe System Update**. Public download and update portal files live in
+> Version: **1.0.3 Hard Drive Installer**. Public download and update portal files live in
 > `pages/` and deploy through GitHub Pages.
 
 > Status: **MVP foundation**. Buildable rootfs overlay, working CLI tooling,
@@ -20,6 +20,7 @@ a dedicated console — not a PC.
 - Controller-first input via `okama-inputd` (USB + Bluetooth via BlueZ)
 - `.ok` package format with manifest validation
 - One-active-game lifecycle via `okama-run`
+- Live-to-disk installation via `okama-install`
 - Idle RAM target: **<250MB**
 - Parent mode (PIN-gated risky actions) and Developer mode (off by default)
 - AI game-creation foundation via `okama-agent` (templates today, LLM later)
@@ -62,6 +63,14 @@ make setup
 make buildroot
 make okamaos-build
 make okamaos-run-qemu
+```
+
+Inside a live OkamaOS boot, install to a VM disk or hard drive from developer
+mode:
+
+```bash
+okama-install --list-disks
+okama-install --target /dev/vdX
 ```
 
 ## Repo layout

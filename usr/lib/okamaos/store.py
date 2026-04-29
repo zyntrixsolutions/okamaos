@@ -52,7 +52,12 @@ def fetch_catalog(url: Optional[str] = None, timeout: int = FETCH_TIMEOUT) -> di
     Returns a dict with at minimum a 'games' list.
     Raises StoreError on network or parse failure.
     """
-    url = url or CATALOG_URL_DEFAULT
+    if url is None:
+        try:
+            import okamaos.config as cfg_mod
+            url = catalog_url(cfg_mod.get())
+        except Exception:
+            url = CATALOG_URL_DEFAULT
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "OkamaOS/1.0"})
         with urllib.request.urlopen(req, timeout=timeout) as resp:

@@ -164,9 +164,20 @@
 - [x] Add Zyntrix Solutions technical partner contact information
 - [x] Bump version metadata to `0.9.8`
 
+### v0.9.9 — Demo Device Management & Ship Readiness ✅
+- [x] Parse network interfaces correctly without trailing `ip addr` colons and skip loopback in Settings > Network
+- [x] Add refresh, DHCP connect/renew, Wi-Fi scan/connect, and disconnect actions to network settings
+- [x] Persist Wi-Fi profiles per interface and reconnect saved Wi-Fi during boot networking
+- [x] Add Bluetooth connect/disconnect and forget actions for known and scanned devices
+- [x] Route game catalog and OS update checks through `zyntrixsolutions.github.io/okamaos-store`
+- [x] Add in-shell support screen with Zyntrix Solutions technical partner contacts
+- [x] Harden laptop framebuffer output by honoring framebuffer offsets and using a safer default ISO graphics mode
+- [x] Bump version metadata to `0.9.9`
+
 ### v1.0 — Console Polish
 - [x] Silent boot (`quiet loglevel=0`, boot log redirect) — completed in v0.3
 - [ ] Boot time < 8 seconds
 - [ ] Controller rumble via evdev FF API
 - [ ] Battery level on HUD
-- [ ] OTA update system via `okama-cli update`
+- [x] OTA update checks from GitHub Pages (`zyntrixsolutions.github.io/okamaos-store`)
+- [ ] OTA package apply via `okama-cli update`

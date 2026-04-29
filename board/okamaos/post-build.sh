@@ -60,6 +60,11 @@ if [ -d "$REPO_DIR/usr/lib/okamaos" ]; then
     mkdir -p "$TARGET_DIR/usr/lib/okamaos"
     cp -a "$REPO_DIR/usr/lib/okamaos"/. "$TARGET_DIR/usr/lib/okamaos/" 2>/dev/null || true
 fi
+if [ -f "$REPO_DIR/VERSION" ]; then
+    mkdir -p "$TARGET_DIR/usr/lib/okamaos" "$TARGET_DIR/etc/okamaos"
+    cp -f "$REPO_DIR/VERSION" "$TARGET_DIR/usr/lib/okamaos/VERSION" 2>/dev/null || true
+    cp -f "$REPO_DIR/VERSION" "$TARGET_DIR/etc/okamaos/VERSION" 2>/dev/null || true
+fi
 if [ -d "$REPO_DIR/usr/share/okamaos" ]; then
     mkdir -p "$TARGET_DIR/usr/share/okamaos"
     cp -a "$REPO_DIR/usr/share/okamaos"/. "$TARGET_DIR/usr/share/okamaos/" 2>/dev/null || true

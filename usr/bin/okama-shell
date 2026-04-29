@@ -267,6 +267,7 @@ SETTINGS_OPTIONS = [
     "Network",
     "Storage Info",
     "Updates",
+    "Support",
 ]
 
 _UPDATE_ACTIONS = ["Check for OS Updates", "Apply Local Update (.ok-update)"]
@@ -707,6 +708,8 @@ class OkamaShell:
             self._game_store_input(action, ev)
         elif self.state == "settings_updates":
             self._settings_updates_input(action, ev)
+        elif self.state == "settings_support":
+            self._settings_support_input(action, ev)
         elif self.state == "dev_console":
             self._dev_console_input(action, ev)
         elif self.state == "wifi_psk":
@@ -865,6 +868,8 @@ class OkamaShell:
             self._enter_settings_storage()
         elif opt == "Updates":
             self._enter_settings_updates()
+        elif opt == "Support":
+            self.state = "settings_support"
 
     def _settings_rects(self):
         return [
@@ -987,6 +992,23 @@ class OkamaShell:
         items = []
         if self._bt_powered:
             items.append({"type": "toggle", "label": "Bluetooth: ON   [ Turn Off ]"})
+            connected = bt_mod.connected_macs()
+            trusted = bt_mod.trusted_macs()
+            known = {}
+            for d in bt_mod.paired_devices():
+                known[d["mac"]] = d
+            for p in bt_mod.list_trusted():
+                mac = p.get("mac", "")
+                if mac:
+                    known.setdefault(mac, {"mac": mac, "name": p.get("name", "Controller")})
+            for d in sorted(known.values(), key=lambda x: x.get("name", "")):
+                mac = d.get("mac", "")
+                name = d.get("name", mac)
+                state = "Connected" if mac in connected else ("Trusted" if mac in trusted else "Paired")
+                items.append({"type": "known_device",
+                              "label": f"  {name}  ({state})",
+                              "mac": mac, "name": name,
+                              "connected": mac in connected})
             if self.bt_scanning:
                 items.append({"type": "info",
                                "label": "  Scanning for devices…"})
@@ -994,13 +1016,17 @@ class OkamaShell:
                 items.append({"type": "scan",
                                "label": "[ Scan for Devices ]"})
             for d in self.bt_devices:
+                if d["mac"] in known:
+                    continue
                 items.append({"type": "device",
                                "label": f"  {d['name']}  ({d['mac']})",
-                               "mac": d["mac"], "name": d["name"]})
+                               "mac": d["mac"], "name": d["name"],
+                               "connected": False})
         else:
             items.append({"type": "toggle",
                            "label": "Bluetooth: OFF  [ Turn On ]"})
         self._bt_action_items = items
+        self.bt_dev_idx = min(self.bt_dev_idx, max(len(items) - 1, 0))
 
     def _settings_bluetooth_input(self, action: str, ev: dict = None):
         n = max(len(self._bt_action_items), 1)
@@ -1019,6 +1045,8 @@ class OkamaShell:
             return
         elif action == "A":
             self._bt_select()
+        elif action == "X":
+            self._bt_forget_selected()
 
     def _bt_select(self):
         if not self._bt_action_items:
@@ -1026,16 +1054,36 @@ class OkamaShell:
         item = self._bt_action_items[self.bt_dev_idx]
         if item["type"] == "toggle":
             cmd = "on" if not self._bt_powered else "off"
+            if cmd == "on":
+                subprocess.call(["/etc/init.d/S25okama-bluetooth", "start"],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             subprocess.call(["bluetoothctl", "power", cmd],
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.conf.set("BLUETOOTH_ENABLED", "yes" if cmd == "on" else "no")
             self._bt_refresh_items()
         elif item["type"] == "scan":
             self._start_bt_scan()
-        elif item["type"] == "device":
+        elif item["type"] in ("device", "known_device"):
             mac, name = item["mac"], item["name"]
-            self._show_message(f"Pairing {name}…")
-            threading.Thread(target=self._do_bt_pair,
-                             args=(mac, name), daemon=True).start()
+            if item.get("connected"):
+                self._show_message(f"Disconnecting {name}...")
+                threading.Thread(target=self._do_bt_disconnect,
+                                 args=(mac, name), daemon=True).start()
+            else:
+                self._show_message(f"Connecting {name}...")
+                threading.Thread(target=self._do_bt_pair,
+                                 args=(mac, name), daemon=True).start()
+
+    def _bt_forget_selected(self):
+        if not self._bt_action_items:
+            return
+        item = self._bt_action_items[self.bt_dev_idx]
+        if item.get("type") not in ("device", "known_device"):
+            return
+        mac, name = item["mac"], item["name"]
+        ok = bt_mod.forget(mac)
+        self._show_message(f"Forgotten: {name}" if ok else f"Forget failed: {name}")
+        self._bt_refresh_items()
 
     def _start_bt_scan(self):
         self.bt_scanning = True
@@ -1057,12 +1105,23 @@ class OkamaShell:
             self._show_message(f"Paired & connected: {name}")
         else:
             self._show_message(f"Pairing failed for {name}")
+        self._bt_refresh_items()
+
+    def _do_bt_disconnect(self, mac: str, name: str):
+        ok = bt_mod.disconnect(mac)
+        self._show_message(f"Disconnected: {name}" if ok else f"Disconnect failed: {name}")
+        self._bt_refresh_items()
 
     def _draw_settings_bluetooth(self):
         self._draw_section_header("* Bluetooth", COL_SETTINGS)
         self._draw_subscreen_list(self._bt_action_items,
                                   self.bt_dev_idx,
                                   key_fn=lambda x: x["label"])
+        if self._bt_action_items:
+            item = self._bt_action_items[self.bt_dev_idx]
+            if item.get("type") in ("device", "known_device"):
+                hint = self.font_sm.render("[A] Connect/Disconnect   [X] Forget", True, COL_DIM)
+                self.screen.blit(hint, (60, HEIGHT - 90))
 
     # -----------------------------------------------------------------------
     # Settings > Audio
@@ -1134,51 +1193,169 @@ class OkamaShell:
 
     def _collect_net_info(self) -> list:
         import re as _re
-        lines = []
+        interfaces = []
+
+        def _read(path: str) -> str:
+            try:
+                with open(path) as f:
+                    return f.read().strip()
+            except OSError:
+                return ""
+
+        def _is_wireless(iface: str) -> bool:
+            return (
+                os.path.isdir(f"/sys/class/net/{iface}/wireless")
+                or iface.startswith(("wl", "wlan"))
+            )
+
+        def _add_iface(item: dict) -> None:
+            iface = (item.get("iface") or "").split("@", 1)[0].rstrip(":")
+            if not iface or iface == "lo" or iface in {x.get("iface") for x in interfaces}:
+                return
+            item["iface"] = iface
+            item["type"] = "wireless" if _is_wireless(iface) else "wired"
+            item["carrier"] = _read(f"/sys/class/net/{iface}/carrier") == "1"
+            if not item.get("mac"):
+                item["mac"] = _read(f"/sys/class/net/{iface}/address")
+            interfaces.append(item)
+
         try:
-            result = subprocess.run(["ip", "addr"],
+            result = subprocess.run(["ip", "-j", "addr", "show"],
                                     capture_output=True, text=True, timeout=5)
-            iface = None
-            for line in result.stdout.splitlines():
-                m = _re.match(r"^\d+: (\S+):.*state (\S+)", line)
-                if m:
-                    iface = m.group(1)
-                    admin_state = m.group(2)
-                    if iface == "lo":
+            if result.returncode == 0 and result.stdout.strip():
+                for dev in json.loads(result.stdout):
+                    ips = []
+                    for addr in dev.get("addr_info", []):
+                        local = addr.get("local", "")
+                        if not local or local.startswith("127.") or local == "::1":
+                            continue
+                        scope = addr.get("scope", "")
+                        if scope == "host":
+                            continue
+                        prefix = addr.get("prefixlen")
+                        ips.append(f"{local}/{prefix}" if prefix is not None else local)
+                    flags = set(dev.get("flags", []))
+                    _add_iface({
+                        "iface": dev.get("ifname", ""),
+                        "admin_state": (dev.get("operstate") or "UNKNOWN").upper(),
+                        "admin_up": "UP" in flags,
+                        "mac": dev.get("address", ""),
+                        "ips": ips,
+                    })
+        except Exception:
+            pass
+
+        if not interfaces:
+            try:
+                result = subprocess.run(["ip", "addr"],
+                                        capture_output=True, text=True, timeout=5)
+                iface = None
+                current = None
+                for line in result.stdout.splitlines():
+                    m = _re.match(r"^\d+:\s+([^:@]+)(?:@[^:]+)?:\s+<([^>]*)>.*state\s+(\S+)", line)
+                    if m:
+                        if current:
+                            _add_iface(current)
+                        iface = m.group(1)
+                        flags = set(m.group(2).split(","))
+                        current = {
+                            "iface": iface,
+                            "admin_state": m.group(3).upper(),
+                            "admin_up": "UP" in flags,
+                            "ips": [],
+                        }
                         continue
-                    typ = "wireless" if "wlan" in iface or "wlp" in iface else "wired"
-                    lines.append({"iface": iface, "admin_state": admin_state, "type": typ})
-                m2 = _re.match(r"^\s+inet (\S+)", line)
-                if m2 and iface and iface != "lo":
-                    if lines:
-                        lines[-1]["ip"] = m2.group(1)
-                m3 = _re.match(r"^\s+inet6 (\S+) scope global", line)
-                if m3 and iface and iface != "lo":
-                    if lines:
-                        lines[-1]["ip6"] = m3.group(1)
-        except Exception as e:
-            lines.append({"iface": "error", "state": "down", "type": "info", "label": f"Error: {e}"})
-            return lines
+                    m2 = _re.match(r"^\s+inet6?\s+(\S+)", line)
+                    if m2 and current:
+                        ip = m2.group(1)
+                        if not ip.startswith("127.") and ip != "::1/128":
+                            current.setdefault("ips", []).append(ip)
+                if current:
+                    _add_iface(current)
+            except Exception as e:
+                return [{"type": "action", "label": "[ Refresh Network Devices ]"},
+                        {"iface": "error", "state": "down", "type": "info",
+                         "label": f"Error: {e}"}]
 
-        # Determine actual connectivity status for each interface
-        for item in lines:
-            has_ip = bool(item.get("ip") or item.get("ip6"))
-            admin_up = item.get("admin_state", "").upper() == "UP"
+        if not interfaces:
+            for iface_path in sorted(glob.glob("/sys/class/net/*")):
+                iface = os.path.basename(iface_path)
+                if iface == "lo":
+                    continue
+                oper = _read(os.path.join(iface_path, "operstate")).upper() or "UNKNOWN"
+                flags = _read(os.path.join(iface_path, "flags"))
+                try:
+                    flags_int = int(flags, 16)
+                except ValueError:
+                    flags_int = 0
+                _add_iface({
+                    "iface": iface,
+                    "admin_state": oper,
+                    "admin_up": bool(flags_int & 0x1) or oper == "UP",
+                    "ips": [],
+                })
 
-            if not admin_up:
-                item["state"] = "down"
-                item["status"] = "Offline"
+        default_iface = self._default_route_iface()
+        connectivity = self._check_connectivity()
+
+        items = [{"type": "action", "label": "[ Refresh Network Devices ]"}]
+        for item in interfaces:
+            iface = item["iface"]
+            ips = item.get("ips", [])
+            if ips:
+                item["ip"] = ips[0]
+            has_ip = bool(ips)
+            admin_up = bool(item.get("admin_up")) or item.get("admin_state") == "UP"
+            active_route = default_iface == iface
+            if has_ip and active_route and connectivity == "Online":
+                item["state"] = "up"
+                item["status"] = "Online"
+            elif has_ip and active_route:
+                item["state"] = "up"
+                item["status"] = "Local"
             elif has_ip:
-                # Check actual internet connectivity
                 item["state"] = "up"
-                item["status"] = self._check_connectivity()
+                item["status"] = "Connected"
+            elif admin_up:
+                item["state"] = "up"
+                item["status"] = "Ready / No IP"
             else:
-                item["state"] = "up"
-                item["status"] = "No IP"
+                item["state"] = "down"
+                item["status"] = "Down"
+            if item.get("type") == "wireless":
+                item["ssid"] = self._wifi_current_ssid(iface)
+                if item.get("ssid") and item["status"] in ("Ready / No IP", "Connected"):
+                    item["status"] = "WiFi Linked" if not has_ip else item["status"]
+            items.append(item)
 
-        if not lines:
-            lines.append({"iface": "none", "state": "down", "type": "info", "label": "No interfaces found"})
-        return lines
+        if len(items) == 1:
+            items.append({"iface": "none", "state": "down", "type": "info",
+                          "label": "No network interfaces found"})
+        return items
+
+    def _default_route_iface(self) -> str:
+        try:
+            result = subprocess.run(["ip", "route", "show", "default"],
+                                    capture_output=True, text=True, timeout=2)
+            for line in result.stdout.splitlines():
+                parts = line.split()
+                if "dev" in parts:
+                    return parts[parts.index("dev") + 1]
+        except Exception:
+            pass
+        return ""
+
+    def _wifi_current_ssid(self, iface: str) -> str:
+        try:
+            result = subprocess.run(["iw", "dev", iface, "link"],
+                                    capture_output=True, text=True, timeout=3)
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if line.startswith("SSID:"):
+                    return line.split("SSID:", 1)[1].strip()
+        except Exception:
+            pass
+        return ""
 
     def _check_connectivity(self) -> str:
         """Check if we have actual internet connectivity. Returns status string."""
@@ -1219,6 +1396,9 @@ class OkamaShell:
         if action in ("B", "START"):
             self.state = "settings"
             return
+        elif action == "Y":
+            self.net_info = self._collect_net_info()
+            self.net_idx = min(self.net_idx, max(len(self.net_info) - 1, 0))
         elif action == "DPAD_UP":
             self.net_idx = (self.net_idx - 1) % n
         elif action == "DPAD_DOWN":
@@ -1232,24 +1412,75 @@ class OkamaShell:
             return
         elif action == "A":
             self._net_select()
+        elif action == "X":
+            self._net_disconnect_selected()
 
     def _net_select(self):
         if not self.net_info:
             return
         item = self.net_info[self.net_idx]
-        if item.get("type") == "wired":
+        if item.get("type") == "action":
+            self.net_info = self._collect_net_info()
+            self.net_idx = min(self.net_idx, max(len(self.net_info) - 1, 0))
+        elif item.get("type") == "wired":
             self._renew_dhcp(item["iface"])
         elif item.get("type") == "wireless":
             self._scan_wifi(item["iface"])
+
+    def _net_disconnect_selected(self):
+        if not self.net_info:
+            return
+        item = self.net_info[self.net_idx]
+        if item.get("type") not in ("wired", "wireless"):
+            return
+        self._show_message(f"Disconnecting {item['iface']}...")
+        threading.Thread(target=self._do_net_disconnect,
+                         args=(item["iface"], item.get("type")),
+                         daemon=True).start()
+
+    def _do_net_disconnect(self, iface: str, typ: str):
+        try:
+            if typ == "wireless" and shutil.which("wpa_cli"):
+                subprocess.run(["wpa_cli", "-i", iface, "disconnect"],
+                               capture_output=True, timeout=5)
+            subprocess.run(["dhcpcd", "-k", iface], capture_output=True, timeout=5)
+            subprocess.run(["ip", "addr", "flush", "dev", iface],
+                           capture_output=True, timeout=5)
+            subprocess.run(["ip", "link", "set", iface, "down"],
+                           capture_output=True, timeout=5)
+        except Exception:
+            pass
+        self.net_info = self._collect_net_info()
 
     def _renew_dhcp(self, iface: str):
         self._show_message(f"Renewing DHCP on {iface}...")
         threading.Thread(target=self._do_dhcp, args=(iface,), daemon=True).start()
 
+    def _dhcp_request(self, iface: str) -> bool:
+        ok = False
+        if shutil.which("udhcpc"):
+            try:
+                res = subprocess.run(["udhcpc", "-b", "-i", iface],
+                                     capture_output=True, timeout=10)
+                ok = res.returncode == 0
+            except Exception:
+                pass
+        try:
+            res = subprocess.run(["dhcpcd", "-n", iface],
+                                 capture_output=True, timeout=10)
+            if res.returncode != 0:
+                res = subprocess.run(["dhcpcd", "-b", iface],
+                                     capture_output=True, timeout=10)
+            ok = ok or res.returncode == 0
+        except Exception:
+            pass
+        return ok
+
     def _do_dhcp(self, iface: str):
         try:
+            self.conf.set("NETWORK_ENABLED", "yes")
             subprocess.run(["ip", "link", "set", iface, "up"], check=False)
-            subprocess.run(["dhcpcd", "-n", iface], capture_output=True, timeout=10)
+            self._dhcp_request(iface)
         except subprocess.TimeoutExpired:
             pass
         except Exception:
@@ -1262,6 +1493,8 @@ class OkamaShell:
         self.wifi_networks = []
         self.wifi_scan_idx = 0
         self.wifi_connect_status = ""
+        self.conf.set("NETWORK_ENABLED", "yes")
+        self.conf.set("WIFI_ENABLED", "yes")
         threading.Thread(target=self._do_wifi_scan, args=(iface,), daemon=True).start()
         self.state = "wifi_networks"
 
@@ -1288,12 +1521,41 @@ class OkamaShell:
                     for i, p in enumerate(parts):
                         if p == "signal:":
                             try:
-                                sig = int(parts[i+1])
+                                sig = int(float(parts[i+1]))
                                 cur["signal"] = sig
                             except (IndexError, ValueError):
                                 pass
+                elif line.startswith("capability:") and "Privacy" in line:
+                    cur["secure"] = True
+                elif line.startswith("RSN:") or line.startswith("WPA:"):
+                    cur["secure"] = True
             if cur.get("ssid"):
                 networks.append(cur)
+            if not networks and shutil.which("iwlist"):
+                proc = subprocess.Popen(
+                    ["iwlist", iface, "scan"],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+                )
+                stdout, _ = proc.communicate(timeout=15)
+                cur = {}
+                for line in stdout.splitlines():
+                    line = line.strip()
+                    if "Cell " in line and "Address:" in line:
+                        if cur.get("ssid"):
+                            networks.append(cur)
+                        cur = {"mac": line.split("Address:", 1)[1].strip()}
+                    elif line.startswith("ESSID:"):
+                        cur["ssid"] = line.split("ESSID:", 1)[1].strip().strip('"')
+                    elif "Signal level=" in line:
+                        try:
+                            level = line.split("Signal level=", 1)[1].split()[0]
+                            cur["signal"] = int(float(level.replace("/100", "")))
+                        except ValueError:
+                            pass
+                    elif line.startswith("Encryption key:"):
+                        cur["secure"] = line.endswith("on")
+                if cur.get("ssid"):
+                    networks.append(cur)
             uniq = {}
             for n in sorted(networks, key=lambda x: x.get("signal", -100), reverse=True):
                 ssid = n.get("ssid", "")
@@ -1353,6 +1615,9 @@ class OkamaShell:
     def _connect_wifi(self, iface: str, ssid: str, psk: str):
         self.wifi_connect_status = f"Connecting to {ssid}..."
         try:
+            def _wpa_quote(value: str) -> str:
+                return value.replace("\\", "\\\\").replace('"', '\\"')
+
             conf_dir = "/etc/wpa_supplicant"
             os.makedirs(conf_dir, exist_ok=True)
             conf_path = os.path.join(conf_dir, f"{iface}.conf")
@@ -1360,9 +1625,17 @@ class OkamaShell:
                 f.write("ctrl_interface=/var/run/wpa_supplicant\n")
                 f.write("update_config=1\n\n")
                 if psk:
-                    f.write(f'network={{\n  ssid="{ssid}"\n  psk="{psk}"\n}}\n')
+                    f.write(
+                        f'network={{\n  ssid="{_wpa_quote(ssid)}"\n'
+                        f'  psk="{_wpa_quote(psk)}"\n}}\n')
                 else:
-                    f.write(f'network={{\n  ssid="{ssid}"\n  key_mgmt=NONE\n}}\n')
+                    f.write(
+                        f'network={{\n  ssid="{_wpa_quote(ssid)}"\n'
+                        "  key_mgmt=NONE\n}\n")
+            try:
+                shutil.copyfile(conf_path, "/etc/wpa_supplicant.conf")
+            except OSError:
+                pass
             subprocess.run(["killall", "wpa_supplicant"], capture_output=True)
             time.sleep(0.5)
             subprocess.run(
@@ -1370,8 +1643,7 @@ class OkamaShell:
                 capture_output=True
             )
             time.sleep(2)
-            res = subprocess.run(["dhcpcd", "-n", iface], capture_output=True, timeout=10)
-            if res.returncode == 0:
+            if self._dhcp_request(iface):
                 self.wifi_connect_status = f"Connected to {ssid}"
                 self.conf.set("WIFI_ENABLED", "yes")
                 self.net_info = self._collect_net_info()
@@ -1398,26 +1670,39 @@ class OkamaShell:
                 pygame.draw.rect(self.screen, COL_SETTINGS, r, 2, border_radius=10)
                 pygame.draw.rect(self.screen, COL_SETTINGS, pygame.Rect(r.x, r.y, 4, r.h), border_radius=2)
             typ = item.get("type", "")
+            if typ == "action":
+                lbl = self.font_mdb.render(item.get("label", "[ Refresh ]"), True,
+                                           COL_TEXT if is_sel else COL_TEXT2)
+                self.screen.blit(lbl, (60, r.y + (r.h - lbl.get_height()) // 2))
+                continue
+            if typ == "info":
+                lbl = self.font_mdb.render(item.get("label", "No devices"), True, COL_DIM)
+                self.screen.blit(lbl, (60, r.y + (r.h - lbl.get_height()) // 2))
+                continue
             iface = item.get("iface", "?")
-            state = item.get("state", "?")
             status = item.get("status", "")
-            ip = item.get("ip", "")
-            # Show interface, state, and connectivity status
-            status_display = status if status else state
-            lbl_text = f"{iface}  [{status_display}]"
-            if ip:
-                lbl_text += f"  {ip}"
+            ip = item.get("ip", "") or "no address"
+            ssid = item.get("ssid", "")
+            kind = "WiFi" if typ == "wireless" else "Ethernet"
+            lbl_text = f"{iface}  {kind}  [{status}]"
             lbl = self.font_mdb.render(lbl_text, True, COL_TEXT if is_sel else COL_TEXT2)
-            self.screen.blit(lbl, (60, r.y + (r.h - lbl.get_height()) // 2))
+            self.screen.blit(lbl, (60, r.y + 7))
+            sub_text = f"{ip}"
+            if ssid:
+                sub_text += f"  SSID: {ssid}"
+            elif item.get("mac"):
+                sub_text += f"  MAC: {item.get('mac')}"
+            sub = self.font_hint.render(sub_text[:100], True, COL_DIM)
+            self.screen.blit(sub, (60, r.y + 34))
             if is_sel:
                 arrow = self.font_md.render(">", True, COL_SETTINGS)
                 self.screen.blit(arrow, (WIDTH - 60, r.y + (r.h - arrow.get_height()) // 2))
             hint_y = r.y + r.h + 2
             if is_sel and typ == "wired":
-                hint = self.font_sm.render("[A] Renew DHCP", True, COL_DIM)
+                hint = self.font_sm.render("[A] Connect/Renew DHCP   [X] Disconnect   [Y] Refresh", True, COL_DIM)
                 self.screen.blit(hint, (60, hint_y))
             elif is_sel and typ == "wireless":
-                hint = self.font_sm.render("[A] Scan WiFi networks", True, COL_DIM)
+                hint = self.font_sm.render("[A] Scan/Connect WiFi   [X] Disconnect   [Y] Refresh", True, COL_DIM)
                 self.screen.blit(hint, (60, hint_y))
         if not items:
             info = self.font_sm.render("No network interfaces detected.", True, COL_DIM)
@@ -1447,7 +1732,8 @@ class OkamaShell:
                 ssid = net.get("ssid", "?")
                 sig = net.get("signal", -100)
                 sig_dbm = f"{sig} dBm" if isinstance(sig, int) else "?"
-                lbl = self.font_mdb.render(f"{ssid}  ({sig_dbm})", True, COL_TEXT if is_sel else COL_TEXT2)
+                secure = "WPA" if net.get("secure") else "Open"
+                lbl = self.font_mdb.render(f"{ssid}  ({sig_dbm})  {secure}", True, COL_TEXT if is_sel else COL_TEXT2)
                 self.screen.blit(lbl, (60, r.y + (r.h - lbl.get_height()) // 2))
                 if is_sel:
                     arrow = self.font_sm.render("A > Enter Password", True, COL_SETTINGS)
@@ -1892,6 +2178,39 @@ class OkamaShell:
             key_fn=lambda x: x["label"])
 
     # -----------------------------------------------------------------------
+    # Settings > Support
+    # -----------------------------------------------------------------------
+    def _settings_support_input(self, action: str, ev: dict = None):
+        if action in ("B", "START", "A"):
+            self.state = "settings"
+
+    def _draw_settings_support(self):
+        self._draw_section_header("* Support", COL_SETTINGS)
+        email = self.conf.get("SUPPORT_EMAIL", "team@zyntrix.solutions")
+        website = self.conf.get("SUPPORT_WEBSITE", "https://okamaos.zyntrix.solutions")
+        store_url = self.conf.get(
+            "STORE_URL", "https://zyntrixsolutions.github.io/okamaos-store/catalog.json")
+        update_url = self.conf.get(
+            "UPDATE_URL", "https://zyntrixsolutions.github.io/okamaos-store/updates/latest.json")
+        rows = [
+            ("Technical partner", "Zyntrix Solutions"),
+            ("Email", email),
+            ("Website", website),
+            ("Game catalog", store_url),
+            ("OS updates", update_url),
+        ]
+        y = 130
+        for label, value in rows:
+            label_s = self.font_sm.render(label, True, COL_DIM)
+            value_font = self.font_sm if len(value) > 44 else self.font_mdb
+            value_s = value_font.render(value, True, COL_TEXT)
+            self.screen.blit(label_s, (70, y))
+            self.screen.blit(value_s, (70, y + 24))
+            y += 78
+        hint = self.font_sm.render("[Esc/B] Back to Settings", True, COL_DIM)
+        self.screen.blit(hint, (70, HEIGHT - 90))
+
+    # -----------------------------------------------------------------------
     # Dev Console (secret mode)
     # -----------------------------------------------------------------------
     def _dev_console_input(self, action: str, ev: dict = None):
@@ -2087,6 +2406,8 @@ class OkamaShell:
             self._draw_game_store()
         elif self.state == "settings_updates":
             self._draw_settings_updates()
+        elif self.state == "settings_support":
+            self._draw_settings_support()
         elif self.state == "dev_console":
             self._draw_dev_console()
         elif self.state == "wifi_networks":
@@ -2121,7 +2442,7 @@ class OkamaShell:
         self.screen.blit(brand, (bx, by))
 
         # Version badge
-        ver_txt = self.font_hint.render("v0.9.8", True, COL_DIM)
+        ver_txt = self.font_hint.render("v0.9.9", True, COL_DIM)
         self.screen.blit(ver_txt, (bx + brand.get_width() + 10,
                                    by + brand.get_height() - ver_txt.get_height() - 2))
 
@@ -2447,6 +2768,8 @@ class FbWriter:
             # --- variable screen info (160 bytes) ---
             # struct fb_var_screeninfo offsets:
             #   0  xres           4  yres
+            #   8  xres_virtual  12  yres_virtual
+            #  16  xoffset       20  yoffset
             #  24  bits_per_pixel
             #  32  red.offset (struct fb_bitfield)
             #  40  green.offset
@@ -2455,6 +2778,10 @@ class FbWriter:
             _fcntl.ioctl(_probe, self.FBIOGET_VSCREENINFO, vbuf)
             self.w   = _struct.unpack_from("=I", vbuf,  0)[0]
             self.h   = _struct.unpack_from("=I", vbuf,  4)[0]
+            self.vw  = _struct.unpack_from("=I", vbuf,  8)[0]
+            self.vh  = _struct.unpack_from("=I", vbuf, 12)[0]
+            self.xoff = _struct.unpack_from("=I", vbuf, 16)[0]
+            self.yoff = _struct.unpack_from("=I", vbuf, 20)[0]
             self.bpp = _struct.unpack_from("=I", vbuf, 24)[0]
             red_off   = _struct.unpack_from("=I", vbuf, 32)[0]
             red_len   = _struct.unpack_from("=I", vbuf, 36)[0]
@@ -2497,12 +2824,17 @@ class FbWriter:
         # Fall back to safe values if ioctl returned zeros
         if self.w == 0 or self.h == 0:
             self.w, self.h = WIDTH, HEIGHT
+        if self.vw == 0:
+            self.vw = self.w
+        if self.vh == 0:
+            self.vh = self.h
         if self.stride == 0:
             self.stride = self.w * self.bytes_pp
 
         self._fb = open(fb_path, "rb+")
         map_len = self.mem_len or (self.stride * self.h)
         self._mm = _mmap.mmap(self._fb.fileno(), map_len)
+        self._base_offset = self.yoff * self.stride + self.xoff * self.bytes_pp
         self._ok = True
 
     def _pack_rgb(self, surface):
@@ -2536,13 +2868,13 @@ class FbWriter:
             row_bytes = self.w * self.bytes_pp
             if self.stride == row_bytes:
                 # Fast path: framebuffer rows are tightly packed
-                self._mm.seek(0)
+                self._mm.seek(self._base_offset)
                 self._mm.write(raw)
             else:
                 # Slow path: framebuffer has per-row padding — write row by row
                 for y in range(self.h):
                     src = y * row_bytes
-                    self._mm.seek(y * self.stride)
+                    self._mm.seek(self._base_offset + y * self.stride)
                     self._mm.write(raw[src:src + row_bytes])
         except Exception:
             self._ok = False

@@ -46,6 +46,40 @@ def scan(timeout: int = 15) -> list:
     return devices
 
 
+def _device_list(*args) -> list:
+    out = _btctl("devices", *args)
+    devices = []
+    for line in out.splitlines():
+        m = re.match(r"Device ([0-9A-F:]{17}) (.+)", line.strip())
+        if m:
+            devices.append({"mac": m.group(1), "name": m.group(2)})
+    return devices
+
+
+def paired_devices() -> list:
+    return _device_list("Paired")
+
+
+def trusted_macs() -> set:
+    out = _btctl("devices", "Trusted")
+    return {
+        m.group(1)
+        for line in out.splitlines()
+        for m in [re.match(r"Device ([0-9A-F:]{17}) ", line.strip())]
+        if m
+    }
+
+
+def connected_macs() -> set:
+    out = _btctl("devices", "Connected")
+    return {
+        m.group(1)
+        for line in out.splitlines()
+        for m in [re.match(r"Device ([0-9A-F:]{17}) ", line.strip())]
+        if m
+    }
+
+
 def pair(mac: str) -> bool:
     out = _btctl("pair", mac, timeout=30)
     return "Pairing successful" in out or "already paired" in out.lower()

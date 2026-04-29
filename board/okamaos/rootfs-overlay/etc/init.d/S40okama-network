@@ -1,11 +1,12 @@
 #!/bin/sh
 # S40okama-network — bring up networking only if enabled.
-# For MVP this handles wired (DHCP). WiFi wpa_supplicant hook is a stub.
+# Handles wired DHCP and saved per-interface WiFi profiles.
 
 CONF=/etc/okamaos/okama.conf
 NET_ENABLED=yes
-WIFI_ENABLED=no
+WIFI_ENABLED=yes
 WPA_CONF=/etc/wpa_supplicant.conf
+WPA_DIR=/etc/wpa_supplicant
 
 if [ -f "$CONF" ]; then
     NET_ENABLED=$(grep '^NETWORK_ENABLED=' "$CONF" | cut -d= -f2 | tr -d '[:space:]')
@@ -40,6 +41,17 @@ unblock_wifi() {
     fi
 }
 
+wpa_conf_for() {
+    iface="$1"
+    if [ -s "$WPA_DIR/$iface.conf" ]; then
+        echo "$WPA_DIR/$iface.conf"
+    elif [ -s "$WPA_CONF" ]; then
+        echo "$WPA_CONF"
+    else
+        echo ""
+    fi
+}
+
 case "$1" in
   start)
     if [ "$NET_ENABLED" = "yes" ]; then
@@ -63,12 +75,13 @@ case "$1" in
                 [ -d "$iface_path/wireless" ] || continue
                 echo "Preparing WiFi interface $iface..."
                 bring_up "$iface"
-                if [ -s "$WPA_CONF" ]; then
+                iface_wpa_conf="$(wpa_conf_for "$iface")"
+                if [ -n "$iface_wpa_conf" ]; then
                     echo "Starting wpa_supplicant and DHCP on $iface..."
-                    wpa_supplicant -B -i "$iface" -c "$WPA_CONF" 2>/dev/null || true
+                    wpa_supplicant -B -i "$iface" -c "$iface_wpa_conf" 2>/dev/null || true
                     start_dhcp "$iface"
                 else
-                    echo "No $WPA_CONF yet; WiFi interface is up for UI scanning."
+                    echo "No saved WiFi profile yet; $iface is up for UI scanning."
                 fi
             done
         fi

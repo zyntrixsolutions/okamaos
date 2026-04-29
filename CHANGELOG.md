@@ -5,6 +5,21 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.9.9] - 2026-04-29
+
+### Fixed
+- **Network device status**: Settings > Network now parses interface names without `ip addr` trailing colons, skips loopback, falls back to sysfs discovery, and reports Online/Local/Connected/Ready states from IPs, default route, carrier, and connectivity checks.
+- **Wi-Fi persistence and scanning**: Wi-Fi scans handle decimal signal values, fall back to `iwlist`, persist per-interface `wpa_supplicant` profiles, and boot networking now reuses saved Wi-Fi profiles.
+- **Laptop framebuffer corruption**: shell and game framebuffer writers now honor framebuffer x/y offsets before writing rows, and the ISO defaults to a more broadly compatible 1024x768x32 graphics mode with an 800x600 safe mode.
+
+### Added
+- **Settings device management**: Network settings now includes refresh, wired DHCP connect/renew, Wi-Fi scan/connect, and disconnect actions; Bluetooth settings can connect/disconnect known devices and forget devices.
+- **Support screen**: Settings now exposes the Zyntrix Solutions technical partner email, website, game catalog URL, and OS update URL.
+
+### Changed
+- **GitHub Pages updates**: OS update checks now default to `https://zyntrixsolutions.github.io/okamaos-store/updates/latest.json`, matching the GitHub Pages game catalog.
+- **Version metadata**: bumped runtime, shell badge, rootfs profile, config defaults, package metadata, and library metadata to `0.9.9`.
+
 ## [0.9.8] - 2026-04-29
 
 ### Fixed

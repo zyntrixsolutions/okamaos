@@ -71,6 +71,8 @@ OkamaOS is developed in partnership with **Zyntrix Solutions**.
 
 - **Email:** team@zyntrix.solutions  
 - **Website:** https://okamaos.zyntrix.solutions
+- **Game catalog:** https://zyntrixsolutions.github.io/okamaos-store/catalog.json
+- **OS updates:** https://zyntrixsolutions.github.io/okamaos-store/updates/latest.json
 
 ## License
 

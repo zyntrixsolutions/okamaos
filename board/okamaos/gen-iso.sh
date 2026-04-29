@@ -67,7 +67,7 @@ set timeout=3
 insmod all_video
 insmod vbe
 insmod gfxterm
-set gfxmode=1280x720x32,1024x768x32,800x600x32,1024x768x16,800x600x16,auto
+set gfxmode=1024x768x32,1280x720x32,800x600x32,1024x768x16,800x600x16,auto
 terminal_output gfxterm
 
 menuentry "OkamaOS" {
@@ -77,7 +77,7 @@ menuentry "OkamaOS" {
 }
 
 menuentry "OkamaOS (safe graphics)" {
-    set gfxpayload=1024x768x32
+    set gfxpayload=800x600x32
     linux  /boot/bzImage rw quiet loglevel=0 console=ttyS0,115200 console=tty1 rdinit=/sbin/init panic=10 rd.systemd.show_status=false printk.devkmsg=off vt.global_cursor_default=0 nomodeset video=vesafb:mtrr:3
     initrd /boot/rootfs.cpio.gz
 }

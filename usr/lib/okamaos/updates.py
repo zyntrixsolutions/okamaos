@@ -8,7 +8,7 @@ Remote release manifest JSON:
   {
     "version":      "0.6.0",
     "notes":        "Bug fixes and UI improvements.",
-    "download_url": "https://store.okamaos.io/os/okamaos-0.6.0.ok-update",
+    "download_url": "https://zyntrixsolutions.github.io/okamaos-store/updates/okamaos-0.6.0.ok-update",
     "checksum":     "sha256:<hex>",
     "size_bytes":   52428800,
     "min_version":  "0.4.0"
@@ -21,13 +21,14 @@ import urllib.error
 import urllib.request
 from typing import Optional
 
-UPDATE_URL_DEFAULT = "https://store.okamaos.io/os/latest.json"
+UPDATE_URL_DEFAULT = "https://zyntrixsolutions.github.io/okamaos-store/updates/latest.json"
 FETCH_TIMEOUT = 10
 
 _VERSION_CANDIDATES = [
     "/usr/lib/okamaos/VERSION",
     "/etc/okamaos/VERSION",
-    os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", "VERSION"),
+    "/VERSION",
+    os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", "..", "VERSION"),
 ]
 
 
@@ -45,6 +46,13 @@ def current_version() -> str:
                 return v
         except FileNotFoundError:
             continue
+    try:
+        import okamaos.config as cfg_mod
+        v = cfg_mod.get().get("VERSION", "")
+        if v:
+            return v
+    except Exception:
+        pass
     return "unknown"
 
 
@@ -54,7 +62,12 @@ def fetch_release_info(url: Optional[str] = None, timeout: int = FETCH_TIMEOUT) 
     Returns a dict containing at minimum 'version' and 'download_url'.
     Raises UpdateError on network or parse failure.
     """
-    url = url or UPDATE_URL_DEFAULT
+    if url is None:
+        try:
+            import okamaos.config as cfg_mod
+            url = cfg_mod.get().get("UPDATE_URL", UPDATE_URL_DEFAULT)
+        except Exception:
+            url = UPDATE_URL_DEFAULT
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "OkamaOS/1.0"})
         with urllib.request.urlopen(req, timeout=timeout) as resp:

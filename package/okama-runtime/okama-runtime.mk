@@ -6,7 +6,7 @@
 # tree under usr/bin and usr/lib/okamaos.
 ################################################################################
 
-OKAMA_RUNTIME_VERSION = 0.9.7
+OKAMA_RUNTIME_VERSION = 0.9.9
 OKAMA_RUNTIME_SOURCE =
 # No SITE/SITE_METHOD — this is an install-only meta-package that copies files directly
 OKAMA_RUNTIME_LICENSE = Proprietary
@@ -16,6 +16,7 @@ OKAMA_RUNTIME_DEPENDENCIES = python3 python-pip sdl2
 define OKAMA_RUNTIME_INSTALL_TARGET_CMDS
 	mkdir -p $(TARGET_DIR)/usr/bin
 	mkdir -p $(TARGET_DIR)/usr/lib/okamaos
+	mkdir -p $(TARGET_DIR)/etc/okamaos
 	mkdir -p $(TARGET_DIR)/usr/share/okamaos
 	mkdir -p $(TARGET_DIR)/var/okamaos/games
 	mkdir -p $(TARGET_DIR)/var/okamaos/saves
@@ -25,6 +26,8 @@ define OKAMA_RUNTIME_INSTALL_TARGET_CMDS
 	mkdir -p $(TARGET_DIR)/var/okamaos/updates
 	cp -a $(BR2_EXTERNAL_OKAMAOS_PATH)/usr/bin/. $(TARGET_DIR)/usr/bin/
 	cp -a $(BR2_EXTERNAL_OKAMAOS_PATH)/usr/lib/okamaos/. $(TARGET_DIR)/usr/lib/okamaos/
+	cp -f $(BR2_EXTERNAL_OKAMAOS_PATH)/VERSION $(TARGET_DIR)/usr/lib/okamaos/VERSION
+	cp -f $(BR2_EXTERNAL_OKAMAOS_PATH)/VERSION $(TARGET_DIR)/etc/okamaos/VERSION
 	cp -a $(BR2_EXTERNAL_OKAMAOS_PATH)/usr/share/okamaos/. $(TARGET_DIR)/usr/share/okamaos/ 2>/dev/null || true
 	chmod 0755 $(TARGET_DIR)/usr/bin/okama-*
 	# games dir + lib must be root-owned executable

@@ -27,6 +27,10 @@ class FbWriter:
             fcntl.ioctl(probe, self.FBIOGET_VSCREENINFO, vbuf)
             self.w = struct.unpack_from("=I", vbuf, 0)[0]
             self.h = struct.unpack_from("=I", vbuf, 4)[0]
+            self.vw = struct.unpack_from("=I", vbuf, 8)[0]
+            self.vh = struct.unpack_from("=I", vbuf, 12)[0]
+            self.xoff = struct.unpack_from("=I", vbuf, 16)[0]
+            self.yoff = struct.unpack_from("=I", vbuf, 20)[0]
             self.bpp = struct.unpack_from("=I", vbuf, 24)[0]
             red_off = struct.unpack_from("=I", vbuf, 32)[0]
             red_len = struct.unpack_from("=I", vbuf, 36)[0]
@@ -62,12 +66,17 @@ class FbWriter:
 
         if self.w == 0 or self.h == 0:
             self.w, self.h = 1280, 720
+        if self.vw == 0:
+            self.vw = self.w
+        if self.vh == 0:
+            self.vh = self.h
         if self.stride == 0:
             self.stride = self.w * self.bytes_pp
 
         self._fb = open(fb_path, "rb+")
         map_len = self.mem_len or (self.stride * self.h)
         self._mm = mmap.mmap(self._fb.fileno(), map_len)
+        self._base_offset = self.yoff * self.stride + self.xoff * self.bytes_pp
         self._ok = True
 
     def _pack_rgb(self, pygame, surface) -> bytes:
@@ -100,12 +109,12 @@ class FbWriter:
             raw = self._pack_rgb(pygame, surface) if self._packed else pygame.image.tostring(surface, self._fmt)
             row_bytes = self.w * self.bytes_pp
             if self.stride == row_bytes:
-                self._mm.seek(0)
+                self._mm.seek(self._base_offset)
                 self._mm.write(raw)
             else:
                 for y in range(self.h):
                     src = y * row_bytes
-                    self._mm.seek(y * self.stride)
+                    self._mm.seek(self._base_offset + y * self.stride)
                     self._mm.write(raw[src:src + row_bytes])
         except Exception as exc:
             print(f"WARNING: framebuffer present failed: {exc}", file=sys.stderr)

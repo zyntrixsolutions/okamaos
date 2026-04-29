@@ -107,6 +107,22 @@ _EVDEV_SHIFT_CHAR_MAP = {
 
 _EVDEV_SHIFT_KEYS = {42, 54}
 _EVDEV_TEXT_CONTROL_KEYS = {1, 14, 28, 68}  # Esc, Backspace, Enter, F10
+_EVIOCGNAME = 0x80ff4506
+
+
+def _evdev_keyboard_name(path: str) -> str | None:
+    import fcntl
+    try:
+        with open(path, "rb") as fd:
+            buf = bytearray(256)
+            fcntl.ioctl(fd, _EVIOCGNAME, buf)
+            name = buf.decode(errors="replace").rstrip("\x00").strip()
+    except OSError:
+        return None
+    lowered = name.lower()
+    if "keyboard" in lowered or lowered.endswith("kbd") or "at translated set" in lowered:
+        return name
+    return None
 
 class _EvdevKeyboardReader:
     """Reads keyboard events directly from evdev when SDL can't receive input."""
@@ -116,12 +132,22 @@ class _EvdevKeyboardReader:
         self._stop = threading.Event()
         self._threads = []
         self._shift_down = False
+        self._held_codes: set = set()
+        self._started = False
 
     def start(self):
-        for path in glob.glob("/dev/input/event*"):
+        keyboards = []
+        for path in sorted(glob.glob("/dev/input/event*")):
+            name = _evdev_keyboard_name(path)
+            if name is not None:
+                legacy = "at translated set" in name.lower()
+                keyboards.append(((1 if legacy else 0, name.lower()), path))
+        for _, path in sorted(keyboards):
             t = threading.Thread(target=self._read, args=(path,), daemon=True)
             t.start()
             self._threads.append(t)
+            self._started = True
+            break
 
     def stop(self):
         self._stop.set()
@@ -137,14 +163,19 @@ class _EvdevKeyboardReader:
                     if etype != _EV_KEY:
                         continue
                     if code in _EVDEV_SHIFT_KEYS:
-                        self._shift_down = value in (_KEY_PRESS, _KEY_REPEAT)
+                        self._shift_down = value == _KEY_PRESS
                         continue
-                    if value in (_KEY_PRESS, _KEY_REPEAT):
+                    if value == _KEY_PRESS:
+                        if code in self._held_codes:
+                            continue
+                        self._held_codes.add(code)
                         self._q.put(code)
                         char_map = _EVDEV_SHIFT_CHAR_MAP if self._shift_down else _EVDEV_CHAR_MAP
                         char = char_map.get(code)
                         if char:
                             self._char_q.put(char)
+                    elif value == _KEY_RELEASE:
+                        self._held_codes.discard(code)
         except OSError:
             pass
 
@@ -2020,7 +2051,7 @@ class OkamaShell:
         self.screen.blit(brand, (bx, by))
 
         # Version badge
-        ver_txt = self.font_hint.render("v0.9.4", True, COL_DIM)
+        ver_txt = self.font_hint.render("v0.9.5", True, COL_DIM)
         self.screen.blit(ver_txt, (bx + brand.get_width() + 10,
                                    by + brand.get_height() - ver_txt.get_height() - 2))
 

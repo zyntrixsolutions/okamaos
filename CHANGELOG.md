@@ -5,6 +5,12 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.9.5] - 2026-04-29
+
+### Fixed
+- **Keyboard repeat and stuck controls**: keyboard fallback now ignores repeat spam, refreshes held keys from repeat events, auto-releases stale keys when a device misses release events, and uses a single keyboard source so menu navigation no longer skips or auto-selects and games no longer keep steering after a key is released.
+- **Version metadata**: bumped runtime, shell, rootfs profile, config defaults, and package metadata to `0.9.5`.
+
 ## [0.9.4] - 2026-04-29
 
 ### Fixed

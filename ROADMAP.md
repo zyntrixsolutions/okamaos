@@ -133,6 +133,13 @@
 - [x] Ensure `KEYBOARD_FALLBACK=yes` enables keyboard events in `okama-inputd`
 - [x] Validate QEMU keyboard events reach the input socket for launched games
 
+### v0.9.5 — Stable Keyboard Input ✅
+- [x] Ignore keyboard repeat events in shell and game input fallback paths
+- [x] Emit one keyboard press and one release per physical key transition
+- [x] Auto-release stale keyboard buttons when a device misses release events
+- [x] Use one keyboard fallback source to prevent duplicate menu/game events
+- [x] Validate QEMU keyboard press/release events through the input socket
+
 ### v1.0 — Console Polish
 - [x] Silent boot (`quiet loglevel=0`, boot log redirect) — completed in v0.3
 - [ ] Boot time < 8 seconds

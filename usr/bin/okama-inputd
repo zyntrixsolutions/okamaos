@@ -57,6 +57,8 @@ EV_KEY  = 1
 EV_ABS  = 3
 EV_MSC  = 4
 
+KEYBOARD_STALE_RELEASE_SEC = 1.0
+
 # evdev ABS axis indices
 ABS_X    = 0
 ABS_Y    = 1
@@ -288,6 +290,7 @@ class KeyboardThread(threading.Thread):
         self.broadcast = broadcast_fn
         self.disconnect_fn = disconnect_fn
         self._stop = threading.Event()
+        self._held_codes: dict = {}
 
     def run(self):
         try:
@@ -310,6 +313,7 @@ class KeyboardThread(threading.Thread):
             while not self._stop.is_set():
                 r, _, _ = select.select([fd], [], [], 0.1)
                 if not r:
+                    self._release_stale_keys()
                     continue
                 data = fd.read(EVSIZE)
                 if len(data) < EVSIZE:
@@ -320,10 +324,24 @@ class KeyboardThread(threading.Thread):
                 button = KEYBOARD_BUTTON_MAP.get(code)
                 if not button:
                     continue
+                if value == 1:
+                    if code in self._held_codes:
+                        continue
+                    self._held_codes[code] = time.monotonic()
+                    state = "pressed"
+                elif value == 2:
+                    if code in self._held_codes:
+                        self._held_codes[code] = time.monotonic()
+                    continue
+                else:
+                    if code not in self._held_codes:
+                        continue
+                    self._held_codes.pop(code, None)
+                    state = "released"
                 self.broadcast({
                     "type": "button",
                     "button": button,
-                    "state": "released" if value == 0 else "pressed",
+                    "state": state,
                     "controller": -1,
                 })
         except OSError:
@@ -343,6 +361,23 @@ class KeyboardThread(threading.Thread):
         except Exception:
             return os.path.basename(self.path)
 
+    def _release_stale_keys(self):
+        now = time.monotonic()
+        stale = [
+            code for code, seen_at in self._held_codes.items()
+            if now - seen_at >= KEYBOARD_STALE_RELEASE_SEC
+        ]
+        for code in stale:
+            self._held_codes.pop(code, None)
+            button = KEYBOARD_BUTTON_MAP.get(code)
+            if button:
+                self.broadcast({
+                    "type": "button",
+                    "button": button,
+                    "state": "released",
+                    "controller": -1,
+                })
+
     def stop(self):
         self._stop.set()
 
@@ -354,6 +389,7 @@ class InputDaemon:
         self._clients_lock = threading.Lock()
         self._controllers: dict = {}   # id -> ControllerThread
         self._keyboards: dict = {}     # path -> KeyboardThread
+        self._keyboard_active = False
         self._next_id = 0
         self._id_lock = threading.Lock()
         self._stop = threading.Event()
@@ -377,6 +413,7 @@ class InputDaemon:
 
     def _on_keyboard_disconnect(self, path: str) -> None:
         self._keyboards.pop(path, None)
+        self._keyboard_active = bool(self._keyboards)
 
     def _next_controller_id(self) -> int:
         with self._id_lock:
@@ -388,19 +425,26 @@ class InputDaemon:
         """Enumerate /dev/input/event* and start a thread per new gamepad."""
         existing_paths = {t.path for t in self._controllers.values()}
         existing_keyboards = set(self._keyboards.keys())
+        keyboard_candidates = []
         for path in sorted(glob.glob("/dev/input/event*")):
             if path in existing_paths or path in existing_keyboards:
                 continue
             if not self._is_gamepad(path):
-                if self.keyboard_fallback and self._is_keyboard(path):
-                    t = KeyboardThread(path, self.broadcast, self._on_keyboard_disconnect)
-                    self._keyboards[path] = t
-                    t.start()
+                if self.keyboard_fallback and not self._keyboard_active:
+                    name = self._keyboard_name(path)
+                    if name:
+                        keyboard_candidates.append((self._keyboard_score(name), path))
                 continue
             cid = self._next_controller_id()
             t = ControllerThread(
                 path, cid, self.broadcast, self._on_disconnect)
             self._controllers[cid] = t
+            t.start()
+        if self.keyboard_fallback and not self._keyboard_active and keyboard_candidates:
+            _, path = sorted(keyboard_candidates)[0]
+            t = KeyboardThread(path, self.broadcast, self._on_keyboard_disconnect)
+            self._keyboards[path] = t
+            self._keyboard_active = True
             t.start()
 
     def _is_gamepad(self, path: str) -> bool:
@@ -418,8 +462,8 @@ class InputDaemon:
         except Exception:
             return False
 
-    def _is_keyboard(self, path: str) -> bool:
-        """Return True for keyboard-like event devices."""
+    def _keyboard_name(self, path: str) -> str:
+        """Return the keyboard device name, or an empty string for non-keyboards."""
         import fcntl
         EVIOCGNAME = 0x80ff4506
         try:
@@ -427,9 +471,17 @@ class InputDaemon:
                 buf = bytearray(256)
                 fcntl.ioctl(fd, EVIOCGNAME, buf)
                 name = buf.decode(errors="replace").rstrip("\x00").strip().lower()
-                return "keyboard" in name or name.endswith("kbd") or "at translated set" in name
+                if "keyboard" in name or name.endswith("kbd") or "at translated set" in name:
+                    return name
         except Exception:
-            return False
+            pass
+        return ""
+
+    def _keyboard_score(self, name: str) -> tuple:
+        """Prefer external USB/HID keyboards over legacy translated PS/2 mirrors."""
+        lowered = name.lower()
+        legacy = "at translated set" in lowered
+        return (1 if legacy else 0, lowered)
 
     def run_server(self):
         if os.path.exists(SOCKET_PATH):

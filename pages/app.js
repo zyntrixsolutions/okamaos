@@ -3,17 +3,17 @@ const fallbackCatalog = {
     {
       id: "com.okamalabs.demo",
       name: "Okama Demo Game",
-      version: "0.1.0",
+      version: "0.1.1",
       runtime: "okama-sdl2",
       category: "Starter",
       status: "available",
       tagline: "The first controller-first drop for every fresh OkamaOS build.",
       description:
         "Reference demo game showing sprite movement, pause handling, save state, audio permissions, and clean return to the OkamaOS shell.",
-      download_url: "downloads/games/com.okamalabs.demo-0.1.0.ok",
-      manifest_url: "catalog/manifests/com.okamalabs.demo.json",
-      sha256: "372ded0cb3615d266b48ab80d8e33bc8ced062cab120606e00b4dfbfbd4c9cf3",
-      size_bytes: 13518,
+      download_url: "https://amakodev.github.io/okamaos_projectX/downloads/games/com.okamalabs.demo-0.1.1.ok",
+      manifest_url: "https://amakodev.github.io/okamaos_projectX/catalog/manifests/com.okamalabs.demo.json",
+      sha256: "10689ad9449d9d54bbc648e66a6b59784424757a035f8f6164479b2d4cd6ef44",
+      size_bytes: 13520,
       min_os_version: "0.1.0",
       target_fps: 30,
       featured: true
@@ -23,21 +23,21 @@ const fallbackCatalog = {
 
 const fallbackUpdates = {
   latest: {
-    version: "1.0.0",
-    codename: "First Wave",
+    version: "1.0.1",
+    codename: "First Wave Notify",
     date: "2026-04-29",
     status: "preview",
     priority: "recommended",
-    title: "V1 boot logo, branded home, and public update download",
+    title: "OS and game update notifications",
     summary:
-      "OkamaOS v1 adds a branded boot screen, replaces the home wordmark with the OkamaOS logo treatment, and publishes a downloadable update manifest from the repo.",
+      "OkamaOS now checks the public update feed and app catalog, then shows in-OS notifications when OS or installed-game updates are available.",
     notes: [
-      "Adds an early tty1 boot splash before the game shell starts.",
-      "Replaces home-screen text branding with the OkamaOS logo treatment.",
-      "Publishes a downloadable v1 .okupdate manifest from the Pages portal."
+      "Adds home-screen notifications for available OS updates.",
+      "Adds installed-game update detection against the public app catalog.",
+      "Updates okama-update check to print notices and download links."
     ],
     release_notes_url: "CHANGELOG.md",
-    download_url: "updates/okamaos-v1.0.0.okupdate",
+    download_url: "https://amakodev.github.io/okamaos_projectX/updates/okamaos-v1.0.1.okupdate",
     artifact_status: "manifest-ready"
   }
 };

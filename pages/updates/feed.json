@@ -1,26 +1,26 @@
 {
   "schema_version": "1.0",
   "channel": "public-preview",
-  "updated_at": "2026-04-29T00:00:00Z",
+  "updated_at": "2026-04-29T20:10:00Z",
   "latest": {
-    "version": "1.0.0",
-    "codename": "First Wave",
+    "version": "1.0.1",
+    "codename": "First Wave Notify",
     "date": "2026-04-29",
     "status": "preview",
     "priority": "recommended",
     "minimum_supported_version": "0.1.0",
-    "title": "V1 boot logo, branded home, and public update download",
-    "summary": "OkamaOS v1 adds a branded boot screen, replaces the home wordmark with the OkamaOS logo treatment, and publishes a downloadable update manifest from the repo.",
+    "title": "OS and game update notifications",
+    "summary": "OkamaOS now checks the public update feed and app catalog, then shows in-OS notifications when OS or installed-game updates are available.",
     "notes": [
-      "Adds an early tty1 boot splash before the game shell starts.",
-      "Replaces home-screen text branding with the OkamaOS logo treatment.",
-      "Publishes a downloadable v1 .okupdate manifest from the Pages portal."
+      "Adds home-screen notifications for available OS updates.",
+      "Adds installed-game update detection against the public app catalog.",
+      "Updates okama-update check to print the same update notices and download links."
     ],
     "release_notes_url": "CHANGELOG.md",
-    "download_url": "updates/okamaos-v1.0.0.okupdate",
+    "download_url": "https://amakodev.github.io/okamaos_projectX/updates/okamaos-v1.0.1.okupdate",
     "artifact_status": "manifest-ready",
-    "sha256": "632e3b696e370aec70fe0f4e529270cc44db8223829a6a419016526017ed462f",
-    "size_bytes": 1248
+    "sha256": "49a5d0f7db78159ae27e588e1e462888b2d08d512d69222ff1a63e5483f6dea0",
+    "size_bytes": 858
   },
   "channels": [
     {

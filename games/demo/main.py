@@ -219,7 +219,7 @@ def draw_start(surf, fonts, blink: bool):
     sub = fonts["sm"].render("Use D-pad or left stick to move", True, COL_DIM)
     surf.blit(sub, (WIDTH // 2 - sub.get_width() // 2, 400))
 
-    credit = fonts["sm"].render("OkamaLabs demo — com.okamalabs.demo  v0.1.0",
+    credit = fonts["sm"].render("OkamaLabs demo — com.okamalabs.demo  v0.1.1",
                                 True, COL_DIM)
     surf.blit(credit, (WIDTH // 2 - credit.get_width() // 2, HEIGHT - 40))
 

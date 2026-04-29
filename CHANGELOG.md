@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.0.1] - 2026-04-29
+
+### Added
+
+- Added OS update notification checks against the public update feed.
+- Added installed-game update checks against the public app catalog.
+- Added home-screen update notification banners in `okama-shell`.
+- Added update notice output to `okama-update check`.
+- Added downloadable `pages/updates/okamaos-v1.0.1.okupdate` metadata.
+- Added `0.1.1` demo game catalog/package metadata for game-update detection.
+
+### Changed
+
+- Bumped runtime and package version tracking to `1.0.1`.
+
 ## [1.0.0] - 2026-04-29
 
 ### Added

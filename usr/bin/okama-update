@@ -16,22 +16,35 @@ if not _lib:
 sys.path.insert(0, os.path.abspath(_lib))
 
 import argparse
+import okamaos.updates as updates_mod
 
-UPDATE_SERVER = "https://amakodev.github.io/okamaos_projectX/updates/feed.json"
+UPDATE_SERVER = updates_mod.DEFAULT_UPDATE_FEED_URL
 UPDATES_DIR = os.environ.get("OKAMA_UPDATES", "/var/okamaos/updates")
 
 
 def cmd_check(args):
-    print("okama-update: checking for updates… (stub)")
+    print("okama-update: checking for updates...")
     print(f"  Update server : {UPDATE_SERVER}")
-    print("  Status        : not implemented in MVP")
-    print("")
-    print("v1 design:")
-    print("  1. Download signed manifest from update feed.")
-    print("  2. Verify signature against OkamaLabs public key.")
-    print("  3. Download delta or full .okupdate bundle.")
-    print("  4. Apply to inactive A/B root partition.")
-    print("  5. Reboot into new partition; rollback on failure.")
+    notices, error = updates_mod.check_all()
+
+    if error:
+        print(f"  Warning       : {error}")
+
+    if not notices:
+        print("  Status        : no updates available")
+        return
+
+    print(f"  Status        : {len(notices)} update(s) available")
+    for notice in notices:
+        kind = "OS" if notice["type"] == "os" else "Game"
+        print("")
+        print(f"{kind}: {notice['title']}")
+        print(f"  Installed     : {notice.get('current_version', '?')}")
+        print(f"  Available     : {notice.get('version', '?')}")
+        if notice.get("summary"):
+            print(f"  Summary       : {notice['summary']}")
+        if notice.get("download_url"):
+            print(f"  Download      : {notice['download_url']}")
 
 
 def cmd_apply(args):

@@ -33,6 +33,7 @@ import subprocess
 import time
 import json
 import argparse
+import threading
 
 # ---------------------------------------------------------------------------
 # Pygame bootstrap — graceful degradation if not available
@@ -47,6 +48,7 @@ from okamaos.input_protocol import InputClient
 import okamaos.config as cfg_mod
 import okamaos.games as games_mod
 import okamaos.bluetooth as bt_mod
+import okamaos.updates as updates_mod
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -149,6 +151,9 @@ class OkamaShell:
         self.power_idx = 0
         self.message = ""
         self.message_timer = 0
+        self.update_notices = []
+        self.update_check_done = False
+        self.update_check_error = ""
 
         self.games = []
         self._refresh_games()
@@ -156,6 +161,7 @@ class OkamaShell:
         self._input_cooldown = 0
         self._axis_threshold = 0.5
         self._axis_held: dict = {}
+        self._start_update_check()
 
     def _init_fonts(self):
         pygame.font.init()
@@ -208,6 +214,19 @@ class OkamaShell:
     def _show_message(self, msg: str, duration: float = 2.5):
         self.message = msg
         self.message_timer = int(duration * FPS)
+
+    def _start_update_check(self):
+        if self.conf.get("UPDATE_CHECK_ENABLED", "yes").lower() != "yes":
+            self.update_check_done = True
+            return
+
+        def worker():
+            notices, error = updates_mod.check_all(installed=self.games)
+            self.update_notices = notices
+            self.update_check_error = error or ""
+            self.update_check_done = True
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def run(self):
         running = True
@@ -437,6 +456,44 @@ class OkamaShell:
             sub = self.font_sm.render(
                 f"{len(self.games)} game(s) installed", True, COL_DIM)
             self.screen.blit(sub, (WIDTH // 2 - sub.get_width() // 2, y + 80))
+
+        self._draw_update_notifications(y + 126)
+
+    def _draw_update_notifications(self, y: int):
+        if not self.update_check_done:
+            label = self.font_sm.render("Checking for OS and game updates...",
+                                        True, COL_DIM)
+            self.screen.blit(label, (WIDTH // 2 - label.get_width() // 2, y))
+            return
+
+        if not self.update_notices:
+            return
+
+        os_count = sum(1 for n in self.update_notices if n.get("type") == "os")
+        game_count = sum(1 for n in self.update_notices if n.get("type") == "game")
+        parts = []
+        if os_count:
+            parts.append(f"{os_count} OS")
+        if game_count:
+            parts.append(f"{game_count} game")
+        title = "Updates ready: " + " + ".join(parts)
+        first = self.update_notices[0]
+        detail = f"{first.get('name', first.get('id', 'Update'))} {first.get('version', '')}"
+        if len(self.update_notices) > 1:
+            detail += f" and {len(self.update_notices) - 1} more"
+
+        card_w, card_h = 760, 88
+        x = WIDTH // 2 - card_w // 2
+        pygame.draw.rect(self.screen, COL_CARD, (x, y, card_w, card_h),
+                         border_radius=12)
+        pygame.draw.rect(self.screen, COL_OK, (x, y, card_w, card_h), 2,
+                         border_radius=12)
+        title_surf = self.font_md.render(title, True, COL_OK)
+        detail_surf = self.font_sm.render(
+            f"{detail} available. Run okama-update check for download links.",
+            True, COL_TEXT)
+        self.screen.blit(title_surf, (x + 22, y + 15))
+        self.screen.blit(detail_surf, (x + 22, y + 52))
 
     def _draw_play(self):
         title = self.font_lg.render("Play", True, COL_ACCENT2)

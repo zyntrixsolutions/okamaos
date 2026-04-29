@@ -4,7 +4,11 @@ import os
 import re
 
 _DEFAULTS = {
-    "VERSION": "1.0.0",
+    "VERSION": "1.0.1",
+    "UPDATE_FEED_URL": "https://amakodev.github.io/okamaos_projectX/updates/feed.json",
+    "APP_CATALOG_URL": "https://amakodev.github.io/okamaos_projectX/catalog/apps.json",
+    "UPDATE_CHECK_ENABLED": "yes",
+    "UPDATE_CHECK_TIMEOUT_SEC": "2",
     "DISPLAY_MODE": "framebuffer",
     "FRAMEBUFFER_DEVICE": "/dev/fb0",
     "TARGET_FPS": "30",

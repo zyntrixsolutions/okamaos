@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "type": "okamaos-update-manifest",
+  "version": "1.0.1",
+  "codename": "First Wave Notify",
+  "channel": "public-preview",
+  "date": "2026-04-29",
+  "minimum_supported_version": "1.0.0",
+  "summary": "Adds OS and installed-game update notifications in the OkamaOS shell and update CLI.",
+  "changes": [
+    "Check the public OS update feed for newer OkamaOS releases.",
+    "Check the public app catalog for newer versions of installed games.",
+    "Show update notifications on the shell home screen without blocking startup.",
+    "Print update notices and download links from okama-update check."
+  ],
+  "install_status": "manual-preview",
+  "download_note": "Current okama-update apply support is still a stub. This file is the public v1.0.1 update manifest and download target for the repository-hosted update channel."
+}

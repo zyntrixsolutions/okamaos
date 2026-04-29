@@ -9,6 +9,8 @@
 - [x] Add Pages deployment automation.
 - [x] Publish a downloadable v1 `.okupdate` manifest from the repo.
 - [x] Add branded boot and home logo treatment for v1.
+- [x] Add in-OS notifications for OS updates.
+- [x] Add in-OS notifications for installed game updates.
 - [ ] Attach production OS image artifacts to GitHub Releases and update `pages/updates/feed.json` with signed asset URLs and hashes.
 - [ ] Add creator submission workflow for community `.ok` game drops.
 - [ ] Wire in-OS store/update clients to the public catalog and update feed URLs.

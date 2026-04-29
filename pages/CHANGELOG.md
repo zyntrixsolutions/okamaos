@@ -1,5 +1,11 @@
 # OkamaOS Portal Changelog
 
+## 2026-04-29 - First Wave Notify
+
+- Added a downloadable `okamaos-v1.0.1.okupdate` manifest to the public update channel.
+- Updated the feed with OS and game update notification release notes.
+- Updated the demo game catalog entry to `0.1.1` so installed `0.1.0` demo games can receive update notices.
+
 ## 2026-04-29 - First Wave v1
 
 - Added a downloadable `okamaos-v1.0.0.okupdate` manifest to the public update channel.

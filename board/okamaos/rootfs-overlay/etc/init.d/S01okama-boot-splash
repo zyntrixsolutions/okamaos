@@ -14,7 +14,7 @@ case "$1" in
         else
           printf 'OkamaOS\n'
         fi
-        printf '\n  Booting OkamaOS 1.0.0 First Wave\n'
+        printf '\n  Booting OkamaOS 1.0.1 First Wave Notify\n'
         printf '  Controller-first game shell loading...\n'
       } > "$TTY"
     fi

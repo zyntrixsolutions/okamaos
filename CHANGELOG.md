@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.3] - 2026-04-29
+
+### Added
+
+- Added `okama-install` for installing a live OkamaOS system to a local hard drive or VM disk.
+- Added destructive-write safeguards with disk listing, root-disk refusal, dry-run checks, and typed confirmation.
+- Added hard-drive boot packaging for the installer kernel, Extlinux installer, Syslinux MBR, and `ldlinux.c32` assets.
+- Added hard-drive installer documentation for device and QEMU workflows.
+
+### Changed
+
+- Bumped runtime and package version tracking to `1.0.3`.
+
 ## [1.0.2] - 2026-04-29
 
 ### Added

@@ -118,6 +118,16 @@
 - [x] Align README, build guide, profile, and shell launcher `PYTHONPATH` examples with the runtime import path
 - [x] Preserve `/var/run` and `/var/okamaos` runtime paths for the built OkamaOS image
 
+### v0.9.3 — Console Runtime Readiness ✅
+- [x] Add shared pygame display helper with framebuffer presentation fallback
+- [x] Update preinstalled games and demo to render through the display helper
+- [x] Stop forcing unavailable `kmsdrm` in `okama-run`
+- [x] Fix target pygame font library resolution and runner subprocess paths/env
+- [x] Broadcast keyboard fallback events through `okama-inputd` for offscreen game control
+- [x] Run reliable `udhcpc` DHCP on every wired interface and enable QEMU user networking
+- [x] Include CA certificates for HTTPS store/update requests
+- [x] Resync rootfs overlay during incremental post-builds
+
 ### v1.0 — Console Polish
 - [x] Silent boot (`quiet loglevel=0`, boot log redirect) — completed in v0.3
 - [ ] Boot time < 8 seconds

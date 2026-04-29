@@ -95,6 +95,30 @@ BUTTON_MAP = {
     0x13e: "R3",
 }
 
+KEYBOARD_BUTTON_MAP = {
+    103: "DPAD_UP",     # KEY_UP
+    108: "DPAD_DOWN",   # KEY_DOWN
+    105: "DPAD_LEFT",   # KEY_LEFT
+    106: "DPAD_RIGHT",  # KEY_RIGHT
+    17: "DPAD_UP",      # KEY_W
+    31: "DPAD_DOWN",    # KEY_S
+    30: "DPAD_LEFT",    # KEY_A
+    32: "DPAD_RIGHT",   # KEY_D
+    28: "A",            # KEY_ENTER
+    57: "A",            # KEY_SPACE
+    44: "A",            # KEY_Z
+    1: "B",             # KEY_ESC
+    14: "B",            # KEY_BACKSPACE
+    45: "X",            # KEY_X
+    35: "X",            # KEY_H
+    21: "Y",            # KEY_Y
+    19: "Y",            # KEY_R
+    25: "START",        # KEY_P
+    102: "START",       # KEY_HOME
+    15: "RB",           # KEY_TAB
+    16: "QUIT",         # KEY_Q
+}
+
 AXIS_MAP = {
     ABS_X:    ("LSTICK_X", False),
     ABS_Y:    ("LSTICK_Y", True),
@@ -257,15 +281,83 @@ class ControllerThread(threading.Thread):
         self._stop.set()
 
 
+class KeyboardThread(threading.Thread):
+    def __init__(self, path: str, broadcast_fn, disconnect_fn):
+        super().__init__(daemon=True)
+        self.path = path
+        self.broadcast = broadcast_fn
+        self.disconnect_fn = disconnect_fn
+        self._stop = threading.Event()
+
+    def run(self):
+        try:
+            fd = open(self.path, "rb")
+        except (PermissionError, FileNotFoundError) as e:
+            log.warning("Cannot open keyboard %s: %s", self.path, e)
+            return
+
+        name = self._read_name(fd)
+        log.info("Keyboard fallback connected: %s (%s)", name, self.path)
+        self.broadcast({
+            "type": "connect",
+            "controller": -1,
+            "name": name,
+            "bus": "keyboard",
+            "path": self.path,
+        })
+
+        try:
+            while not self._stop.is_set():
+                r, _, _ = select.select([fd], [], [], 0.1)
+                if not r:
+                    continue
+                data = fd.read(EVSIZE)
+                if len(data) < EVSIZE:
+                    break
+                _, _, ev_type, code, value = struct.unpack(EVFMT, data)
+                if ev_type != EV_KEY or value not in (0, 1, 2):
+                    continue
+                button = KEYBOARD_BUTTON_MAP.get(code)
+                if not button:
+                    continue
+                self.broadcast({
+                    "type": "button",
+                    "button": button,
+                    "state": "released" if value == 0 else "pressed",
+                    "controller": -1,
+                })
+        except OSError:
+            pass
+        finally:
+            fd.close()
+            self.broadcast({"type": "disconnect", "controller": -1})
+            self.disconnect_fn(self.path)
+
+    def _read_name(self, fd) -> str:
+        import fcntl
+        EVIOCGNAME = 0x80ff4506
+        buf = bytearray(256)
+        try:
+            fcntl.ioctl(fd, EVIOCGNAME, buf)
+            return buf.decode(errors="replace").rstrip("\x00").strip()
+        except Exception:
+            return os.path.basename(self.path)
+
+    def stop(self):
+        self._stop.set()
+
+
 class InputDaemon:
     def __init__(self, dev_mode: bool = False):
         self.dev_mode = dev_mode
         self._clients: list = []
         self._clients_lock = threading.Lock()
         self._controllers: dict = {}   # id -> ControllerThread
+        self._keyboards: dict = {}     # path -> KeyboardThread
         self._next_id = 0
         self._id_lock = threading.Lock()
         self._stop = threading.Event()
+        self.keyboard_fallback = cfg_mod.get().get("KEYBOARD_FALLBACK", "yes") == "yes"
 
     def broadcast(self, event: dict) -> None:
         line = (json.dumps(event) + "\n").encode()
@@ -283,6 +375,9 @@ class InputDaemon:
         with self._id_lock:
             self._controllers.pop(controller_id, None)
 
+    def _on_keyboard_disconnect(self, path: str) -> None:
+        self._keyboards.pop(path, None)
+
     def _next_controller_id(self) -> int:
         with self._id_lock:
             cid = self._next_id
@@ -292,10 +387,15 @@ class InputDaemon:
     def _scan_devices(self):
         """Enumerate /dev/input/event* and start a thread per new gamepad."""
         existing_paths = {t.path for t in self._controllers.values()}
+        existing_keyboards = set(self._keyboards.keys())
         for path in sorted(glob.glob("/dev/input/event*")):
-            if path in existing_paths:
+            if path in existing_paths or path in existing_keyboards:
                 continue
             if not self._is_gamepad(path):
+                if self.keyboard_fallback and self._is_keyboard(path):
+                    t = KeyboardThread(path, self.broadcast, self._on_keyboard_disconnect)
+                    self._keyboards[path] = t
+                    t.start()
                 continue
             cid = self._next_controller_id()
             t = ControllerThread(
@@ -315,6 +415,19 @@ class InputDaemon:
                 fcntl.ioctl(fd, EVIOCGBIT_EV, buf)
                 bits = struct.unpack("<I", buf)[0]
                 return bool(bits & EV_ABS_bit) and bool(bits & EV_KEY_bit)
+        except Exception:
+            return False
+
+    def _is_keyboard(self, path: str) -> bool:
+        """Return True for keyboard-like event devices."""
+        import fcntl
+        EVIOCGNAME = 0x80ff4506
+        try:
+            with open(path, "rb") as fd:
+                buf = bytearray(256)
+                fcntl.ioctl(fd, EVIOCGNAME, buf)
+                name = buf.decode(errors="replace").rstrip("\x00").strip().lower()
+                return "keyboard" in name or name.endswith("kbd") or "at translated set" in name
         except Exception:
             return False
 

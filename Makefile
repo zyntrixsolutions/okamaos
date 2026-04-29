@@ -68,6 +68,7 @@ okamaos-run-qemu:
 	    -kernel $(QEMU_KERNEL) \
 	    -drive file=$(QEMU_ROOTFS),if=virtio,format=raw \
 	    -append "root=/dev/vda rw quiet loglevel=0 console=tty1" \
+	    -nic user,model=virtio-net-pci \
 	    -device usb-ehci -device usb-kbd -device usb-mouse \
 	    -vga std -serial mon:stdio
 

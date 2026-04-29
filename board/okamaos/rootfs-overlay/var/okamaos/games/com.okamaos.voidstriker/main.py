@@ -43,6 +43,8 @@ except ImportError:
     time.sleep(2)
     sys.exit(0)
 
+from okamaos.display import open_display
+
 try:
     from okamaos.input_protocol import InputClient
     _HAS_IC = True
@@ -942,13 +944,13 @@ def main():
         flags = 0
     
     try:
-        screen = pygame.display.set_mode((W, H), flags)
+        screen, display = open_display(pygame, W, H, flags,
+                                       caption="VOID STRIKER — OkamaOS")
     except Exception as e:
         print(f"pygame.display.set_mode() failed: {e}", file=sys.stderr)
         print(f"SDL_VIDEODRIVER: {os.environ.get('SDL_VIDEODRIVER', 'not set')}", file=sys.stderr)
         sys.exit(1)
     
-    pygame.display.set_caption("VOID STRIKER — OkamaOS")
     pygame.mouse.set_visible(False)
     # Force window focus on desktop systems
     if flags == 0:
@@ -1151,8 +1153,9 @@ def main():
             draw_gameover(canvas, fonts, score, hi_score, new_hi)
 
         screen.blit(canvas, off)
-        pygame.display.flip()
+        display.flip(screen)
 
+    display.close()
     pygame.quit()
     sys.exit(0)
 

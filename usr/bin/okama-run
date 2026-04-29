@@ -84,6 +84,42 @@ SUSPEND_SERVICES = [
 ]
 
 
+def _path_list(value: str) -> list:
+    paths = []
+    for part in value.split(os.pathsep):
+        if not part:
+            continue
+        paths.append(part if os.path.isabs(part) else os.path.abspath(part))
+    return paths
+
+
+def _dedupe_paths(paths: list) -> list:
+    result = []
+    seen = set()
+    for path in paths:
+        if path and path not in seen:
+            seen.add(path)
+            result.append(path)
+    return result
+
+
+def _python_executable() -> str:
+    for candidate in (sys.executable, shutil.which("python3"), shutil.which("python"), "/usr/bin/python3"):
+        if candidate and os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return os.path.abspath(candidate)
+    return sys.executable or "python3"
+
+
+def _pygame_lib_dirs() -> list:
+    version = f"python{sys.version_info.major}.{sys.version_info.minor}"
+    candidates = [
+        os.environ.get("OKAMA_PYGAME_LIBS", ""),
+        os.path.join(sys.prefix, "lib", version, "site-packages", "pygame.libs"),
+        os.path.join("/usr/lib", version, "site-packages", "pygame.libs"),
+    ]
+    return [path for path in candidates if path and os.path.isdir(path)]
+
+
 def acquire_lock(game_id: str) -> None:
     if os.path.exists(LOCK_FILE):
         with open(LOCK_FILE) as f:
@@ -127,7 +163,7 @@ def build_launch_cmd(manifest: dict, game_dir: str) -> list:
         return [venv_python, entry]
 
     if runtime in ("okama-lite", "okama-python", "okama-sdl2"):
-        return [sys.executable, entry]
+        return [_python_executable(), entry]
     else:
         raise ValueError(f"Unknown runtime: {runtime}")
 
@@ -183,19 +219,33 @@ def main():
     bundled_sp = os.path.join(game_dir, "site-packages")
     if os.path.isdir(bundled_sp):
         python_path_parts.insert(0, bundled_sp)
-    env["PYTHONPATH"] = os.pathsep.join(python_path_parts)
+    python_path_parts.extend(_path_list(env.get("PYTHONPATH", "")))
+    env["PYTHONPATH"] = os.pathsep.join(_dedupe_paths(python_path_parts))
 
     bundled_lib = os.path.join(game_dir, "lib")
+    ld_paths = _pygame_lib_dirs() + _path_list(env.get("LD_LIBRARY_PATH", ""))
     if os.path.isdir(bundled_lib):
-        existing = env.get("LD_LIBRARY_PATH", "")
-        env["LD_LIBRARY_PATH"] = (bundled_lib + os.pathsep + existing).rstrip(os.pathsep)
-    # SDL2 has no fbcon backend; use kmsdrm (DRM) or offscreen + FbWriter fallback
+        ld_paths.insert(0, bundled_lib)
+    if ld_paths:
+        env["LD_LIBRARY_PATH"] = os.pathsep.join(_dedupe_paths(ld_paths))
+    # SDL2's bundled pygame wheel often lacks kmsdrm. Prefer host windows when
+    # available, otherwise use offscreen and let okamaos.display copy frames to
+    # the framebuffer.
     fb_dev = conf.get("FRAMEBUFFER_DEVICE", "/dev/fb0")
-    if os.path.exists("/dev/dri/card0") or os.path.exists("/dev/dri/card1"):
-        env["SDL_VIDEODRIVER"] = "kmsdrm"
-    else:
+    env["OKAMA_FRAMEBUFFER_DEVICE"] = fb_dev
+    if env.get("OKAMA_SDL_VIDEODRIVER"):
+        env["SDL_VIDEODRIVER"] = env["OKAMA_SDL_VIDEODRIVER"]
+    elif env.get("SDL_VIDEODRIVER"):
+        pass
+    elif env.get("DISPLAY"):
+        env["SDL_VIDEODRIVER"] = "x11"
+    elif env.get("WAYLAND_DISPLAY"):
+        env["SDL_VIDEODRIVER"] = "wayland"
+    elif os.path.exists(fb_dev):
         env["SDL_VIDEODRIVER"] = "offscreen"
         env["SDL_FBDEV"] = fb_dev
+    elif os.path.exists("/dev/dri/card0") or os.path.exists("/dev/dri/card1"):
+        env["SDL_VIDEODRIVER"] = "kmsdrm"
     env["SDL_AUDIODRIVER"] = "alsa"
 
     # Performance hardening for games

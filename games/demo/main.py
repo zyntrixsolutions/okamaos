@@ -26,6 +26,7 @@ except ImportError:
     sys.exit(0)
 
 from okamaos.input_protocol import InputClient
+from okamaos.display import open_display
 
 # ---------------------------------------------------------------------------
 # Config
@@ -276,12 +277,10 @@ def draw_pause(surf, fonts, menu_idx: int):
 # ---------------------------------------------------------------------------
 def main():
     pygame.init()
-    pygame.display.set_caption(TITLE)
-
     flags = pygame.FULLSCREEN | pygame.NOFRAME
     if "--windowed" in sys.argv:
         flags = 0
-    screen = pygame.display.set_mode((WIDTH, HEIGHT), flags)
+    screen, display = open_display(pygame, WIDTH, HEIGHT, flags, caption=TITLE)
     pygame.mouse.set_visible(False)
     clock = pygame.time.Clock()
 
@@ -369,9 +368,10 @@ def main():
             draw_play(screen, fonts, player, score)
             draw_pause(screen, fonts, pause_idx)
 
-        pygame.display.flip()
+        display.flip(screen)
         clock.tick(FPS)
 
+    display.close()
     pygame.quit()
     sys.exit(0)
 

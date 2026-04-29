@@ -32,21 +32,27 @@ if [ -n "$PYVER" ] && [ ! -d "$SITE/pygame" ]; then
         cp -r /tmp/pg-whl-extract/pygame "$SITE/" 2>/dev/null || true
         # Keep pygame.libs (needed by pygame .so RPATH for SDL2, SDL2_image, SDL2_mixer)
         cp -r /tmp/pg-whl-extract/pygame.libs "$SITE/" 2>/dev/null || true
-        # Replace bundled (ELF-misaligned) libSDL2_ttf with a symlink to the
-        # system Buildroot-built libSDL2_ttf — same ABI, page-aligned
-        rm -f "$SITE/pygame.libs/libSDL2_ttf"*.so* 2>/dev/null || true
-        ln -sf /usr/lib/libSDL2_ttf-2.0.so.0 \
-            "$SITE/pygame.libs/libSDL2_ttf-2-e6bdbc24.0.so.0.2000.1" 2>/dev/null || true
         rm -rf /tmp/pg-whl-extract /tmp/pygame-wheel-dl
         echo ">> pygame installed from $WHL"
     else
         echo ">> WARNING: pygame wheel download failed, skipping"
     fi
 fi
+if [ -d "$SITE/pygame.libs" ]; then
+    # Replace bundled (ELF-misaligned) libSDL2_ttf with a relative symlink to
+    # the system Buildroot-built libSDL2_ttf.  The relative link works both in
+    # the installed image and in output/target runtime smoke tests.
+    rm -f "$SITE/pygame.libs/libSDL2_ttf"*.so* 2>/dev/null || true
+    ln -sf ../../../libSDL2_ttf-2.0.so.0 \
+        "$SITE/pygame.libs/libSDL2_ttf-2-e6bdbc24.0.so.0.2000.1" 2>/dev/null || true
+fi
 
 # Sync okama-* binaries and libs from source tree into target
 # (Buildroot overlay only runs at first build; this ensures every build gets latest)
 REPO_DIR="$(dirname "$(readlink -f "$0")")/../.."
+if [ -d "$REPO_DIR/board/okamaos/rootfs-overlay" ]; then
+    cp -a "$REPO_DIR/board/okamaos/rootfs-overlay"/. "$TARGET_DIR"/ 2>/dev/null || true
+fi
 if [ -d "$REPO_DIR/usr/bin" ]; then
     cp -a "$REPO_DIR/usr/bin"/okama-* "$TARGET_DIR/usr/bin/" 2>/dev/null || true
 fi

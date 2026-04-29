@@ -42,6 +42,8 @@ except ImportError as e:
     print(f"ERROR: pygame not available: {e}", file=sys.stderr)
     sys.exit(1)
 
+from okamaos.display import open_display
+
 try:
     from okamaos.input_protocol import InputClient
     _HAS_INPUT_CLIENT = True
@@ -430,8 +432,9 @@ class DriveInput:
 # ══════════════════════════════════════════════════════════════════════════════
 
 class Game:
-    def __init__(self, screen, seed=None):
+    def __init__(self, screen, display, seed=None):
         self.screen    = screen
+        self.display   = display
         self._inp      = DriveInput()
         self.cam       = Camera()
         self.show_help = False
@@ -489,7 +492,7 @@ class Game:
                 npc.tick()
             self.cam.follow(self.player.x, self.player.y)
             self._draw()
-            pygame.display.flip()
+            self.display.flip(self.screen)
             clock.tick(TARGET_FPS)
 
     def _draw(self):
@@ -532,17 +535,18 @@ def main():
                 pass
 
     pygame.init()
-    pygame.display.set_caption("PGDrive — OkamaOS")
 
     flags = pygame.FULLSCREEN | pygame.NOFRAME
     if "--windowed" in sys.argv:
         flags = 0
-    screen = pygame.display.set_mode((WIDTH, HEIGHT), flags)
+    screen, display = open_display(pygame, WIDTH, HEIGHT, flags,
+                                   caption="PGDrive — OkamaOS")
     pygame.mouse.set_visible(False)
 
-    game = Game(screen, seed=seed)
+    game = Game(screen, display, seed=seed)
     game.run()
 
+    display.close()
     pygame.quit()
     sys.exit(0)
 

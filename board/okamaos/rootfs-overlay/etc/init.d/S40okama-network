@@ -11,19 +11,37 @@ if [ -f "$CONF" ]; then
     WIFI_ENABLED=$(grep '^WIFI_ENABLED='   "$CONF" | cut -d= -f2 | tr -d '[:space:]')
 fi
 
+start_dhcp() {
+    iface="$1"
+    if command -v udhcpc >/dev/null 2>&1; then
+        udhcpc -b -i "$iface" 2>/dev/null && return 0
+    fi
+    dhcpcd -b "$iface" 2>/dev/null || true
+}
+
 case "$1" in
   start)
     if [ "$NET_ENABLED" = "yes" ]; then
-        echo "Starting network (DHCP on eth0)..."
+        echo "Starting network (DHCP on available wired interfaces)..."
         ifconfig lo up 2>/dev/null || ip link set lo up 2>/dev/null || true
-        # Try wired DHCP; errors are non-fatal (no cable is okay)
-        dhcpcd -b eth0 2>/dev/null || udhcpc -b -i eth0 2>/dev/null || true
+        for iface_path in /sys/class/net/*; do
+            iface="$(basename "$iface_path")"
+            [ "$iface" = "lo" ] && continue
+            [ -d "$iface_path/wireless" ] && continue
+            [ "$(cat "$iface_path/type" 2>/dev/null)" = "1" ] || continue
+            echo "Starting DHCP on $iface..."
+            ifconfig "$iface" up 2>/dev/null || ip link set "$iface" up 2>/dev/null || true
+            start_dhcp "$iface"
+        done
 
         if [ "$WIFI_ENABLED" = "yes" ]; then
-            echo "Starting wpa_supplicant (WiFi)..."
-            # TODO(v1): read ssid/psk from /etc/okamaos/wifi.conf
-            wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf 2>/dev/null || true
-            dhcpcd -b wlan0 2>/dev/null || udhcpc -b -i wlan0 2>/dev/null || true
+            for iface_path in /sys/class/net/*; do
+                iface="$(basename "$iface_path")"
+                [ -d "$iface_path/wireless" ] || continue
+                echo "Starting wpa_supplicant and DHCP on $iface..."
+                wpa_supplicant -B -i "$iface" -c /etc/wpa_supplicant.conf 2>/dev/null || true
+                start_dhcp "$iface"
+            done
         fi
     else
         echo "Network disabled — skipping."

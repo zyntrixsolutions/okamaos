@@ -5,6 +5,25 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.9.3] - 2026-04-29
+
+### Added
+- **Game framebuffer display helper**: added `okamaos.display.open_display()` so pygame games can fall back from unavailable KMSDRM to SDL offscreen rendering with direct `/dev/fb0` presentation.
+- **Keyboard fallback through `okama-inputd`**: keyboard devices now broadcast Okama button events when `KEYBOARD_FALLBACK=yes`, keeping games playable when SDL offscreen cannot emit keyboard events.
+
+### Fixed
+- **VM/console game launch**: `okama-run` no longer forces `kmsdrm` just because `/dev/dri/card0` exists; it now prefers host windows, then framebuffer-backed offscreen rendering, and keeps explicit driver overrides.
+- **Preinstalled game rendering**: PGDrive, VOID STRIKER, and the demo game now use the shared display helper and present frames correctly on framebuffer-only consoles.
+- **Target pygame font loading**: the pygame TTF shim now uses a relative symlink to Buildroot's SDL2_ttf library, so target-runtime checks and the installed image resolve fonts consistently.
+- **Runner subprocess environment**: `okama-run` now resolves a real Python executable even when Buildroot leaves `sys.executable` empty, injects Pygame's bundled SDL library directory for child games, preserves inherited Python paths, and normalizes path lists before changing into the game directory.
+- **Network startup**: wired DHCP now runs against every non-loopback, non-wireless interface, skips pseudo devices, and prefers BusyBox `udhcpc` so QEMU/console boots receive IPv4 routes reliably; WiFi startup scans all wireless interfaces when enabled.
+- **QEMU networking**: the QEMU run target now attaches a virtio user-network device so the console has an internet path in local VM runs.
+
+### Changed
+- Version metadata updated to `0.9.3` across the root `VERSION`, runtime package version, shell badge, config defaults, rootfs profile, and OkamaOS library metadata.
+- Buildroot defconfig now includes CA certificates for HTTPS-backed store/update requests.
+- Post-build synchronization now reapplies the rootfs overlay so preinstalled games, init scripts, and profile changes are refreshed in incremental builds.
+
 ## [0.9.2] - 2026-04-29
 
 ### Fixed

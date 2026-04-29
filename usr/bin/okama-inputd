@@ -57,7 +57,7 @@ EV_KEY  = 1
 EV_ABS  = 3
 EV_MSC  = 4
 
-KEYBOARD_STALE_RELEASE_SEC = 1.0
+KEYBOARD_STALE_RELEASE_SEC = 0.30
 
 # evdev ABS axis indices
 ABS_X    = 0

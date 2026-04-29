@@ -5,6 +5,13 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.9.6] - 2026-04-29
+
+### Fixed
+- **Shell keyboard double input**: `okama-shell` now ignores `okama-inputd` keyboard fallback events (`controller == -1`) because the shell already reads keyboard directly through SDL/evdev, preventing menu skips and accidental auto-selection.
+- **Game key release latency**: shortened stale keyboard auto-release timing so launched games recover quickly when an evdev device misses a release event.
+- **Version metadata**: bumped runtime, shell, rootfs profile, config defaults, and package metadata to `0.9.6`.
+
 ## [0.9.5] - 2026-04-29
 
 ### Fixed

@@ -140,6 +140,13 @@
 - [x] Use one keyboard fallback source to prevent duplicate menu/game events
 - [x] Validate QEMU keyboard press/release events through the input socket
 
+### v0.9.6 — Clean Keyboard Routing ✅
+- [x] Keep shell keyboard handling on its direct SDL/evdev path
+- [x] Ignore `okama-inputd` keyboard fallback events in shell menus
+- [x] Preserve daemon keyboard fallback events for launched games
+- [x] Shorten stale game key release timing for missed release events
+- [x] Validate shell ignores daemon keyboard events while games still receive them
+
 ### v1.0 — Console Polish
 - [x] Silent boot (`quiet loglevel=0`, boot log redirect) — completed in v0.3
 - [ ] Boot time < 8 seconds

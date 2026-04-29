@@ -539,6 +539,11 @@ class OkamaShell:
 
         # Controller events from okama-inputd
         for ev in self.input_client.poll():
+            # Keyboard fallback events are for launched games. The shell has
+            # its own SDL/evdev keyboard path, so consuming controller -1 here
+            # double-triggers menu navigation and selection.
+            if ev.get("controller") == -1:
+                continue
             if ev.get("type") == "button" and ev.get("state") == "pressed":
                 events.append({"src": "controller", "action": ev["button"]})
             elif ev.get("type") == "axis":
@@ -2051,7 +2056,7 @@ class OkamaShell:
         self.screen.blit(brand, (bx, by))
 
         # Version badge
-        ver_txt = self.font_hint.render("v0.9.5", True, COL_DIM)
+        ver_txt = self.font_hint.render("v0.9.6", True, COL_DIM)
         self.screen.blit(ver_txt, (bx + brand.get_width() + 10,
                                    by + brand.get_height() - ver_txt.get_height() - 2))
 

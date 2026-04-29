@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""okama-update — OTA update manager (MVP: stubbed, design documented).
+"""okama-update — OkamaOS system update manager.
 
 Usage:
   okama-update check
-  okama-update apply <path.okupdate>
+  okama-update apply [--dry-run] <path-or-url.okupdate>
   okama-update rollback
 """
 
@@ -16,10 +16,47 @@ if not _lib:
 sys.path.insert(0, os.path.abspath(_lib))
 
 import argparse
+import datetime as _dt
+import json
+import posixpath
+import shutil
+import tarfile
+import tempfile
+import urllib.parse
+import urllib.request
+
 import okamaos.updates as updates_mod
+import okamaos.config as cfg_mod
 
 UPDATE_SERVER = updates_mod.DEFAULT_UPDATE_FEED_URL
 UPDATES_DIR = os.environ.get("OKAMA_UPDATES", "/var/okamaos/updates")
+UPDATE_ROOT = os.environ.get("OKAMA_UPDATE_ROOT", "/")
+
+PRESERVED_PATHS = (
+    "/var/okamaos/games",
+    "/var/okamaos/saves",
+    "/var/okamaos/logs",
+    "/var/okamaos/cache",
+    "/var/okamaos/controllers",
+    "/var/okamaos/updates",
+    "/etc/okamaos/parent.conf",
+    "/etc/okamaos/devmode.conf",
+)
+
+ALLOWED_FILE_PREFIXES = (
+    "/usr/bin/okama-",
+    "/usr/lib/okamaos/",
+    "/usr/share/okamaos/",
+    "/etc/init.d/S",
+)
+
+ALLOWED_FILE_EXACT = (
+    "/etc/profile",
+)
+
+MERGE_CONFIG_PATHS = (
+    "/etc/okamaos/okama.conf",
+)
 
 
 def cmd_check(args):
@@ -48,18 +85,294 @@ def cmd_check(args):
 
 
 def cmd_apply(args):
-    path = args.update_file
-    if not os.path.exists(path):
-        print(f"ERROR: file not found: {path}", file=sys.stderr)
+    try:
+        update_path = _resolve_update_file(args.update_file)
+        summary = _apply_bundle(update_path, dry_run=args.dry_run)
+    except Exception as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
         sys.exit(1)
-    print(f"okama-update: applying {path}… (stub)")
-    print("  Full OTA apply not implemented in MVP.")
-    print("  v1 path: tar-extract signed bundle over inactive partition.")
+
+    action = "would update" if args.dry_run else "updated"
+    print(f"okama-update: {action} OkamaOS to {summary['version']}")
+    print(f"  Files         : {len(summary['files'])}")
+    print(f"  Config merges : {len(summary['configs'])}")
+    if summary.get("backup_dir"):
+        print(f"  Backup        : {summary['backup_dir']}")
+    if summary.get("requires_reboot"):
+        print("  Reboot        : required to finish the system update")
 
 
 def cmd_rollback(args):
-    print("okama-update: rollback… (stub)")
-    print("  v1 path: switch active boot slot to previous, reboot.")
+    try:
+        backup_dir = _latest_backup_dir()
+        restored = _restore_backup(backup_dir)
+    except Exception as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    print("okama-update: rollback complete")
+    print(f"  Backup   : {backup_dir}")
+    print(f"  Restored : {restored} file(s)")
+    print("  Reboot   : recommended")
+
+
+def _resolve_update_file(source: str) -> str:
+    if source.startswith(("http://", "https://")):
+        downloads_dir = _data_path(os.path.join(UPDATES_DIR, "downloads"))
+        os.makedirs(downloads_dir, exist_ok=True)
+        name = os.path.basename(urllib.parse.urlparse(source).path) or "update.okupdate"
+        dest = os.path.join(downloads_dir, name)
+        urllib.request.urlretrieve(source, dest)
+        return dest
+    if not os.path.exists(source):
+        raise FileNotFoundError(f"file not found: {source}")
+    return source
+
+
+def _apply_bundle(path: str, dry_run: bool = False) -> dict:
+    with tempfile.TemporaryDirectory(prefix="okama-update-") as tmp:
+        try:
+            with tarfile.open(path, "r:*") as tf:
+                _safe_extract(tf, tmp)
+        except tarfile.TarError:
+            raise ValueError("not an installable .okupdate bundle")
+
+        manifest_path = os.path.join(tmp, "manifest.okupdate.json")
+        if not os.path.exists(manifest_path):
+            raise ValueError("missing manifest.okupdate.json in update bundle")
+        with open(manifest_path) as f:
+            manifest = json.load(f)
+
+        if manifest.get("type") != "okamaos-system-update":
+            raise ValueError("update bundle is not an OkamaOS system update")
+
+        overlay_root = os.path.join(tmp, manifest.get("overlay_root", "files"))
+        files = _collect_overlay_files(overlay_root)
+        configs = manifest.get("config_merges", [])
+        _validate_targets(files, configs)
+
+        backup_dir = ""
+        summary = {
+            "version": manifest.get("version", "unknown"),
+            "files": files,
+            "configs": configs,
+            "requires_reboot": bool(manifest.get("requires_reboot", True)),
+        }
+        if dry_run:
+            return summary
+
+        backup_dir = _make_backup_dir(manifest)
+        _backup_targets(files, configs, backup_dir)
+        _install_files(overlay_root, files)
+        _merge_configs(configs)
+        _write_history(manifest, files, configs, backup_dir)
+        summary["backup_dir"] = backup_dir
+        return summary
+
+
+def _safe_extract(tf: tarfile.TarFile, dest: str) -> None:
+    dest_abs = os.path.abspath(dest)
+    for member in tf.getmembers():
+        name = member.name
+        if name.startswith("/") or ".." in name.split("/"):
+            raise ValueError(f"unsafe update path: {name}")
+        target = os.path.abspath(os.path.join(dest_abs, name))
+        if not target.startswith(dest_abs + os.sep) and target != dest_abs:
+            raise ValueError(f"unsafe update path: {name}")
+        if member.islnk() or member.issym():
+            raise ValueError(f"links are not allowed in updates: {name}")
+
+    for member in tf.getmembers():
+        target = os.path.abspath(os.path.join(dest_abs, member.name))
+        if member.isdir():
+            os.makedirs(target, exist_ok=True)
+        elif member.isfile():
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            src = tf.extractfile(member)
+            if src is None:
+                raise ValueError(f"cannot read update file: {member.name}")
+            with src, open(target, "wb") as out:
+                shutil.copyfileobj(src, out)
+            os.chmod(target, member.mode & 0o777)
+        else:
+            raise ValueError(f"unsupported update entry: {member.name}")
+
+
+def _collect_overlay_files(overlay_root: str) -> list:
+    if not os.path.isdir(overlay_root):
+        return []
+    files = []
+    for root, _, names in os.walk(overlay_root):
+        for name in names:
+            src = os.path.join(root, name)
+            rel = os.path.relpath(src, overlay_root)
+            target = "/" + rel.replace(os.sep, "/")
+            files.append({"source": rel, "target": target})
+    return sorted(files, key=lambda item: item["target"])
+
+
+def _validate_targets(files: list, configs: list) -> None:
+    for item in files:
+        target = _clean_target(item["target"])
+        if _is_preserved_path(target):
+            raise ValueError(f"update refuses to overwrite preserved data: {target}")
+        if not _is_allowed_file_target(target):
+            raise ValueError(f"update target is not allowed: {target}")
+        item["target"] = target
+
+    for item in configs:
+        path = _clean_target(item.get("path", ""))
+        if path not in MERGE_CONFIG_PATHS:
+            raise ValueError(f"config merge target is not allowed: {path}")
+        item["path"] = path
+
+
+def _clean_target(path: str) -> str:
+    if not path:
+        raise ValueError("empty update target")
+    clean = posixpath.normpath("/" + path.lstrip("/"))
+    if clean == "/" or clean.startswith("/../"):
+        raise ValueError(f"unsafe update target: {path}")
+    return clean
+
+
+def _is_preserved_path(path: str) -> bool:
+    return any(path == p or path.startswith(p + "/") for p in PRESERVED_PATHS)
+
+
+def _is_allowed_file_target(path: str) -> bool:
+    return path in ALLOWED_FILE_EXACT or any(path.startswith(p) for p in ALLOWED_FILE_PREFIXES)
+
+
+def _root_path(path: str) -> str:
+    return os.path.join(UPDATE_ROOT, path.lstrip("/"))
+
+
+def _data_path(path: str) -> str:
+    if UPDATE_ROOT == "/" or not os.path.isabs(path):
+        return path
+
+    root_abs = os.path.abspath(UPDATE_ROOT)
+    path_abs = os.path.abspath(path)
+    if path_abs == root_abs or path_abs.startswith(root_abs + os.sep):
+        return path
+    return _root_path(path)
+
+
+def _make_backup_dir(manifest: dict) -> str:
+    version = manifest.get("version", "unknown")
+    stamp = _dt.datetime.now(_dt.UTC).strftime("%Y%m%dT%H%M%SZ")
+    base = _data_path(cfg_mod.get().get(
+        "UPDATE_BACKUP_DIR", os.path.join(UPDATES_DIR, "backups")))
+    path = os.path.join(base, f"{stamp}-{version}")
+    os.makedirs(path, exist_ok=False)
+    return path
+
+
+def _backup_targets(files: list, configs: list, backup_dir: str) -> None:
+    entries = []
+    targets = [item["target"] for item in files] + [item["path"] for item in configs]
+    for target in sorted(set(targets)):
+        src = _root_path(target)
+        rel = target.lstrip("/")
+        backup_path = os.path.join(backup_dir, "files", rel)
+        existed = os.path.exists(src)
+        if existed:
+            os.makedirs(os.path.dirname(backup_path), exist_ok=True)
+            shutil.copy2(src, backup_path)
+        entries.append({"target": target, "existed": existed})
+
+    with open(os.path.join(backup_dir, "backup.json"), "w") as f:
+        json.dump({"entries": entries}, f, indent=2)
+
+
+def _install_files(overlay_root: str, files: list) -> None:
+    for item in files:
+        src = os.path.join(overlay_root, item["source"])
+        dest = _root_path(item["target"])
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        shutil.copy2(src, dest)
+        if item["target"].startswith("/usr/bin/") or "/init.d/" in item["target"]:
+            os.chmod(dest, 0o755)
+
+
+def _merge_configs(configs: list) -> None:
+    for item in configs:
+        path = _root_path(item["path"])
+        data = _read_kv(path)
+        data.update(item.get("set", {}))
+        for key, value in item.get("defaults", {}).items():
+            data.setdefault(key, value)
+        _write_kv(path, data)
+
+
+def _read_kv(path: str) -> dict:
+    data = {}
+    try:
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                data[key] = value
+    except FileNotFoundError:
+        pass
+    return data
+
+
+def _write_kv(path: str, data: dict) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        for key in sorted(data):
+            f.write(f"{key}={data[key]}\n")
+
+
+def _write_history(manifest: dict, files: list, configs: list, backup_dir: str) -> None:
+    history_dir = _data_path(cfg_mod.get().get(
+        "UPDATE_HISTORY_DIR", os.path.join(UPDATES_DIR, "history")))
+    os.makedirs(history_dir, exist_ok=True)
+    version = manifest.get("version", "unknown")
+    with open(os.path.join(history_dir, f"{version}.json"), "w") as f:
+        json.dump({
+            "version": version,
+            "applied_at": _dt.datetime.now(_dt.UTC).isoformat(),
+            "backup_dir": backup_dir,
+            "files": files,
+            "configs": configs,
+        }, f, indent=2)
+
+
+def _latest_backup_dir() -> str:
+    base = _data_path(cfg_mod.get().get(
+        "UPDATE_BACKUP_DIR", os.path.join(UPDATES_DIR, "backups")))
+    try:
+        names = sorted(n for n in os.listdir(base) if os.path.isdir(os.path.join(base, n)))
+    except FileNotFoundError:
+        names = []
+    if not names:
+        raise FileNotFoundError("no update backups available")
+    return os.path.join(base, names[-1])
+
+
+def _restore_backup(backup_dir: str) -> int:
+    manifest_path = os.path.join(backup_dir, "backup.json")
+    with open(manifest_path) as f:
+        manifest = json.load(f)
+
+    restored = 0
+    for entry in manifest.get("entries", []):
+        target = _clean_target(entry["target"])
+        dest = _root_path(target)
+        backup_file = os.path.join(backup_dir, "files", target.lstrip("/"))
+        if entry.get("existed"):
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            shutil.copy2(backup_file, dest)
+            restored += 1
+        elif os.path.exists(dest):
+            os.remove(dest)
+            restored += 1
+    return restored
 
 
 def main():
@@ -70,6 +383,7 @@ def main():
     sub.add_parser("check")
 
     pa = sub.add_parser("apply")
+    pa.add_argument("--dry-run", action="store_true")
     pa.add_argument("update_file")
 
     sub.add_parser("rollback")

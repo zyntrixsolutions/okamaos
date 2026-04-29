@@ -28,7 +28,9 @@ mkdir -p "$TARGET_DIR/var/okamaos/games" \
          "$TARGET_DIR/var/okamaos/logs" \
          "$TARGET_DIR/var/okamaos/cache" \
          "$TARGET_DIR/var/okamaos/controllers" \
-         "$TARGET_DIR/var/okamaos/updates"
+         "$TARGET_DIR/var/okamaos/updates" \
+         "$TARGET_DIR/var/okamaos/updates/backups" \
+         "$TARGET_DIR/var/okamaos/updates/history"
 
 # Quiet boot: silence motd and issue file in normal mode
 echo "OkamaOS" > "$TARGET_DIR/etc/issue"

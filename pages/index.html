@@ -46,7 +46,7 @@
         <div class="hero-panel" aria-label="Launch status">
           <div>
             <span class="panel-label">Build</span>
-            <strong>1.0.1 First Wave Notify</strong>
+            <strong>1.0.2 Safe System Update</strong>
           </div>
           <div>
             <span class="panel-label">Catalog</span>
@@ -146,24 +146,24 @@
           </div>
           <div class="update-card" id="updateCard" aria-live="polite">
             <span class="status-pill">recommended</span>
-            <h3>1.0.1 First Wave Notify</h3>
+            <h3>1.0.2 Safe System Update</h3>
             <p>
-              OkamaOS now checks the public update feed and app catalog, then
-              shows in-OS notifications when OS or installed-game updates are
-              available.
+              OkamaOS can now apply repo-hosted system update bundles that
+              replace CLI, shell, runtime, and brand files while preserving
+              games, saves, settings, and update backups.
             </p>
             <div class="card-meta">
               <span>2026-04-29</span>
               <span>preview</span>
-              <span>manifest-ready</span>
+              <span>bundle-ready</span>
             </div>
             <ul class="update-list">
-              <li>Adds home-screen notifications for available OS updates.</li>
-              <li>Adds installed-game update detection against the public app catalog.</li>
-              <li>Updates okama-update check to print notices and download links.</li>
+              <li>Adds real okama-update apply support for .okupdate system bundles.</li>
+              <li>Backs up replaced system files before applying an update.</li>
+              <li>Preserves games, saves, controllers, logs, cache, and local config.</li>
             </ul>
             <div class="download-row">
-              <a class="button primary" href="updates/okamaos-v1.0.1.okupdate" download>Download v1 update</a>
+              <a class="button primary" href="updates/okamaos-v1.0.2.okupdate" download>Download v1 update</a>
               <a class="button secondary" href="CHANGELOG.md">Release notes</a>
             </div>
           </div>

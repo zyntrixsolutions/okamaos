@@ -10,8 +10,8 @@ const fallbackCatalog = {
       tagline: "The first controller-first drop for every fresh OkamaOS build.",
       description:
         "Reference demo game showing sprite movement, pause handling, save state, audio permissions, and clean return to the OkamaOS shell.",
-      download_url: "https://amakodev.github.io/okamaos_projectX/downloads/games/com.okamalabs.demo-0.1.1.ok",
-      manifest_url: "https://amakodev.github.io/okamaos_projectX/catalog/manifests/com.okamalabs.demo.json",
+      download_url: "https://zyntrixsolutions.github.io/okamaos/downloads/games/com.okamalabs.demo-0.1.1.ok",
+      manifest_url: "https://zyntrixsolutions.github.io/okamaos/catalog/manifests/com.okamalabs.demo.json",
       sha256: "10689ad9449d9d54bbc648e66a6b59784424757a035f8f6164479b2d4cd6ef44",
       size_bytes: 13520,
       min_os_version: "0.1.0",
@@ -23,22 +23,22 @@ const fallbackCatalog = {
 
 const fallbackUpdates = {
   latest: {
-    version: "1.0.1",
-    codename: "First Wave Notify",
+    version: "1.0.2",
+    codename: "Safe System Update",
     date: "2026-04-29",
     status: "preview",
     priority: "recommended",
-    title: "OS and game update notifications",
+    title: "Safe system updates with data preservation",
     summary:
-      "OkamaOS now checks the public update feed and app catalog, then shows in-OS notifications when OS or installed-game updates are available.",
+      "OkamaOS can now apply repo-hosted system update bundles that replace CLI, shell, runtime, and brand files while preserving games, saves, settings, and update backups.",
     notes: [
-      "Adds home-screen notifications for available OS updates.",
-      "Adds installed-game update detection against the public app catalog.",
-      "Updates okama-update check to print notices and download links."
+      "Adds real okama-update apply support for .okupdate system bundles.",
+      "Backs up replaced system files before applying an update.",
+      "Preserves games, saves, controllers, logs, cache, and local config."
     ],
     release_notes_url: "CHANGELOG.md",
-    download_url: "https://amakodev.github.io/okamaos_projectX/updates/okamaos-v1.0.1.okupdate",
-    artifact_status: "manifest-ready"
+    download_url: "https://zyntrixsolutions.github.io/okamaos/updates/okamaos-v1.0.2.okupdate",
+    artifact_status: "bundle-ready"
   }
 };
 

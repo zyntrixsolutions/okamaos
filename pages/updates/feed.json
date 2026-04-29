@@ -1,26 +1,26 @@
 {
   "schema_version": "1.0",
   "channel": "public-preview",
-  "updated_at": "2026-04-29T20:10:00Z",
+  "updated_at": "2026-04-29T20:45:00Z",
   "latest": {
-    "version": "1.0.1",
-    "codename": "First Wave Notify",
+    "version": "1.0.2",
+    "codename": "Safe System Update",
     "date": "2026-04-29",
     "status": "preview",
     "priority": "recommended",
     "minimum_supported_version": "0.1.0",
-    "title": "OS and game update notifications",
-    "summary": "OkamaOS now checks the public update feed and app catalog, then shows in-OS notifications when OS or installed-game updates are available.",
+    "title": "Safe system updates with data preservation",
+    "summary": "OkamaOS can now apply repo-hosted system update bundles that replace CLI, shell, runtime, and brand files while preserving games, saves, settings, and update backups.",
     "notes": [
-      "Adds home-screen notifications for available OS updates.",
-      "Adds installed-game update detection against the public app catalog.",
-      "Updates okama-update check to print the same update notices and download links."
+      "Adds real okama-update apply support for .okupdate system bundles.",
+      "Backs up replaced system files before applying an update.",
+      "Preserves games, saves, controllers, logs, cache, update history, and parent/developer config."
     ],
     "release_notes_url": "CHANGELOG.md",
-    "download_url": "https://amakodev.github.io/okamaos_projectX/updates/okamaos-v1.0.1.okupdate",
-    "artifact_status": "manifest-ready",
-    "sha256": "49a5d0f7db78159ae27e588e1e462888b2d08d512d69222ff1a63e5483f6dea0",
-    "size_bytes": 858
+    "download_url": "https://zyntrixsolutions.github.io/okamaos/updates/okamaos-v1.0.2.okupdate",
+    "artifact_status": "bundle-ready",
+    "sha256": "87f43425884332a6e5e2bac2cd69b6c4d59efd53368e0fe43de2cde8ad6cfceb",
+    "size_bytes": 28107
   },
   "channels": [
     {

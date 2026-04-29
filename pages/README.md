@@ -41,10 +41,11 @@ GitHub Releases and set `download_url` to the release asset.
 
 ## Update feed
 
-`updates/feed.json` describes the public update channel. Small preview
-manifests can live in `updates/` as `.okupdate` files. OS images should ship
-through GitHub Releases; this feed should point to the release page or exact
-asset URL and include `sha256` when artifacts are final.
+`updates/feed.json` describes the public update channel. Installable
+`.okupdate` bundles live in `updates/` and can replace OkamaOS runtime files
+while preserving user data. OS images can still ship through GitHub Releases;
+this feed should point to the exact asset URL and include `sha256` plus byte
+size when artifacts are final.
 
-Current builds can use the feed as a human-readable update source now and a
-machine-readable contract later.
+Current builds can use the feed as both a human-readable update source and a
+machine-readable update contract.

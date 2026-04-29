@@ -5,7 +5,7 @@ partnership with **OkamaLabs**. OkamaOS boots straight into a fullscreen
 controller-driven shell, runs one game at a time, and is designed to feel like
 a dedicated console — not a PC.
 
-> Version: **1.0.1 First Wave Notify**. Public download and update portal files live in
+> Version: **1.0.2 Safe System Update**. Public download and update portal files live in
 > `pages/` and deploy through GitHub Pages.
 
 > Status: **MVP foundation**. Buildable rootfs overlay, working CLI tooling,

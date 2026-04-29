@@ -1,5 +1,11 @@
 # OkamaOS Portal Changelog
 
+## 2026-04-29 - Safe System Update
+
+- Published a real `okamaos-v1.0.2.okupdate` system update bundle.
+- Updated the feed to point at an installable runtime update artifact.
+- Added safe-upgrade notes for preserving games, saves, settings, and update history.
+
 ## 2026-04-29 - First Wave Notify
 
 - Added a downloadable `okamaos-v1.0.1.okupdate` manifest to the public update channel.

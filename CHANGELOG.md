@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.0.2] - 2026-04-29
+
+### Added
+
+- Added real `.okupdate` bundle apply support for system/runtime files.
+- Added safe update backups under `/var/okamaos/updates/backups`.
+- Added rollback support for the latest system update backup.
+- Added preserved-data guards for games, saves, logs, cache, controllers, update history, and parent/developer config.
+- Added an update bundle builder for publishing repo-hosted system updates.
+- Added a downloadable `pages/updates/okamaos-v1.0.2.okupdate` system update bundle.
+
+### Changed
+
+- Bumped runtime and package version tracking to `1.0.2`.
+- Updated the public feed to point at an installable system update bundle instead of metadata-only update notes.
+
 ## [1.0.1] - 2026-04-29
 
 ### Added

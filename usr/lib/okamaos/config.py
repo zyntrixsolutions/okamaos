@@ -4,11 +4,13 @@ import os
 import re
 
 _DEFAULTS = {
-    "VERSION": "1.0.1",
-    "UPDATE_FEED_URL": "https://amakodev.github.io/okamaos_projectX/updates/feed.json",
-    "APP_CATALOG_URL": "https://amakodev.github.io/okamaos_projectX/catalog/apps.json",
+    "VERSION": "1.0.2",
+    "UPDATE_FEED_URL": "https://zyntrixsolutions.github.io/okamaos/updates/feed.json",
+    "APP_CATALOG_URL": "https://zyntrixsolutions.github.io/okamaos/catalog/apps.json",
     "UPDATE_CHECK_ENABLED": "yes",
     "UPDATE_CHECK_TIMEOUT_SEC": "2",
+    "UPDATE_BACKUP_DIR": "/var/okamaos/updates/backups",
+    "UPDATE_HISTORY_DIR": "/var/okamaos/updates/history",
     "DISPLAY_MODE": "framebuffer",
     "FRAMEBUFFER_DEVICE": "/dev/fb0",
     "TARGET_FPS": "30",

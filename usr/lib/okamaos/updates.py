@@ -8,8 +8,8 @@ import okamaos.config as cfg_mod
 import okamaos.games as games_mod
 
 
-DEFAULT_UPDATE_FEED_URL = "https://amakodev.github.io/okamaos_projectX/updates/feed.json"
-DEFAULT_APP_CATALOG_URL = "https://amakodev.github.io/okamaos_projectX/catalog/apps.json"
+DEFAULT_UPDATE_FEED_URL = "https://zyntrixsolutions.github.io/okamaos/updates/feed.json"
+DEFAULT_APP_CATALOG_URL = "https://zyntrixsolutions.github.io/okamaos/catalog/apps.json"
 
 
 def version_tuple(version: str) -> tuple:

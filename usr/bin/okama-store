@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.abspath(_lib))
 
 import argparse
 
-STORE_URL = "https://store.okamalabs.com/v1"
+STORE_URL = "https://zyntrixsolutions.github.io/okamaos-store/catalog.json"
 
 
 def _stub(name: str) -> None:

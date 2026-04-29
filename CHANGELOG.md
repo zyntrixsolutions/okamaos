@@ -5,6 +5,17 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.9.8] - 2026-04-29
+
+### Fixed
+- **Network status detection**: Settings > Network now shows actual connectivity status (Online/Local/Limited/No IP/Offline) instead of just interface state; uses ping and route checks to verify internet connectivity.
+
+### Changed
+- **Game Store URL**: Default catalog and download URLs now point to GitHub Pages at `zyntrixsolutions.github.io/okamaos-store/` instead of `store.okamaos.io`.
+
+### Added
+- **Technical Partner Info**: Added Zyntrix Solutions contact information (team@zyntrix.solutions, https://okamaos.zyntrix.solutions) to README.md.
+
 ## [0.9.7] - 2026-04-29
 
 ### Added

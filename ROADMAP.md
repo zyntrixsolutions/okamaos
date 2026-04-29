@@ -157,6 +157,13 @@
 - [x] Refresh the shell/default theme with Okama-red cyberpunk visuals and cyan secondary accents
 - [x] Bump version metadata to `0.9.7`
 
+### v0.9.8 — Network & Store Polish ✅
+- [x] Fix network status detection to show actual connectivity (Online/Local/Limited/No IP/Offline)
+- [x] Add connectivity check via ping and route verification in Settings > Network
+- [x] Update Game Store URL to zyntrixsolutions.github.io GitHub Pages
+- [x] Add Zyntrix Solutions technical partner contact information
+- [x] Bump version metadata to `0.9.8`
+
 ### v1.0 — Console Polish
 - [x] Silent boot (`quiet loglevel=0`, boot log redirect) — completed in v0.3
 - [ ] Boot time < 8 seconds

@@ -1143,11 +1143,11 @@ class OkamaShell:
                 m = _re.match(r"^\d+: (\S+):.*state (\S+)", line)
                 if m:
                     iface = m.group(1)
-                    state = m.group(2)
+                    admin_state = m.group(2)
                     if iface == "lo":
                         continue
                     typ = "wireless" if "wlan" in iface or "wlp" in iface else "wired"
-                    lines.append({"iface": iface, "state": state, "type": typ})
+                    lines.append({"iface": iface, "admin_state": admin_state, "type": typ})
                 m2 = _re.match(r"^\s+inet (\S+)", line)
                 if m2 and iface and iface != "lo":
                     if lines:
@@ -1158,9 +1158,61 @@ class OkamaShell:
                         lines[-1]["ip6"] = m3.group(1)
         except Exception as e:
             lines.append({"iface": "error", "state": "down", "type": "info", "label": f"Error: {e}"})
+            return lines
+
+        # Determine actual connectivity status for each interface
+        for item in lines:
+            has_ip = bool(item.get("ip") or item.get("ip6"))
+            admin_up = item.get("admin_state", "").upper() == "UP"
+
+            if not admin_up:
+                item["state"] = "down"
+                item["status"] = "Offline"
+            elif has_ip:
+                # Check actual internet connectivity
+                item["state"] = "up"
+                item["status"] = self._check_connectivity()
+            else:
+                item["state"] = "up"
+                item["status"] = "No IP"
+
         if not lines:
             lines.append({"iface": "none", "state": "down", "type": "info", "label": "No interfaces found"})
         return lines
+
+    def _check_connectivity(self) -> str:
+        """Check if we have actual internet connectivity. Returns status string."""
+        # Try to ping a reliable host (Google DNS)
+        try:
+            result = subprocess.run(
+                ["ping", "-c", "1", "-W", "2", "8.8.8.8"],
+                capture_output=True, timeout=5
+            )
+            if result.returncode == 0:
+                return "Online"
+        except Exception:
+            pass
+
+        # Fallback: try to reach a common website via curl/wget
+        try:
+            result = subprocess.run(
+                ["wget", "-q", "--timeout=3", "--tries=1", "-O", "-", "https://1.1.1.1"],
+                capture_output=True, timeout=5
+            )
+            if result.returncode == 0:
+                return "Online"
+        except Exception:
+            pass
+
+        # Check if we have a default route
+        try:
+            result = subprocess.run(["ip", "route"], capture_output=True, text=True, timeout=2)
+            if "default" in result.stdout:
+                return "Local"
+        except Exception:
+            pass
+
+        return "Limited"
 
     def _settings_network_input(self, action: str, ev: dict = None):
         n = max(len(self.net_info), 1)
@@ -1348,8 +1400,11 @@ class OkamaShell:
             typ = item.get("type", "")
             iface = item.get("iface", "?")
             state = item.get("state", "?")
+            status = item.get("status", "")
             ip = item.get("ip", "")
-            lbl_text = f"{iface}  [{state}]"
+            # Show interface, state, and connectivity status
+            status_display = status if status else state
+            lbl_text = f"{iface}  [{status_display}]"
             if ip:
                 lbl_text += f"  {ip}"
             lbl = self.font_mdb.render(lbl_text, True, COL_TEXT if is_sel else COL_TEXT2)
@@ -1541,7 +1596,7 @@ class OkamaShell:
         self.store_idx = 0
         self.store_scroll = 0
         if not self.store_catalog:
-            self.store_status = "Press Y to fetch catalog from store.okamaos.io"
+            self.store_status = "Press Y to fetch catalog from zyntrixsolutions.github.io"
         self.state = "game_store"
 
     def _fetch_store_catalog(self):
@@ -2066,7 +2121,7 @@ class OkamaShell:
         self.screen.blit(brand, (bx, by))
 
         # Version badge
-        ver_txt = self.font_hint.render("v0.9.7", True, COL_DIM)
+        ver_txt = self.font_hint.render("v0.9.8", True, COL_DIM)
         self.screen.blit(ver_txt, (bx + brand.get_width() + 10,
                                    by + brand.get_height() - ver_txt.get_height() - 2))
 

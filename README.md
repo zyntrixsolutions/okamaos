@@ -65,6 +65,13 @@ See the tree in `docs/architecture.md`. Key directories:
 Always **OkamaOS** / **OkamaLabs**. The string `akama` (without the leading "Ok")
 must never appear. `make naming-check` enforces this in CI.
 
+## Technical Partner
+
+OkamaOS is developed in partnership with **Zyntrix Solutions**.
+
+- **Email:** team@zyntrix.solutions  
+- **Website:** https://okamaos.zyntrix.solutions
+
 ## License
 
 TBD by OkamaLabs. Treat as proprietary until specified.

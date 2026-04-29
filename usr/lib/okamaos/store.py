@@ -2,6 +2,7 @@
 
 Fetches a JSON catalog from the OkamaOS store server and downloads .ok packages.
 The catalog URL can be overridden in okama.conf via the STORE_URL key.
+Default catalog is hosted on GitHub Pages (zyntrixsolutions organization).
 
 Catalog JSON format:
   {
@@ -13,7 +14,7 @@ Catalog JSON format:
         "version":      "1.0.0",
         "description":  "A short description.",
         "size_bytes":   5242880,
-        "download_url": "https://store.okamaos.io/packages/demo.ok",
+        "download_url": "https://zyntrixsolutions.github.io/okamaos-store/packages/demo.ok",
         "checksum":     "sha256:<hex>",
         "category":     "demo",
         "age_rating":   "Everyone"
@@ -30,7 +31,7 @@ import urllib.error
 import urllib.request
 from typing import Callable, Optional
 
-CATALOG_URL_DEFAULT = "https://store.okamaos.io/catalog.json"
+CATALOG_URL_DEFAULT = "https://zyntrixsolutions.github.io/okamaos-store/catalog.json"
 DOWNLOAD_TIMEOUT = 60  # seconds
 FETCH_TIMEOUT = 10     # seconds
 

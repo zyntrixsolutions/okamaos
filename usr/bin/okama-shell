@@ -231,29 +231,29 @@ except ImportError:
 WIDTH, HEIGHT = 1280, 720
 FPS = 60
 
-# -- Color palette (ultra-dark futuristic cyber theme) --
-COL_BG         = (3,    4,   12)
-COL_BG2        = (7,    8,   22)
-COL_ACCENT     = (0,  190, 255)
-COL_ACCENT2    = (40, 215, 255)
-COL_ACCENT_HOT = (110, 240, 255)
-COL_TEXT       = (215, 235, 255)
-COL_TEXT2      = (145, 180, 215)
-COL_DIM        = (62,   90, 130)
-COL_SELECTED   = (0,    52, 100)
-COL_SEL_HOVER  = (0,    68, 120)
-COL_CARD       = (7,    11,  26)
-COL_CARD_HOV   = (13,   19,  42)
-COL_BORDER     = (0,   108, 175)
-COL_WARN       = (255, 165,  20)
-COL_OK         = (0,   220,  90)
+# -- Color palette (Okama-red cyberpunk theme) --
+COL_BG         = (2,    3,   10)
+COL_BG2        = (10,   8,   20)
+COL_ACCENT     = (255,  36,  72)
+COL_ACCENT2    = (255,  72, 104)
+COL_ACCENT_HOT = (255, 130, 145)
+COL_TEXT       = (232, 240, 255)
+COL_TEXT2      = (160, 190, 220)
+COL_DIM        = (78,   98, 130)
+COL_SELECTED   = (82,    8,  28)
+COL_SEL_HOVER  = (110,  14,  38)
+COL_CARD       = (8,    10,  24)
+COL_CARD_HOV   = (18,   16,  36)
+COL_BORDER     = (185,  26,  58)
+COL_WARN       = (255, 184,  42)
+COL_OK         = (0,   220, 110)
 COL_ERROR      = (255,  40,  80)
-COL_PLAY       = (0,   210,  80)
-COL_POWER      = (240,  30,  70)
-COL_SETTINGS   = (0,   185, 255)
-COL_STORE      = (175,  55, 255)
-COL_UPDATE     = (255, 185,  30)
-COL_DEV        = (255,  50, 170)
+COL_PLAY       = (255,  40,  80)
+COL_POWER      = (255,  78,  90)
+COL_SETTINGS   = (0,   205, 255)
+COL_STORE      = (178,  80, 255)
+COL_UPDATE     = (255, 195,  35)
+COL_DEV        = (255,  60, 180)
 
 SECTIONS = ["Play", "Settings", "Power"]
 SECTION_ICONS = [">", "*", "O"]
@@ -462,7 +462,7 @@ class OkamaShell:
         self._build_bg()
 
     def _build_bg(self):
-        """Pre-render a subtle gradient background."""
+        """Pre-render the cyber grid background."""
         surf = pygame.Surface((WIDTH, HEIGHT))
         for y in range(HEIGHT):
             t = y / HEIGHT
@@ -470,6 +470,16 @@ class OkamaShell:
             g = int(COL_BG[1] + (COL_BG2[1]-COL_BG[1]) * t)
             b = int(COL_BG[2] + (COL_BG2[2]-COL_BG[2]) * t)
             pygame.draw.line(surf, (r, g, b), (0, y), (WIDTH, y))
+        grid = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        for x in range(0, WIDTH, 64):
+            pygame.draw.line(grid, (*COL_ACCENT, 22), (x, 0), (x, HEIGHT), 1)
+        for y in range(56, HEIGHT, 48):
+            pygame.draw.line(grid, (0, 205, 255, 18), (0, y), (WIDTH, y), 1)
+        for y in range(0, HEIGHT, 6):
+            pygame.draw.line(grid, (255, 255, 255, 5), (0, y), (WIDTH, y), 1)
+        pygame.draw.line(grid, (*COL_ACCENT, 42), (0, HEIGHT - 130), (WIDTH, 90), 2)
+        pygame.draw.line(grid, (0, 205, 255, 34), (0, HEIGHT - 70), (WIDTH, 150), 1)
+        surf.blit(grid, (0, 0))
         self._bg_surf = surf
 
     def _init_fonts(self):
@@ -2056,7 +2066,7 @@ class OkamaShell:
         self.screen.blit(brand, (bx, by))
 
         # Version badge
-        ver_txt = self.font_hint.render("v0.9.6", True, COL_DIM)
+        ver_txt = self.font_hint.render("v0.9.7", True, COL_DIM)
         self.screen.blit(ver_txt, (bx + brand.get_width() + 10,
                                    by + brand.get_height() - ver_txt.get_height() - 2))
 
@@ -2077,7 +2087,7 @@ class OkamaShell:
                 card_col = COL_CARD_HOV
             else:
                 card_col = COL_CARD
-            pygame.draw.rect(self.screen, card_col, r, border_radius=16)
+            pygame.draw.rect(self.screen, card_col, r, border_radius=8)
 
             # Selected: colored top bar
             if is_sel:
@@ -2086,7 +2096,7 @@ class OkamaShell:
 
             # Border
             border_col = col if is_sel else (COL_BORDER if is_hov else (30, 28, 55))
-            pygame.draw.rect(self.screen, border_col, r, 2, border_radius=16)
+            pygame.draw.rect(self.screen, border_col, r, 2, border_radius=8)
 
             # Icon
             icon_surf = self.font_icon.render(icon, True, col if is_sel else COL_DIM)
@@ -2391,34 +2401,75 @@ class FbWriter:
             self.w   = _struct.unpack_from("=I", vbuf,  0)[0]
             self.h   = _struct.unpack_from("=I", vbuf,  4)[0]
             self.bpp = _struct.unpack_from("=I", vbuf, 24)[0]
-            red_off  = _struct.unpack_from("=I", vbuf, 32)[0]
-            blue_off = _struct.unpack_from("=I", vbuf, 48)[0]
+            red_off   = _struct.unpack_from("=I", vbuf, 32)[0]
+            red_len   = _struct.unpack_from("=I", vbuf, 36)[0]
+            green_off = _struct.unpack_from("=I", vbuf, 40)[0]
+            green_len = _struct.unpack_from("=I", vbuf, 44)[0]
+            blue_off  = _struct.unpack_from("=I", vbuf, 48)[0]
+            blue_len  = _struct.unpack_from("=I", vbuf, 52)[0]
 
             # --- fixed screen info (68 bytes) ---
             # struct fb_fix_screeninfo:
             #   0-15  id[16]
+            #  20    smem_len
             #  32    line_length (smem_line_length)
             fbuf = bytearray(68)
             _fcntl.ioctl(_probe, self.FBIOGET_FSCREENINFO, fbuf)
+            self.mem_len = _struct.unpack_from("=I", fbuf, 20)[0]
             self.stride = _struct.unpack_from("=I", fbuf, 32)[0]
 
         # Determine pygame pixel-format string from hardware channel order
+        self.bytes_pp = max(1, self.bpp // 8)
         if self.bpp == 32:
             self._fmt = "BGRX" if blue_off == 0 else "RGBX"
+            self._packed = False
         elif self.bpp == 24:
             self._fmt = "BGR" if blue_off == 0 else "RGB"
-        else:
+            self._packed = False
+        elif self.bpp in (15, 16):
+            if not (red_len and green_len and blue_len):
+                red_len, green_len, blue_len = (5, 6, 5) if self.bpp == 16 else (5, 5, 5)
             self._fmt = "RGB"
+            self._packed = True
+            self._chan = (
+                (red_off, red_len, 8 - red_len),
+                (green_off, green_len, 8 - green_len),
+                (blue_off, blue_len, 8 - blue_len),
+            )
+        else:
+            raise RuntimeError(f"unsupported framebuffer depth: {self.bpp} bpp")
 
         # Fall back to safe values if ioctl returned zeros
         if self.w == 0 or self.h == 0:
             self.w, self.h = WIDTH, HEIGHT
         if self.stride == 0:
-            self.stride = self.w * (self.bpp // 8)
+            self.stride = self.w * self.bytes_pp
 
         self._fb = open(fb_path, "rb+")
-        self._mm = _mmap.mmap(self._fb.fileno(), self.stride * self.h)
+        map_len = self.mem_len or (self.stride * self.h)
+        self._mm = _mmap.mmap(self._fb.fileno(), map_len)
         self._ok = True
+
+    def _pack_rgb(self, surface):
+        raw = pygame.image.tostring(surface, "RGB")
+        out = bytearray(self.w * self.h * self.bytes_pp)
+        red, green, blue = self._chan
+        ri = 0
+        oi = 0
+        for _ in range(self.w * self.h):
+            pixel = 0
+            for value, channel in ((raw[ri], red), (raw[ri + 1], green), (raw[ri + 2], blue)):
+                off, bits, drop = channel
+                if drop >= 0:
+                    value >>= drop
+                else:
+                    value <<= -drop
+                pixel |= (value & ((1 << bits) - 1)) << off
+            for byte_idx in range(self.bytes_pp):
+                out[oi + byte_idx] = (pixel >> (byte_idx * 8)) & 0xff
+            ri += 3
+            oi += self.bytes_pp
+        return bytes(out)
 
     def present(self, surface):
         if not self._ok:
@@ -2426,8 +2477,8 @@ class FbWriter:
         try:
             if (surface.get_width(), surface.get_height()) != (self.w, self.h):
                 surface = pygame.transform.scale(surface, (self.w, self.h))
-            raw = pygame.image.tostring(surface, self._fmt)
-            row_bytes = self.w * (self.bpp // 8)
+            raw = self._pack_rgb(surface) if self._packed else pygame.image.tostring(surface, self._fmt)
+            row_bytes = self.w * self.bytes_pp
             if self.stride == row_bytes:
                 # Fast path: framebuffer rows are tightly packed
                 self._mm.seek(0)
@@ -2468,6 +2519,7 @@ def main():
         return
 
     os.environ.setdefault("SDL_AUDIODRIVER", "alsa")
+    os.environ.setdefault("SDL_RENDER_DRIVER", "software")
 
     if args.windowed:
         os.environ["SDL_VIDEODRIVER"] = "x11"  # dev host
@@ -2476,13 +2528,14 @@ def main():
         shell.run()
         return
 
-    # On bare-metal/VM Linux with no X11/Wayland we try three backends in order:
-    #  1. kmsdrm  — cleanest; uses /dev/dri/card0 directly (DRM_BOCHS / DRM_VIRTIO)
-    #  2. offscreen + FbWriter — renders to memory then blits to /dev/fb0
-    #  3. text fallback
+    # On bare-metal/VM Linux with no X11/Wayland, framebuffer mode is the
+    # compatibility default. KMSDRM can still be selected explicitly for
+    # hardware where SDL's KMS backend is known-good.
     fb_dev = conf.get("FRAMEBUFFER_DEVICE", "/dev/fb0")
     drivers = []
-    if os.path.exists("/dev/dri/card0") or os.path.exists("/dev/dri/card1"):
+    display_mode = conf.get("DISPLAY_MODE", "framebuffer").lower()
+    allow_kms = display_mode == "drm" or os.environ.get("OKAMA_ALLOW_KMSDRM") == "yes"
+    if allow_kms and (os.path.exists("/dev/dri/card0") or os.path.exists("/dev/dri/card1")):
         drivers.append("kmsdrm")
     drivers.append("offscreen")  # always available
 

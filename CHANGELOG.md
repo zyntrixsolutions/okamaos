@@ -5,6 +5,21 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.9.7] - 2026-04-29
+
+### Added
+- **Beta hardware driver pack**: enabled common Intel/AMD/NVIDIA/VMware/QXL DRM paths, USB Ethernet, wired NIC, Wi-Fi, Bluetooth, and matching firmware selections for broader PC compatibility.
+- **Safe graphics boot option**: ISO GRUB menu now includes a fallback graphics entry and prioritizes 32-bit framebuffer modes before 16-bit modes.
+
+### Fixed
+- **Glitched framebuffer output**: shell and game framebuffer writers now correctly pack 15/16-bit RGB framebuffer formats instead of treating them as 24-bit RGB rows.
+- **Shell graphics backend selection**: framebuffer mode now uses the offscreen framebuffer presenter by default and only tries KMSDRM when explicitly requested.
+- **Bluetooth and network readiness**: Bluetooth startup now prepares D-Bus, rfkill, and HCI devices; network startup waits for udev and brings wired/Wi-Fi interfaces up more reliably.
+
+### Changed
+- **Cyberpunk UI refresh**: shifted the shell and default theme to an Okama-red cyber palette with cyan secondary accents and a pre-rendered grid/scanline background.
+- **Version metadata**: bumped runtime, shell, rootfs profile, config defaults, and package metadata to `0.9.7`.
+
 ## [0.9.6] - 2026-04-29
 
 ### Fixed

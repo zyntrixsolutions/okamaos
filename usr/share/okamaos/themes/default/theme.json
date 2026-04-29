@@ -1,18 +1,18 @@
 {
   "_comment": "OkamaOS default theme — loaded by okama-shell at startup",
-  "name": "OkamaOS Default",
-  "version": "1",
+  "name": "OkamaOS Cyber Red",
+  "version": "2",
   "colors": {
-    "bg":       [10,  10,  24],
-    "accent":   [80,  60, 200],
-    "accent2":  [140, 100, 255],
-    "text":     [230, 230, 240],
-    "dim":      [100, 100, 120],
-    "selected": [60,  50,  160],
-    "card":     [20,  20,  44],
-    "warn":     [220, 100,  30],
-    "ok":       [60,  200,  80],
-    "error":    [220,  50,  50]
+    "bg":       [2,   3,  10],
+    "accent":   [255, 36, 72],
+    "accent2":  [0, 205, 255],
+    "text":     [232, 240, 255],
+    "dim":      [78,  98, 130],
+    "selected": [82,   8,  28],
+    "card":     [8,   10,  24],
+    "warn":     [255, 184, 42],
+    "ok":       [0,  220, 110],
+    "error":    [255,  40, 80]
   },
   "fonts": {
     "family": "DejaVu Sans",

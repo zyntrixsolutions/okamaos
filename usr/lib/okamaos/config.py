@@ -4,7 +4,7 @@ import os
 import re
 
 _DEFAULTS = {
-    "VERSION": "0.9.6",
+    "VERSION": "0.9.7",
     "DISPLAY_MODE": "framebuffer",
     "FRAMEBUFFER_DEVICE": "/dev/fb0",
     "TARGET_FPS": "30",
@@ -12,7 +12,7 @@ _DEFAULTS = {
     "DEFAULT_VOLUME": "80",
     "CONTROLLER_PREFER": "usb",
     "KEYBOARD_FALLBACK": "yes",
-    "BLUETOOTH_ENABLED": "no",
+    "BLUETOOTH_ENABLED": "yes",
     "BT_SCAN_TIMEOUT": "30",
     "BT_AUTO_RECONNECT": "yes",
     "NETWORK_ENABLED": "yes",

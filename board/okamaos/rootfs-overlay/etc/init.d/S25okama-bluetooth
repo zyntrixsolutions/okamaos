@@ -5,7 +5,7 @@
 
 CONF=/etc/okamaos/okama.conf
 CONTROLLERS_DIR=/var/okamaos/controllers
-BT_ENABLED=no
+BT_ENABLED=yes
 
 # Read config
 if [ -f "$CONF" ]; then
@@ -17,13 +17,47 @@ if [ -d "$CONTROLLERS_DIR" ] && ls "$CONTROLLERS_DIR"/*.json 2>/dev/null | grep 
     BT_ENABLED=yes
 fi
 
+start_dbus() {
+    if command -v dbus-daemon >/dev/null 2>&1; then
+        mkdir -p /var/run/dbus
+        dbus-uuidgen --ensure 2>/dev/null || true
+        if ! pidof dbus-daemon >/dev/null 2>&1; then
+            dbus-daemon --system --fork 2>/dev/null || true
+        fi
+    fi
+}
+
+unblock_bluetooth() {
+    if command -v rfkill >/dev/null 2>&1; then
+        rfkill unblock bluetooth 2>/dev/null || true
+    fi
+}
+
+bring_hci_up() {
+    for hci_path in /sys/class/bluetooth/hci*; do
+        [ -e "$hci_path" ] || continue
+        hci="$(basename "$hci_path")"
+        if command -v hciconfig >/dev/null 2>&1; then
+            hciconfig "$hci" up 2>/dev/null || true
+        fi
+    done
+}
+
 case "$1" in
   start)
     if [ "$BT_ENABLED" = "yes" ]; then
         echo "Starting Bluetooth (bluetoothd)..."
+        start_dbus
+        unblock_bluetooth
         if which bluetoothd >/dev/null 2>&1; then
-            bluetoothd --nodetach &
+            if ! pidof bluetoothd >/dev/null 2>&1; then
+                bluetoothd --nodetach &
+            fi
             sleep 1
+            bring_hci_up
+            if which bluetoothctl >/dev/null 2>&1; then
+                printf 'power on\nagent on\ndefault-agent\nquit\n' | bluetoothctl >/dev/null 2>&1 || true
+            fi
             # Auto-connect trusted controllers
             if which bluetoothctl >/dev/null 2>&1; then
                 for f in "$CONTROLLERS_DIR"/*.json; do

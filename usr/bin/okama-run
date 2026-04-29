@@ -250,6 +250,7 @@ def main():
 
     # Performance hardening for games
     # Lock to single CPU to reduce scheduler jitter, enable performance governor
+    env["SDL_RENDER_DRIVER"] = "software"
     env["SDL_HIGHDPI_DISABLED"] = "1"
     env["SDL_VIDEO_X11_NODIRECTCOLOR"] = "1"
     env["PYTHONDONTWRITEBYTECODE"] = "1"

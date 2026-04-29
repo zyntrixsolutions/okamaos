@@ -50,7 +50,7 @@
 - [x] **UI polish**: semi-transparent header background, bottom hint bar background, separator lines drawn after content to stay on top
 - [x] **PGDrive preinstalled game** (`com.okamaos.pgdrive`): manifest + entry point packaged, preinstalled stub in rootfs-overlay
 - [ ] ALSA audio device selection (multi-device support)
-- [ ] Network: DHCP on boot, Wi-Fi via `wpa_supplicant` UI
+- [x] Network: DHCP on boot, Wi-Fi via `wpa_supplicant` UI
 - [ ] SSH access via Dropbear
 - [ ] OTA update system via Install Game browser (from network URL)
 
@@ -146,6 +146,16 @@
 - [x] Preserve daemon keyboard fallback events for launched games
 - [x] Shorten stale game key release timing for missed release events
 - [x] Validate shell ignores daemon keyboard events while games still receive them
+
+### v0.9.7 — Beta Hardware & Cyber Red Polish ✅
+- [x] Correct shell and game framebuffer output on 15/16-bit RGB modes
+- [x] Prefer framebuffer-safe shell presentation unless KMSDRM is explicitly requested
+- [x] Add GRUB 32-bit graphics priority and a safe graphics boot option
+- [x] Enable common GPU, wired NIC, USB Ethernet, Wi-Fi, Bluetooth, and firmware support
+- [x] Start Bluetooth in beta-ready mode with D-Bus, rfkill, HCI bring-up, and trusted controller reconnects
+- [x] Harden network boot discovery for wired DHCP and Wi-Fi UI scanning
+- [x] Refresh the shell/default theme with Okama-red cyberpunk visuals and cyan secondary accents
+- [x] Bump version metadata to `0.9.7`
 
 ### v1.0 — Console Polish
 - [x] Silent boot (`quiet loglevel=0`, boot log redirect) — completed in v0.3

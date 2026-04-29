@@ -5,6 +5,7 @@
 CONF=/etc/okamaos/okama.conf
 NET_ENABLED=yes
 WIFI_ENABLED=no
+WPA_CONF=/etc/wpa_supplicant.conf
 
 if [ -f "$CONF" ]; then
     NET_ENABLED=$(grep '^NETWORK_ENABLED=' "$CONF" | cut -d= -f2 | tr -d '[:space:]')
@@ -19,28 +20,56 @@ start_dhcp() {
     dhcpcd -b "$iface" 2>/dev/null || true
 }
 
+settle_devices() {
+    if command -v udevadm >/dev/null 2>&1; then
+        udevadm settle --timeout=5 2>/dev/null || true
+    else
+        sleep 1
+    fi
+}
+
+bring_up() {
+    iface="$1"
+    ifconfig "$iface" up 2>/dev/null || ip link set "$iface" up 2>/dev/null || true
+}
+
+unblock_wifi() {
+    if command -v rfkill >/dev/null 2>&1; then
+        rfkill unblock wifi 2>/dev/null || true
+        rfkill unblock wlan 2>/dev/null || true
+    fi
+}
+
 case "$1" in
   start)
     if [ "$NET_ENABLED" = "yes" ]; then
-        echo "Starting network (DHCP on available wired interfaces)..."
-        ifconfig lo up 2>/dev/null || ip link set lo up 2>/dev/null || true
+        echo "Starting network services..."
+        settle_devices
+        bring_up lo
         for iface_path in /sys/class/net/*; do
             iface="$(basename "$iface_path")"
             [ "$iface" = "lo" ] && continue
             [ -d "$iface_path/wireless" ] && continue
             [ "$(cat "$iface_path/type" 2>/dev/null)" = "1" ] || continue
             echo "Starting DHCP on $iface..."
-            ifconfig "$iface" up 2>/dev/null || ip link set "$iface" up 2>/dev/null || true
+            bring_up "$iface"
             start_dhcp "$iface"
         done
 
         if [ "$WIFI_ENABLED" = "yes" ]; then
+            unblock_wifi
             for iface_path in /sys/class/net/*; do
                 iface="$(basename "$iface_path")"
                 [ -d "$iface_path/wireless" ] || continue
-                echo "Starting wpa_supplicant and DHCP on $iface..."
-                wpa_supplicant -B -i "$iface" -c /etc/wpa_supplicant.conf 2>/dev/null || true
-                start_dhcp "$iface"
+                echo "Preparing WiFi interface $iface..."
+                bring_up "$iface"
+                if [ -s "$WPA_CONF" ]; then
+                    echo "Starting wpa_supplicant and DHCP on $iface..."
+                    wpa_supplicant -B -i "$iface" -c "$WPA_CONF" 2>/dev/null || true
+                    start_dhcp "$iface"
+                else
+                    echo "No $WPA_CONF yet; WiFi interface is up for UI scanning."
+                fi
             done
         fi
     else

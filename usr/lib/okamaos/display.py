@@ -29,27 +29,67 @@ class FbWriter:
             self.h = struct.unpack_from("=I", vbuf, 4)[0]
             self.bpp = struct.unpack_from("=I", vbuf, 24)[0]
             red_off = struct.unpack_from("=I", vbuf, 32)[0]
+            red_len = struct.unpack_from("=I", vbuf, 36)[0]
+            green_off = struct.unpack_from("=I", vbuf, 40)[0]
+            green_len = struct.unpack_from("=I", vbuf, 44)[0]
             blue_off = struct.unpack_from("=I", vbuf, 48)[0]
+            blue_len = struct.unpack_from("=I", vbuf, 52)[0]
 
             fbuf = bytearray(68)
             fcntl.ioctl(probe, self.FBIOGET_FSCREENINFO, fbuf)
+            self.mem_len = struct.unpack_from("=I", fbuf, 20)[0]
             self.stride = struct.unpack_from("=I", fbuf, 32)[0]
 
+        self.bytes_pp = max(1, self.bpp // 8)
         if self.bpp == 32:
             self._fmt = "BGRX" if blue_off == 0 else "RGBX"
+            self._packed = False
         elif self.bpp == 24:
             self._fmt = "BGR" if blue_off == 0 else "RGB"
-        else:
+            self._packed = False
+        elif self.bpp in (15, 16):
+            if not (red_len and green_len and blue_len):
+                red_len, green_len, blue_len = (5, 6, 5) if self.bpp == 16 else (5, 5, 5)
             self._fmt = "RGB"
+            self._packed = True
+            self._chan = (
+                (red_off, red_len, 8 - red_len),
+                (green_off, green_len, 8 - green_len),
+                (blue_off, blue_len, 8 - blue_len),
+            )
+        else:
+            raise RuntimeError(f"unsupported framebuffer depth: {self.bpp} bpp")
 
         if self.w == 0 or self.h == 0:
             self.w, self.h = 1280, 720
         if self.stride == 0:
-            self.stride = self.w * (self.bpp // 8)
+            self.stride = self.w * self.bytes_pp
 
         self._fb = open(fb_path, "rb+")
-        self._mm = mmap.mmap(self._fb.fileno(), self.stride * self.h)
+        map_len = self.mem_len or (self.stride * self.h)
+        self._mm = mmap.mmap(self._fb.fileno(), map_len)
         self._ok = True
+
+    def _pack_rgb(self, pygame, surface) -> bytes:
+        raw = pygame.image.tostring(surface, "RGB")
+        out = bytearray(self.w * self.h * self.bytes_pp)
+        red, green, blue = self._chan
+        ri = 0
+        oi = 0
+        for _ in range(self.w * self.h):
+            pixel = 0
+            for value, channel in ((raw[ri], red), (raw[ri + 1], green), (raw[ri + 2], blue)):
+                off, bits, drop = channel
+                if drop >= 0:
+                    value >>= drop
+                else:
+                    value <<= -drop
+                pixel |= (value & ((1 << bits) - 1)) << off
+            for byte_idx in range(self.bytes_pp):
+                out[oi + byte_idx] = (pixel >> (byte_idx * 8)) & 0xff
+            ri += 3
+            oi += self.bytes_pp
+        return bytes(out)
 
     def present(self, pygame, surface) -> None:
         if not self._ok:
@@ -57,8 +97,8 @@ class FbWriter:
         try:
             if (surface.get_width(), surface.get_height()) != (self.w, self.h):
                 surface = pygame.transform.scale(surface, (self.w, self.h))
-            raw = pygame.image.tostring(surface, self._fmt)
-            row_bytes = self.w * (self.bpp // 8)
+            raw = self._pack_rgb(pygame, surface) if self._packed else pygame.image.tostring(surface, self._fmt)
+            row_bytes = self.w * self.bytes_pp
             if self.stride == row_bytes:
                 self._mm.seek(0)
                 self._mm.write(raw)

@@ -12,7 +12,7 @@ ls -lh "$IMAGES_DIR" || true
 
 "$SCRIPT_DIR/gen-iso.sh" "$IMAGES_DIR" "$OUTPUT_ISO"
 
-# Keep a copy beside the Buildroot image set for tools that scan
-# output/images, while keeping output/okamaos.iso as the canonical artifact.
-cp -f "$OUTPUT_ISO" "$IMAGES_DIR/okamaos.iso"
+# Keep a single ISO artifact in output/ so operators do not have to guess
+# which image is current.
+rm -f "$IMAGES_DIR/okamaos.iso"
 echo ">> okamaos post-image: canonical ISO $OUTPUT_ISO"

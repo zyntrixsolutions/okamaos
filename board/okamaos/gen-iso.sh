@@ -70,19 +70,19 @@ terminal_output gfxterm
 
 menuentry "OkamaOS (safe graphics default)" {
     set gfxpayload=800x600x32
-    linux  /boot/bzImage rw quiet loglevel=0 console=ttyS0,115200 console=tty1 rdinit=/sbin/init panic=10 rd.systemd.show_status=false printk.devkmsg=off vt.global_cursor_default=0 nomodeset video=vesafb:mtrr:3
+    linux  /boot/bzImage rw quiet loglevel=3 console=tty1 console=ttyS0,115200 earlyprintk=serial,ttyS0,115200 rdinit=/sbin/init rd.systemd.show_status=false vt.global_cursor_default=0 nomodeset video=vesafb:mtrr:3
     initrd /boot/rootfs.cpio.gz
 }
 
 menuentry "OkamaOS" {
     set gfxpayload=keep
-    linux  /boot/bzImage rw quiet loglevel=0 console=ttyS0,115200 console=tty1 rdinit=/sbin/init panic=10 rd.systemd.show_status=false printk.devkmsg=off vt.global_cursor_default=0
+    linux  /boot/bzImage rw quiet loglevel=3 console=tty1 console=ttyS0,115200 earlyprintk=serial,ttyS0,115200 rdinit=/sbin/init rd.systemd.show_status=false vt.global_cursor_default=0
     initrd /boot/rootfs.cpio.gz
 }
 
 menuentry "OkamaOS (debug - verbose)" {
     set gfxpayload=keep
-    linux  /boot/bzImage rw loglevel=7 console=ttyS0,115200 console=tty1 rdinit=/sbin/init panic=30 vt.global_cursor_default=0
+    linux  /boot/bzImage rw loglevel=7 console=tty1 console=ttyS0,115200 earlyprintk=serial,ttyS0,115200 rdinit=/sbin/init vt.global_cursor_default=0
     initrd /boot/rootfs.cpio.gz
 }
 EOF

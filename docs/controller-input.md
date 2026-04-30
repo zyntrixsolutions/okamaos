@@ -9,9 +9,10 @@
 3. Translates raw evdev events through generic keyboard/gamepad mappings
 4. Broadcasts unified JSON events over a Unix socket: `/run/okama-inputd.sock`
 
-All consumers — `okama-shell`, games via `okamaos.input_protocol.InputClient` —
-read from this single socket. The kernel's evdev device is never accessed directly
-by application code.
+Games read this socket via `okamaos.input_protocol.InputClient`. `okama-shell`
+also keeps a local evdev keyboard reader so the home UI remains navigable if
+SDL keyboard events are unavailable or the input daemon socket appears after the
+shell starts. The shell reconnects to `okama-inputd` once the socket is ready.
 
 ## Unified Button Protocol
 
@@ -85,9 +86,10 @@ or virtual keyboard even when no controller is connected.
 | Developer terminal         | Yes — full keyboard                 |
 | Developer mode debugging   | Yes — full keyboard access          |
 
-`okama-shell` reads direct Pygame keyboard events and also accepts keyboard
-events from `okama-inputd`. Only one action is dispatched per input frame, so
-the direct and daemon paths do not double-trigger navigation.
+`okama-shell` reads direct Pygame keyboard events, shell-local evdev keyboard
+events, and reconnecting `okama-inputd` events. Only one action is dispatched
+per input frame, and duplicate same-action events are suppressed so the paths
+do not double-trigger navigation.
 
 ## Adding a Game Controller
 

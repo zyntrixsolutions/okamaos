@@ -1,5 +1,10 @@
 # OkamaOS Portal Changelog
 
+## 2026-04-30 - Keyboard Navigation Hotfix
+
+- Published OkamaOS `1.1.1` release notes for shell keyboard navigation reliability and reconnecting input clients.
+- Refined the home UI and removed the horizontal yellow cyber-grid line.
+
 ## 2026-04-30 - Cyber Hardware Readiness
 
 - Published OkamaOS `1.1.0` release notes for full keyboard support, generic HID controller readiness, live online/update indicators, and Bluetooth auto readiness.

@@ -21,9 +21,11 @@
 
 - [x] Maintain version tracking through root `VERSION`, package version files, and runtime config.
 - [x] Ship first-class keyboard support for shell navigation, games, and developer/recovery terminal flows.
+- [x] Add shell-local keyboard reading and reconnecting input clients so home navigation works even when SDL/inputd delivery is late or missing.
 - [x] Broaden generic evdev/HID controller detection for USB and Bluetooth controllers.
 - [x] Add live online and OS/game update indicators to the shell UI.
 - [x] Add the retro-futuristic cyber grid/fence shell background.
+- [x] Refine the cyber home UI and remove the horizontal yellow grid line.
 - [x] Add SHA-256 verification for downloaded system update bundles when feed metadata includes hashes.
 - [x] Add a guided hard-drive installer for live images and VM disks.
 - [x] Package bootloader and kernel assets needed by installed-disk boots.

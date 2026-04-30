@@ -35,9 +35,11 @@ for _pkg_dir in glob.glob("/usr/lib/python*/site-packages") + glob.glob("/usr/li
 
 import subprocess
 import time
-import json
 import argparse
 import threading
+import queue
+import select
+import struct
 
 # ---------------------------------------------------------------------------
 # Pygame bootstrap — graceful degradation if not available
@@ -66,9 +68,9 @@ FPS = 30
 
 COL_BG        = (6,   8,   18)
 COL_GRID      = (31,  210, 190)
-COL_GRID2     = (255, 70,  180)
+COL_GRID2     = (255, 76,  160)
 COL_ACCENT    = (26,  132, 255)
-COL_ACCENT2   = (255, 205, 72)
+COL_ACCENT2   = (255, 76,  160)
 COL_TEXT      = (230, 230, 240)
 COL_DIM       = (126, 138, 158)
 COL_SELECTED  = (28,  74,  118)
@@ -93,6 +95,28 @@ BUTTON_HINT_A = "[A/Enter] Select"
 BUTTON_HINT_B = "[B/Esc] Back"
 BUTTON_HINT_DPAD = "[D-pad/Arrows/WASD] Move"
 BUTTON_HINT_START = "[START] Home"
+
+EVFMT = "llHHi"
+EVSIZE = struct.calcsize(EVFMT)
+EV_KEY = 1
+EV_SYN = 0
+EVIOCGBIT_BASE = 0x80000000 | (ord("E") << 8)
+
+SHELL_KEYBOARD_MAP = {
+    1: "B", 14: "B", 15: "SELECT", 28: "A", 57: "A",
+    72: "DPAD_UP", 75: "DPAD_LEFT", 77: "DPAD_RIGHT", 80: "DPAD_DOWN",
+    96: "A", 102: "START", 103: "DPAD_UP", 104: "DPAD_UP",
+    105: "DPAD_LEFT", 106: "DPAD_RIGHT", 107: "DPAD_RIGHT",
+    108: "DPAD_DOWN", 109: "DPAD_DOWN",
+    17: "DPAD_UP", 30: "DPAD_LEFT", 31: "DPAD_DOWN",
+    32: "DPAD_RIGHT", 35: "START",
+}
+
+HOME_DETAILS = {
+    "Play": "Installed games and local packages",
+    "Settings": "Network, Bluetooth, input, updates, install",
+    "Power": "Restart, shut down, or return safely",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -145,6 +169,107 @@ def _log_shell_error(message: str):
         pass
 
 
+class ShellKeyboardReader(threading.Thread):
+    """Local evdev reader used by the shell before SDL or inputd are ready."""
+
+    def __init__(self):
+        super().__init__(daemon=True)
+        self._events = queue.Queue()
+        self._stop_event = threading.Event()
+
+    def poll(self) -> list:
+        events = []
+        while True:
+            try:
+                events.append(self._events.get_nowait())
+            except queue.Empty:
+                return events
+
+    def run(self):
+        workers = {}
+        while not self._stop_event.is_set():
+            for path, worker in list(workers.items()):
+                if not worker.is_alive():
+                    workers.pop(path, None)
+            for path in sorted(glob.glob("/dev/input/event*")):
+                if path in workers or not self._is_keyboard(path):
+                    continue
+                worker = threading.Thread(
+                    target=self._read_device,
+                    args=(path,),
+                    daemon=True,
+                )
+                workers[path] = worker
+                worker.start()
+            time.sleep(2)
+
+    def stop(self):
+        self._stop_event.set()
+
+    def _read_device(self, path: str):
+        name = self._device_name(path)
+        self._events.put({"type": "keyboard_connect", "name": name, "path": path})
+        try:
+            with open(path, "rb") as fd:
+                while not self._stop_event.is_set():
+                    r, _, _ = select.select([fd], [], [], 0.1)
+                    if not r:
+                        continue
+                    data = fd.read(EVSIZE)
+                    if len(data) < EVSIZE:
+                        break
+                    _, _, ev_type, code, value = struct.unpack(EVFMT, data)
+                    if ev_type != EV_KEY or value not in (1, 2):
+                        continue
+                    action = SHELL_KEYBOARD_MAP.get(code)
+                    if action:
+                        self._events.put({
+                            "src": "evdev-keyboard",
+                            "action": action,
+                            "path": path,
+                        })
+        except (PermissionError, FileNotFoundError, OSError) as exc:
+            _log_shell_error(f"Keyboard reader skipped {path}: {exc}")
+
+    def _is_keyboard(self, path: str) -> bool:
+        name = self._device_name(path).lower()
+        if "keyboard" in name or "kbd" in name:
+            return True
+        bits = self._ev_bits(path, EV_KEY, 96)
+        nav_codes = (17, 30, 31, 32, 72, 75, 77, 80, 103, 105, 106, 108)
+        action_codes = (1, 14, 15, 28, 57, 96, 102)
+        has_nav = any(self._bit_is_set(bits, code) for code in nav_codes)
+        has_action = any(self._bit_is_set(bits, code) for code in action_codes)
+        mapped = sum(1 for code in SHELL_KEYBOARD_MAP if self._bit_is_set(bits, code))
+        return has_nav and has_action and mapped >= 3
+
+    def _device_name(self, path: str) -> str:
+        event = os.path.basename(path)
+        name_path = f"/sys/class/input/{event}/device/name"
+        try:
+            with open(name_path) as f:
+                return f.read().strip()
+        except OSError:
+            return event
+
+    def _ev_bits(self, path: str, ev_type: int, size: int) -> bytes:
+        import fcntl
+        request = EVIOCGBIT_BASE | (size << 16) | (0x20 + ev_type)
+        buf = bytearray(size)
+        try:
+            with open(path, "rb") as fd:
+                fcntl.ioctl(fd, request, buf)
+            return bytes(buf)
+        except OSError:
+            return b""
+
+    def _bit_is_set(self, bits: bytes, bit: int) -> bool:
+        idx = bit // 8
+        if idx >= len(bits):
+            return False
+        return bool(bits[idx] & (1 << (bit % 8)))
+
+
 # ---------------------------------------------------------------------------
 # Pygame shell
 # ---------------------------------------------------------------------------
@@ -158,6 +283,7 @@ class OkamaShell:
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT), flags)
         pygame.display.set_caption("OkamaOS")
         pygame.mouse.set_visible(False)
+        pygame.key.set_repeat(260, 90)
 
         self.clock = pygame.time.Clock()
         self._init_fonts()
@@ -165,6 +291,9 @@ class OkamaShell:
 
         self.input_client = InputClient()
         self.input_client.connect()
+        self._last_input_connect_attempt = 0.0
+        self.keyboard_reader = ShellKeyboardReader()
+        self.keyboard_reader.start()
 
         self.state = "home"       # home | play | settings | power | launching
         self.section_idx = 0
@@ -196,6 +325,7 @@ class OkamaShell:
         self._input_cooldown = 0
         self._axis_threshold = 0.5
         self._axis_held: dict = {}
+        self._last_action_at: dict[str, float] = {}
         self._start_update_check()
         self._start_status_loop()
 
@@ -245,8 +375,10 @@ class OkamaShell:
         for y in range(fence_top, fence_bottom, 34):
             pygame.draw.line(surf, (72, 60, 95), (0, y),
                              (WIDTH, y + 16), 1)
-        pygame.draw.line(surf, COL_ACCENT2, (0, fence_bottom),
-                         (WIDTH, fence_bottom), 2)
+        haze = pygame.Surface((WIDTH, 110), pygame.SRCALPHA)
+        for y in range(110):
+            haze.fill((10, 18, 34, max(0, 70 - y)), rect=(0, y, WIDTH, 1))
+        surf.blit(haze, (0, fence_bottom - 34))
         return surf.convert()
 
     def _draw_logo(self, center_x: int, y: int, scale: float = 1.0):
@@ -330,6 +462,8 @@ class OkamaShell:
             if self.message_timer > 0:
                 self.message_timer -= 1
 
+        self.keyboard_reader.stop()
+        self.input_client.close()
         pygame.quit()
 
     # -----------------------------------------------------------------------
@@ -350,6 +484,22 @@ class OkamaShell:
                     events.append({"src": "keyboard", "action": action})
                     direct_keyboard_actions.add(action)
 
+        for ev in self.keyboard_reader.poll():
+            if ev.get("type") == "keyboard_connect":
+                self.input_devices[f"shell:{ev.get('path')}"] = {
+                    "bus": "keyboard",
+                    "name": ev.get("name", "keyboard"),
+                    "path": ev.get("path", ""),
+                }
+                continue
+            action = ev.get("action")
+            if action:
+                if self._recent_action(action, 0.08):
+                    continue
+                events.append(ev)
+                direct_keyboard_actions.add(action)
+
+        self._ensure_input_connected()
         for ev in self.input_client.poll():
             ev_type = ev.get("type")
             controller = ev.get("controller")
@@ -369,6 +519,23 @@ class OkamaShell:
                 self._handle_axis_to_dpad(ev, events)
 
         return events
+
+    def _ensure_input_connected(self):
+        if self.input_client.connected:
+            return
+        now = time.monotonic()
+        if now - self._last_input_connect_attempt < 1.0:
+            return
+        self._last_input_connect_attempt = now
+        self.input_client.connect()
+
+    def _recent_action(self, action: str, window: float) -> bool:
+        now = time.monotonic()
+        last = self._last_action_at.get(action, 0.0)
+        if now - last < window:
+            return True
+        self._last_action_at[action] = now
+        return False
 
     def _map_keyboard_action(self, key: int) -> str | None:
         mapping = {
@@ -569,34 +736,60 @@ class OkamaShell:
 
     def _draw_home(self):
         # Brand mark
-        self._draw_logo(WIDTH // 2, 64, 1.0)
+        self._draw_logo(WIDTH // 2, 58, 0.92)
 
-        # Section pills
-        pill_w, pill_h = 200, 60
-        total_w = len(SECTIONS) * pill_w + (len(SECTIONS) - 1) * 20
-        start_x = WIDTH // 2 - total_w // 2
-        y = HEIGHT // 2 - pill_h // 2
-
+        panel_x = 140
+        panel_y = 210
+        panel_w = 1000
+        row_h = 86
+        gap = 14
         for i, section in enumerate(SECTIONS):
-            x = start_x + i * (pill_w + 20)
-            color = COL_ACCENT if i == self.section_idx else COL_CARD
-            pygame.draw.rect(self.screen, color, (x, y, pill_w, pill_h),
-                             border_radius=8)
-            if i == self.section_idx:
-                pygame.draw.rect(self.screen, COL_ACCENT2,
-                                 (x, y, pill_w, pill_h), 2, border_radius=8)
-            label = self.font_md.render(section, True, COL_TEXT)
-            self.screen.blit(label,
-                (x + pill_w // 2 - label.get_width() // 2,
-                 y + pill_h // 2 - label.get_height() // 2))
+            y = panel_y + i * (row_h + gap)
+            selected = i == self.section_idx
+            color = (18, 32, 56) if selected else COL_CARD
+            border = COL_ACCENT if selected else (36, 58, 82)
+            pygame.draw.rect(self.screen, color,
+                             (panel_x, y, panel_w, row_h), border_radius=8)
+            pygame.draw.rect(self.screen, border,
+                             (panel_x, y, panel_w, row_h), 2, border_radius=8)
+            marker_color = COL_ACCENT2 if selected else (48, 82, 102)
+            pygame.draw.rect(self.screen, marker_color,
+                             (panel_x, y, 8, row_h), border_radius=4)
+            label = self.font_lg.render(section, True, COL_TEXT)
+            detail = self.font_sm.render(HOME_DETAILS.get(section, ""),
+                                         True, COL_DIM)
+            self.screen.blit(label, (panel_x + 34, y + 12))
+            self.screen.blit(detail, (panel_x + 36, y + 56))
 
-        # Sub-hint
-        if SECTIONS[self.section_idx] == "Play":
-            sub = self.font_sm.render(
-                f"{len(self.games)} game(s) installed", True, COL_DIM)
-            self.screen.blit(sub, (WIDTH // 2 - sub.get_width() // 2, y + 80))
+            if selected:
+                indicator = self.font_md.render(">", True, COL_ACCENT2)
+                self.screen.blit(indicator, (panel_x + panel_w - 42, y + 26))
 
-        self._draw_update_notifications(y + 126)
+        self._draw_home_status(panel_x, panel_y + len(SECTIONS) * (row_h + gap) + 14,
+                               panel_w)
+        self._draw_update_notifications(panel_y + 420)
+
+    def _draw_home_status(self, x: int, y: int, w: int):
+        with self._status_lock:
+            net = dict(self.network_status)
+            bt = dict(self.bluetooth_status)
+        items = [
+            ("Games", str(len(self.games))),
+            ("Network", "online" if net.get("online") == "yes" else "offline"),
+            ("Bluetooth", "ready" if bt.get("available") == "yes" else "off"),
+            ("Input", self._input_summary()),
+        ]
+        col_w = w // len(items)
+        for i, (label, value) in enumerate(items):
+            ix = x + i * col_w
+            pygame.draw.rect(self.screen, (8, 18, 30),
+                             (ix, y, col_w - 10, 58), border_radius=8)
+            pygame.draw.rect(self.screen, (32, 74, 92),
+                             (ix, y, col_w - 10, 58), 1, border_radius=8)
+            label_surf = self.font_hint.render(label, True, COL_DIM)
+            value_surf = self.font_sm.render(value, True, COL_TEXT)
+            self.screen.blit(label_surf, (ix + 16, y + 9))
+            self.screen.blit(value_surf, (ix + 16, y + 30))
 
     def _draw_update_notifications(self, y: int):
         if not self.update_check_done:

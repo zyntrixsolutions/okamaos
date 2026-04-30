@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.0.5] - 2026-04-30
+
+### Fixed
+
+- Enabled kernel initrd support required by the GRUB ISO live root filesystem.
+- Removed automatic panic reboot behavior from ISO boot entries so boot failures stay visible instead of silently looping.
+- Enabled the standard 8250 serial console and early serial printk for boot diagnostics.
+- Enabled VESA, EFI, simple framebuffer, and simpledrm support required by the safe graphics ISO path.
+- Stopped mirroring the ISO into `output/images`; the build now leaves a single ISO at `output/okamaos.iso`.
+- Updated the boot splash version text and shell module path bootstrap for packaged Python runtime modules.
+- Launched the ISO shell in text mode by default to avoid the current framebuffer pygame startup hang.
+
+### Changed
+
+- Bumped runtime, installer, and package version tracking to `1.0.5`.
+
 ## [1.0.4] - 2026-04-30
 
 ### Fixed

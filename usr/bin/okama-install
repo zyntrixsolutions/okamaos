@@ -2,7 +2,7 @@
 # Install the running OkamaOS live system to a local disk.
 set -euo pipefail
 
-VERSION="1.0.3"
+VERSION="1.0.5"
 MOUNTPOINT="${OKAMA_INSTALL_MOUNT:-/mnt/okama-install}"
 BOOT_ASSET_DIR="${OKAMA_INSTALL_BOOT_ASSETS:-/usr/share/okamaos/boot}"
 KERNEL_SRC="${OKAMA_INSTALL_KERNEL:-/boot/okamaos/vmlinuz}"

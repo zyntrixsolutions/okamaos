@@ -23,6 +23,10 @@
 - [x] Add a guided hard-drive installer for live images and VM disks.
 - [x] Package bootloader and kernel assets needed by installed-disk boots.
 - [x] Restore the normal Buildroot post-image ISO build path and canonical `output/okamaos.iso` artifact.
+- [x] Enable ISO initrd boot support and remove duplicate ISO output artifacts.
+- [x] Enable serial boot diagnostics for ISO startup failures.
+- [x] Enable framebuffer drivers required by the safe graphics ISO boot path.
+- [x] Keep the ISO boot path operable with the text shell while framebuffer pygame startup is stabilized.
 - [ ] Add signed update verification before automatic OS updates.
 - [ ] Publish a stable public release channel after hardware validation.
 

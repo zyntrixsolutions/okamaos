@@ -1,5 +1,10 @@
 # OkamaOS Portal Changelog
 
+## 2026-04-30 - ISO Boot Fix
+
+- Restored live ISO boot support for OkamaOS `1.0.5`.
+- Clarified that the build publishes one ISO at `output/okamaos.iso`.
+
 ## 2026-04-30 - ISO Build Restore
 
 - Restored version tracking for OkamaOS `1.0.4`.

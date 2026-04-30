@@ -23,11 +23,15 @@ Keyboard (emergency fallback only):
 
 import sys
 import os
+import glob
 
 _lib = os.environ.get("OKAMA_LIB", "")
 if not _lib:
     _lib = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../lib")
 sys.path.insert(0, os.path.abspath(_lib))
+for _pkg_dir in glob.glob("/usr/lib/python*/site-packages") + glob.glob("/usr/lib/python*/dist-packages"):
+    if _pkg_dir not in sys.path:
+        sys.path.append(_pkg_dir)
 
 import subprocess
 import time
@@ -90,7 +94,7 @@ def _text_shell():
     """Minimal text-mode shell for terminals / no-Pygame environments."""
     conf = cfg_mod.get()
     print("\n" + "=" * 48)
-    print("  OkamaOS Shell  (text mode — Pygame not found)")
+    print("  OkamaOS Shell  (text mode)")
     print("=" * 48)
 
     while True:

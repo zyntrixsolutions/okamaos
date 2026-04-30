@@ -5,7 +5,7 @@ partnership with **OkamaLabs**. OkamaOS boots straight into a fullscreen
 controller-driven shell, runs one game at a time, and is designed to feel like
 a dedicated console — not a PC.
 
-> Version: **1.0.4 ISO Build Restore**. Public download and update portal files live in
+> Version: **1.0.5 ISO Boot Fix**. Public download and update portal files live in
 > `pages/` and deploy through GitHub Pages.
 
 > Status: **MVP foundation**. Buildable rootfs overlay, working CLI tooling,

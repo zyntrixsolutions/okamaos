@@ -4,7 +4,7 @@ import os
 import re
 
 _DEFAULTS = {
-    "VERSION": "2.0.1",
+    "VERSION": "2.0.2",
     "UPDATE_FEED_URL": "https://zyntrixsolutions.github.io/okamaos/updates/feed.json",
     "APP_CATALOG_URL": "https://zyntrixsolutions.github.io/okamaos/catalog/apps.json",
     "UPDATE_CHECK_ENABLED": "yes",

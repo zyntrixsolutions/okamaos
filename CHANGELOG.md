@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.0.2] - 2026-04-30
+
+### Fixed
+
+- Moved the boot shell text renderer from `pygame.font`/SDL_ttf to `pygame.freetype` so VirtualBox boots do not crash in the SDL_ttf native path.
+- Kept the graphical shell independent of the fragile font module while preserving the same fullscreen UI layout and labels.
+
+### Changed
+
+- Bumped runtime, installer, package, config, and documentation version tracking to `2.0.2`.
+- Extended `make boot-readiness-check` to fail if the boot shell starts using `pygame.font` again.
+
 ## [2.0.1] - 2026-04-30
 
 ### Fixed

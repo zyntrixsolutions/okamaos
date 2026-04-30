@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""okama-shell — OkamaOS v2.0.1 fullscreen controller-first UI shell.
+"""okama-shell — OkamaOS v2.0.2 fullscreen controller-first UI shell.
 
 MAJOR UPDATE: Cyberpunk UI, Full Keyboard/Generic Controller Support,
 Network Status, Online Indicators, Bluetooth Plug-and-Play
@@ -58,9 +58,11 @@ import socket as sock_module
 PYGAME_IMPORT_ERROR = None
 try:
     import pygame
+    import pygame.freetype as pygame_freetype
     PYGAME_OK = True
 except Exception as exc:
     pygame = None
+    pygame_freetype = None
     PYGAME_OK = False
     PYGAME_IMPORT_ERROR = exc
 
@@ -451,6 +453,22 @@ def _configure_sdl_environment(conf, windowed: bool) -> None:
         os.environ["SDL_VIDEODRIVER"] = "x11"  # dev host
 
 
+class ShellFont:
+    """Small wrapper that keeps the shell off pygame.font/SDL_ttf."""
+
+    def __init__(self, size: int, bold: bool = False):
+        if pygame_freetype is None:
+            raise RuntimeError("pygame.freetype is not available")
+        self._font = pygame_freetype.Font(None, size)
+        self._font.strong = bold
+
+    def render(self, text: str, antialias_or_color, color=None):
+        if color is None:
+            color = antialias_or_color
+        surf, _ = self._font.render(str(text), fgcolor=color)
+        return surf
+
+
 # ---------------------------------------------------------------------------
 # Pygame shell
 # ---------------------------------------------------------------------------
@@ -507,42 +525,19 @@ class OkamaShell:
         self._start_update_check()
 
     def _init_fonts(self):
-        # Initialize pygame font module and verify it actually works
         try:
-            pygame.font.init()
-            # Test if font module is actually functional by creating a test font
-            test_font = pygame.font.Font(None, 24)
-            if test_font is None:
-                raise RuntimeError("pygame.font.Font returned None")
+            pygame_freetype.init()
+            test_font = ShellFont(24)
+            if test_font.render("OkamaOS", COL_TEXT).get_width() <= 0:
+                raise RuntimeError("pygame.freetype rendered empty text")
         except Exception as e:
-            # Font module failed - this is critical for GUI
-            raise RuntimeError(f"Font module unavailable: {e}")
-        
-        # Try to use system fonts, fallback to default pygame font
-        try:
-            self.font_xl  = pygame.font.SysFont("DejaVu Sans", 72, bold=True)
-            self.font_lg  = pygame.font.SysFont("DejaVu Sans", 42, bold=True)
-            self.font_md  = pygame.font.SysFont("DejaVu Sans", 28)
-            self.font_sm  = pygame.font.SysFont("DejaVu Sans", 20)
-            self.font_hint= pygame.font.SysFont("DejaVu Sans", 18)
-            # Verify fonts loaded correctly
-            if not self.font_xl or not self.font_lg:
-                raise RuntimeError("SysFont returned None")
-        except Exception as e:
-            # Fallback to default pygame fonts
-            try:
-                default_xl = pygame.font.Font(None, 72)
-                default_lg = pygame.font.Font(None, 42)
-                default_md = pygame.font.Font(None, 28)
-                default_sm = pygame.font.Font(None, 20)
-                default_hint = pygame.font.Font(None, 18)
-            except Exception as e2:
-                raise RuntimeError(f"Cannot load any font: {e2}")
-            self.font_xl = default_xl
-            self.font_lg = default_lg
-            self.font_md = default_md
-            self.font_sm = default_sm
-            self.font_hint = default_hint
+            raise RuntimeError(f"Freetype text renderer unavailable: {e}")
+
+        self.font_xl = ShellFont(72, bold=True)
+        self.font_lg = ShellFont(42, bold=True)
+        self.font_md = ShellFont(28)
+        self.font_sm = ShellFont(20)
+        self.font_hint = ShellFont(18)
 
     def _draw_logo(self, center_x: int, y: int, scale: float = 1.0):
         width = int(520 * scale)

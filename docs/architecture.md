@@ -1,12 +1,13 @@
-# OkamaOS Architecture v2.0.1
+# OkamaOS Architecture v2.0.2
 
 ## System Overview
 
 OkamaOS is a controller-first console Linux OS built on Buildroot for x86_64
 low-cost PCs. It replaces the entire conventional Linux desktop stack with a
-single-purpose game console loop. Version 2.0.1 keeps the cyberpunk retro UI,
+single-purpose game console loop. Version 2.0.2 keeps the cyberpunk retro UI,
 full keyboard support, network status monitoring, Bluetooth plug-and-play, and
-adds boot-readiness checks for the SDL2/Pygame runtime contract.
+adds boot-readiness checks for the SDL2/Pygame runtime contract. The boot shell
+uses `pygame.freetype` for text so the UI does not depend on SDL_ttf startup.
 
 ## Boot Sequence
 

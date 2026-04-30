@@ -5,14 +5,14 @@ partnership with **OkamaLabs**. OkamaOS boots straight into a fullscreen
 controller-driven shell, runs one game at a time, and is designed to feel like
 a dedicated console — not a PC.
 
-> Version: **2.0.1 Boot Readiness**. Public download and update portal files live in
+> Version: **2.0.2 UI Recovery**. Public download and update portal files live in
 > `pages/` and deploy through GitHub Pages.
 
 > Status: **Release Candidate**. Full controller/keyboard support, animated cyberpunk UI,
 > WiFi/Ethernet status monitoring, Bluetooth plug-and-play, generic HID drivers,
 > hard disk installation with EFI support, and a boot-readiness check for release builds.
 
-## v2.0.1 Highlights
+## v2.0.2 Highlights
 
 - **Cyberpunk Retro UI** — Animated checkered net/fence background with neon accents
 - **Full Keyboard + Controller Support** — Navigate with keyboard or any gamepad
@@ -22,6 +22,7 @@ a dedicated console — not a PC.
 - **Update Notifications** — Visual badge when OS/game updates are available
 - **EFI Support** — Hard disk installer supports both BIOS and EFI boot
 - **Boot Readiness Check** — Release checks validate version, init, and SDL runtime contracts
+- **VirtualBox UI Recovery** — Boot shell text rendering avoids the SDL_ttf crash path
 
 ## Highlights
 

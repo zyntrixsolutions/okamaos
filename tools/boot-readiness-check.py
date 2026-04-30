@@ -123,6 +123,10 @@ def check_shell_and_game_runtime(runner: CheckRunner) -> None:
     run = "usr/bin/okama-run"
     runner.require(contains(shell, "PYGAME_HIDE_SUPPORT_PROMPT"),
                    "shell hides pygame startup banner")
+    runner.require(contains(shell, "pygame.freetype"),
+                   "shell uses pygame.freetype text rendering")
+    runner.require(not contains(shell, "pygame.font."),
+                   "shell avoids pygame.font/SDL_ttf during boot UI startup")
     runner.require(contains(shell, "pygame.display.init()"),
                    "shell initializes display without initializing audio")
     runner.require(not contains(shell, "pygame.init()"),

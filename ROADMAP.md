@@ -31,6 +31,7 @@
 - [x] Keep safe graphics as an explicit fallback instead of making it the default GUI path.
 - [x] Add boot-readiness checks for version alignment, init-script permissions, SDL2_ttf packaging, and shell/game SDL startup contracts.
 - [x] Rebind pygame SDL2_ttf to the Buildroot library so GUI font loading works on VM/live boots.
+- [x] Move the boot shell text renderer off `pygame.font`/SDL_ttf to prevent native VirtualBox startup crashes.
 - [ ] Add signed update verification before automatic OS updates.
 - [ ] Publish a stable public release channel after hardware validation.
 

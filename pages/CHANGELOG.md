@@ -1,5 +1,11 @@
 # OkamaOS Portal Changelog
 
+## 2026-04-30 - UI Recovery
+
+- Prepared OkamaOS `2.0.2` to recover VirtualBox GUI boot.
+- Moved the shell text renderer off `pygame.font`/SDL_ttf and onto `pygame.freetype`.
+- Extended the boot-readiness check so future shell changes cannot reintroduce the SDL_ttf boot path.
+
 ## 2026-04-30 - Boot Readiness
 
 - Prepared OkamaOS `2.0.1` as a boot-readiness release candidate.

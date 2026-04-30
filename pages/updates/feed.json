@@ -1,26 +1,28 @@
 {
   "schema_version": "1.0",
   "channel": "public-preview",
-  "updated_at": "2026-04-29T20:45:00Z",
+  "updated_at": "2026-04-30T00:00:00Z",
   "latest": {
-    "version": "1.0.2",
-    "codename": "Safe System Update",
-    "date": "2026-04-29",
+    "version": "1.1.0",
+    "codename": "Cyber Hardware Readiness",
+    "date": "2026-04-30",
     "status": "preview",
     "priority": "recommended",
     "minimum_supported_version": "0.1.0",
-    "title": "Safe system updates with data preservation",
-    "summary": "OkamaOS can now apply repo-hosted system update bundles that replace CLI, shell, runtime, and brand files while preserving games, saves, settings, and update backups.",
+    "title": "Keyboard, controller, online status, and Bluetooth readiness",
+    "summary": "OkamaOS now treats keyboard input as a first-class system path, broadens generic HID controller detection, shows live online and update status, refreshes the shell with a cyber grid background, and verifies system update hashes.",
     "notes": [
-      "Adds real okama-update apply support for .okupdate system bundles.",
-      "Backs up replaced system files before applying an update.",
-      "Preserves games, saves, controllers, logs, cache, update history, and parent/developer config."
+      "Adds full keyboard shell navigation and developer terminal readiness.",
+      "Broadens generic USB and Bluetooth HID controller detection.",
+      "Shows live Ethernet/Wi-Fi internet state and OS/game update availability in the shell.",
+      "Starts Bluetooth in auto mode for plug-and-play controller readiness.",
+      "Verifies downloaded system update bundles with SHA-256 metadata."
     ],
     "release_notes_url": "CHANGELOG.md",
-    "download_url": "https://zyntrixsolutions.github.io/okamaos/updates/okamaos-v1.0.2.okupdate",
+    "download_url": "https://zyntrixsolutions.github.io/okamaos/updates/okamaos-v1.1.0.okupdate",
     "artifact_status": "bundle-ready",
-    "sha256": "87f43425884332a6e5e2bac2cd69b6c4d59efd53368e0fe43de2cde8ad6cfceb",
-    "size_bytes": 28107
+    "sha256": "5ec35921db9839fb354e5f1953d53392fc26b41d1561cd483bda0eaa46343377",
+    "size_bytes": 41465
   },
   "channels": [
     {

@@ -3,19 +3,20 @@
 ## Stack
 
 OkamaOS uses **BlueZ 5** (`bluetoothd`) for Bluetooth HID controller support.
-BlueZ is started only when:
+BlueZ is started when:
 
-- `BLUETOOTH_ENABLED=yes` in `/etc/okamaos/okama.conf`, **or**
+- `BLUETOOTH_ENABLED=auto` or `yes` in `/etc/okamaos/okama.conf`, **or**
 - Paired controller `.json` files exist in `/var/okamaos/controllers/`
 
-This prevents the ~30 MB Bluetooth stack from loading on systems with no
-Bluetooth hardware or no paired controllers.
+The default is `auto` so common Bluetooth adapters are powered and ready for
+plug-and-play controller pairing while missing adapters fail non-fatally.
 
 ## Buildroot Config Requirements
 
 ```
 BR2_PACKAGE_BLUEZ5_UTILS=y
 BR2_PACKAGE_BLUEZ5_UTILS_CLIENT=y
+BR2_PACKAGE_DBUS=y
 ```
 
 Kernel options required:
@@ -44,6 +45,7 @@ CONFIG_HID_NINTENDO=y     # Switch Pro Controller (kernel ≥ 5.16)
 
 ```bash
 okama-cli bluetooth status           # check adapter power state
+okama-cli bluetooth ready            # power adapter and register pairing agent
 okama-cli bluetooth scan             # scan 15 s, list found devices
 okama-cli bluetooth pair <mac>       # pair; prompts for name; auto-trusts
 okama-cli bluetooth connect <mac>    # connect immediately
@@ -52,12 +54,12 @@ okama-cli bluetooth connect <mac>    # connect immediately
 Paired controller profiles are saved to `/var/okamaos/controllers/<mac>.json`.
 On next boot, `S25okama-bluetooth` reads these profiles and auto-connects.
 
-### via okama-shell Settings (v1 target)
+### via okama-shell Settings
 
-The Settings → Bluetooth screen will guide the user through pairing entirely
-with a controller (if one is already connected via USB or another BT device).
-For the initial pair with no controller, a keyboard may be used only if no
-controller is available.
+The Settings screen now reports Bluetooth availability, power state, and the
+number of connected Bluetooth devices. Pairing commands remain available from
+`okama-cli`, and full keyboard support is available from the developer/recovery
+terminal.
 
 ## Controller Pairing States
 
@@ -93,10 +95,11 @@ okama-cli controllers test           # stream live input events
 okama-cli controllers default <id>   # set preferred controller
 ```
 
-## USB Fallback
+## USB And Keyboard Support
 
 If Bluetooth connection fails on boot, `okama-inputd` will still detect any
-USB HID gamepads automatically. The system never blocks on Bluetooth.
+USB HID gamepads and system keyboards automatically. The system never blocks on
+Bluetooth.
 
 ## Memory Optimisations
 
@@ -130,10 +133,10 @@ evtest /dev/input/eventN
 okama-inputd --test
 ```
 
-## Known Limitations (MVP)
+## Known Limitations
 
 - Battery level reporting not yet surfaced in the shell UI
-- Pairing UI in `okama-shell` is Settings stub only — use `okama-cli` for now
+- Full pairing UI in `okama-shell` is not yet shipped — use `okama-cli` for now
 - `bluetoothctl` is interactive; the non-interactive wrappers in
   `okamaos/bluetooth.py` cover the most common flows
 - Controllers that require authentication PIN codes may need manual

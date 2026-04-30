@@ -1,4 +1,4 @@
 """okamaos — shared Python library for OkamaOS userland tools."""
 
-VERSION = "1.0.6"
-CODENAME = "Hard Drive Installer"
+VERSION = "1.1.0"
+CODENAME = "Cyber Hardware Readiness"

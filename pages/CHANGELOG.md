@@ -1,5 +1,10 @@
 # OkamaOS Portal Changelog
 
+## 2026-04-30 - Cyber Hardware Readiness
+
+- Published OkamaOS `1.1.0` release notes for full keyboard support, generic HID controller readiness, live online/update indicators, and Bluetooth auto readiness.
+- Added update-channel notes for SHA-256 verified system update downloads.
+
 ## 2026-04-30 - GUI Boot Restore
 
 - Restored GUI-first ISO startup for OkamaOS `1.0.6`.

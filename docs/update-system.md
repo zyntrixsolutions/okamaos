@@ -37,6 +37,14 @@ okama-update apply https://zyntrixsolutions.github.io/okamaos/updates/okamaos-v1
 reboot
 ```
 
+When applying a URL from the public feed, `okama-update apply` verifies the
+bundle SHA-256 from feed metadata before extracting it. Local files can be
+verified explicitly:
+
+```bash
+okama-update apply --sha256 <expected-hash> ./update.okupdate
+```
+
 Before replacing files, `okama-update apply` creates a backup in
 `/var/okamaos/updates/backups`.
 

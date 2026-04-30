@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""okama-inputd — OkamaOS controller input daemon.
+"""okama-inputd — OkamaOS system input daemon.
 
-Reads raw evdev events from USB and Bluetooth HID gamepads, normalises them
-through the controller profile map, and broadcasts Okama unified input events
-as newline-delimited JSON to a Unix domain socket.
+Reads raw evdev events from USB and Bluetooth HID gamepads plus system
+keyboards, normalises them, and broadcasts Okama unified input events as
+newline-delimited JSON to a Unix domain socket.
 
 Architecture:
   - One thread per /dev/input/eventN device
   - Main thread accepts socket connections and fans out events to all clients
-  - Hot-plug handled via inotify on /dev/input (or polling fallback)
-  - Keyboard treated as secondary; only emits events in dev/fallback mode
+  - Hot-plug handled by polling /dev/input for generic evdev devices
+  - Keyboard support is enabled for shell navigation, games, and terminal flows
 
 Usage (daemon mode — called by init script):
   okama-inputd --daemon
@@ -57,6 +57,8 @@ EV_KEY  = 1
 EV_ABS  = 3
 EV_MSC  = 4
 
+EVIOCGBIT_BASE = 0x80000000 | (ord("E") << 8)
+
 # evdev ABS axis indices
 ABS_X    = 0
 ABS_Y    = 1
@@ -80,6 +82,16 @@ BTN_START  = 0x13b
 BTN_MODE   = 0x13c  # HOME / Guide
 
 BUTTON_MAP = {
+    0x120: "A",
+    0x121: "B",
+    0x122: "X",
+    0x123: "Y",
+    0x124: "L1",
+    0x125: "R1",
+    0x126: "L2",
+    0x127: "R2",
+    0x128: "SELECT",
+    0x129: "START",
     0x130: "A",
     0x131: "B",
     0x133: "X",
@@ -93,15 +105,19 @@ BUTTON_MAP = {
     0x13c: "HOME",
     0x13d: "L3",
     0x13e: "R3",
+    0x220: "DPAD_UP",
+    0x221: "DPAD_DOWN",
+    0x222: "DPAD_LEFT",
+    0x223: "DPAD_RIGHT",
 }
 
 AXIS_MAP = {
-    ABS_X:    ("LSTICK_X", False),
-    ABS_Y:    ("LSTICK_Y", True),
-    ABS_RX:   ("RSTICK_X", False),
-    ABS_RY:   ("RSTICK_Y", True),
-    ABS_Z:    ("L2_AXIS",  False),
-    ABS_RZ:   ("R2_AXIS",  False),
+    ABS_X:    ("LSTICK_X", False, False),
+    ABS_Y:    ("LSTICK_Y", True, False),
+    ABS_RX:   ("RSTICK_X", False, False),
+    ABS_RY:   ("RSTICK_Y", True, False),
+    ABS_Z:    ("L2_AXIS",  False, True),
+    ABS_RZ:   ("R2_AXIS",  False, True),
 }
 
 HAT_MAP = {
@@ -110,19 +126,73 @@ HAT_MAP = {
 }
 
 
-def normalise_axis(raw: int, inverted: bool = False) -> float:
-    """Map raw evdev axis value (0–255 or –32768–32767) to –1.0..1.0."""
-    if raw > 127:
-        v = (raw - 128) / 127.0
-    elif raw < 0:
+KEYBOARD_BUTTON_MAP = {
+    1: "B",           # ESC
+    14: "B",          # Backspace
+    15: "SELECT",     # Tab
+    28: "A",          # Enter
+    57: "A",          # Space
+    103: "DPAD_UP",
+    105: "DPAD_LEFT",
+    106: "DPAD_RIGHT",
+    108: "DPAD_DOWN",
+    17: "DPAD_UP",    # W
+    30: "DPAD_LEFT",  # A
+    31: "DPAD_DOWN",  # S
+    32: "DPAD_RIGHT", # D
+    35: "HOME",       # H
+}
+
+
+def normalise_axis(raw: int, inverted: bool = False,
+                   trigger: bool = False,
+                   abs_range: tuple[int, int] | None = None) -> float:
+    """Map common evdev axis ranges to the Okama normalized range."""
+    if abs_range:
+        min_v, max_v = abs_range
+        span = max_v - min_v
+        if span > 0:
+            if trigger:
+                v = (raw - min_v) / span
+                return round(max(0.0, min(1.0, v)), 3)
+            center = min_v + span / 2.0
+            half = span / 2.0
+            v = (raw - center) / half
+            if inverted:
+                v = -v
+            if abs(v) < 0.08:
+                v = 0.0
+            return round(max(-1.0, min(1.0, v)), 3)
+
+    if trigger:
+        if raw <= 255:
+            v = raw / 255.0
+        elif raw <= 1023:
+            v = raw / 1023.0
+        elif raw <= 65535:
+            v = raw / 65535.0
+        else:
+            v = raw / 32767.0
+        v = max(0.0, min(1.0, v))
+        return round(v, 3)
+
+    if raw < 0:
         v = raw / 32768.0
+    elif raw <= 255:
+        v = (raw - 127.5) / 127.5
+    elif raw <= 1023:
+        v = (raw - 511.5) / 511.5
+    elif raw <= 32767:
+        v = raw / 32767.0
+    elif raw <= 65535:
+        v = (raw - 32767.5) / 32767.5
     else:
-        v = raw / 128.0 - 1.0
+        v = raw / 32767.0
     if inverted:
         v = -v
     if abs(v) < 0.08:
         v = 0.0
-    return round(v, 3)
+    return round(max(-1.0, min(1.0, v)), 3)
 
 
 class ControllerThread(threading.Thread):
@@ -134,6 +204,8 @@ class ControllerThread(threading.Thread):
         self.broadcast = broadcast_fn
         self.disconnect_fn = disconnect_fn
         self._stop = threading.Event()
+        self._hat_state: dict = {}
+        self._axis_ranges: dict[int, tuple[int, int]] = {}
 
     def run(self):
         try:
@@ -143,6 +215,7 @@ class ControllerThread(threading.Thread):
             return
 
         name = self._read_name(fd)
+        self._axis_ranges = self._read_axis_ranges(fd)
         log.info("Controller %d connected: %s (%s)",
                  self.controller_id, name, self.path)
         self.broadcast({
@@ -186,25 +259,121 @@ class ControllerThread(threading.Thread):
                 })
         elif ev_type == EV_ABS:
             if code in AXIS_MAP:
-                axis_name, inverted = AXIS_MAP[code]
+                axis_name, inverted, trigger = AXIS_MAP[code]
                 self.broadcast({
                     "type": "axis",
                     "axis": axis_name,
-                    "value": normalise_axis(value, inverted),
+                    "value": normalise_axis(
+                        value, inverted, trigger,
+                        self._axis_ranges.get(code)),
                     "controller": self.controller_id,
                 })
             elif code in HAT_MAP:
                 neg_btn, pos_btn = HAT_MAP[code]
+                prev = self._hat_state.get(code)
+                current = None
                 if value < 0:
-                    self.broadcast({"type": "button", "button": neg_btn,
-                                    "state": "pressed", "controller": self.controller_id})
+                    current = neg_btn
                 elif value > 0:
-                    self.broadcast({"type": "button", "button": pos_btn,
+                    current = pos_btn
+
+                if prev and prev != current:
+                    self.broadcast({"type": "button", "button": prev,
+                                    "state": "released", "controller": self.controller_id})
+                if current and current != prev:
+                    self.broadcast({"type": "button", "button": current,
                                     "state": "pressed", "controller": self.controller_id})
-                else:
+                elif current is None and prev is None:
                     for btn in (neg_btn, pos_btn):
                         self.broadcast({"type": "button", "button": btn,
                                         "state": "released", "controller": self.controller_id})
+                self._hat_state[code] = current
+
+    def _read_name(self, fd) -> str:
+        import fcntl
+        EVIOCGNAME = 0x80ff4506
+        buf = bytearray(256)
+        try:
+            fcntl.ioctl(fd, EVIOCGNAME, buf)
+            return buf.decode(errors="replace").rstrip("\x00").strip()
+        except Exception:
+            return os.path.basename(self.path)
+
+    def _read_axis_ranges(self, fd) -> dict[int, tuple[int, int]]:
+        import fcntl
+        ranges = {}
+        for code in AXIS_MAP:
+            request = EVIOCGBIT_BASE | (24 << 16) | (0x40 + code)
+            buf = bytearray(24)
+            try:
+                fcntl.ioctl(fd, request, buf)
+                _, min_v, max_v, _, _, _ = struct.unpack("iiiiii", buf)
+            except OSError:
+                continue
+            if max_v > min_v:
+                ranges[code] = (min_v, max_v)
+        return ranges
+
+    def stop(self):
+        self._stop.set()
+
+
+class KeyboardThread(threading.Thread):
+    """Keyboard-to-Okama input path for shell navigation and games."""
+
+    def __init__(self, path: str, broadcast_fn, disconnect_fn):
+        super().__init__(daemon=True)
+        self.path = path
+        self.broadcast = broadcast_fn
+        self.disconnect_fn = disconnect_fn
+        self._stop = threading.Event()
+
+    def run(self):
+        try:
+            fd = open(self.path, "rb")
+        except (PermissionError, FileNotFoundError) as e:
+            log.warning("Cannot open keyboard %s: %s", self.path, e)
+            return
+
+        name = self._read_name(fd)
+        log.info("Keyboard connected: %s (%s)", name, self.path)
+        self.broadcast({
+            "type": "connect",
+            "controller": -1,
+            "name": name,
+            "bus": "keyboard",
+            "path": self.path,
+        })
+
+        try:
+            while not self._stop.is_set():
+                r, _, _ = select.select([fd], [], [], 0.1)
+                if not r:
+                    continue
+                data = fd.read(EVSIZE)
+                if len(data) < EVSIZE:
+                    break
+                _, _, ev_type, code, value = struct.unpack(EVFMT, data)
+                if ev_type != EV_KEY or value not in (0, 1):
+                    continue
+                button = KEYBOARD_BUTTON_MAP.get(code)
+                if button:
+                    self.broadcast({
+                        "type": "button",
+                        "button": button,
+                        "state": "pressed" if value else "released",
+                        "controller": -1,
+                    })
+        except OSError:
+            pass
+        finally:
+            fd.close()
+            self.broadcast({
+                "type": "disconnect",
+                "controller": -1,
+                "path": self.path,
+            })
+            self.disconnect_fn(self.path)
 
     def _read_name(self, fd) -> str:
         import fcntl
@@ -226,9 +395,15 @@ class InputDaemon:
         self._clients: list = []
         self._clients_lock = threading.Lock()
         self._controllers: dict = {}   # id -> ControllerThread
+        self._keyboards: dict = {}     # path -> KeyboardThread
         self._next_id = 0
         self._id_lock = threading.Lock()
         self._stop = threading.Event()
+        conf = cfg_mod.get()
+        self.keyboard_enabled = conf.get(
+            "SYSTEM_KEYBOARD_ENABLED",
+            conf.get("KEYBOARD_FALLBACK", "yes"),
+        ).lower() == "yes"
 
     def broadcast(self, event: dict) -> None:
         line = (json.dumps(event) + "\n").encode()
@@ -246,6 +421,9 @@ class InputDaemon:
         with self._id_lock:
             self._controllers.pop(controller_id, None)
 
+    def _on_keyboard_disconnect(self, path: str) -> None:
+        self._keyboards.pop(path, None)
+
     def _next_controller_id(self) -> int:
         with self._id_lock:
             cid = self._next_id
@@ -253,33 +431,77 @@ class InputDaemon:
         return cid
 
     def _scan_devices(self):
-        """Enumerate /dev/input/event* and start a thread per new gamepad."""
+        """Enumerate /dev/input/event* and start readers for new input devices."""
         existing_paths = {t.path for t in self._controllers.values()}
+        existing_paths.update(self._keyboards)
         for path in sorted(glob.glob("/dev/input/event*")):
             if path in existing_paths:
                 continue
-            if not self._is_gamepad(path):
-                continue
-            cid = self._next_controller_id()
-            t = ControllerThread(
-                path, cid, self.broadcast, self._on_disconnect)
-            self._controllers[cid] = t
-            t.start()
+            if self._is_gamepad(path):
+                cid = self._next_controller_id()
+                t = ControllerThread(
+                    path, cid, self.broadcast, self._on_disconnect)
+                self._controllers[cid] = t
+                t.start()
+            elif self.keyboard_enabled and self._is_keyboard(path):
+                t = KeyboardThread(path, self.broadcast,
+                                   self._on_keyboard_disconnect)
+                self._keyboards[path] = t
+                t.start()
 
     def _is_gamepad(self, path: str) -> bool:
         """Return True if the device looks like a joystick/gamepad."""
-        EV_ABS_bit = 1 << EV_ABS
-        EV_KEY_bit = 1 << EV_KEY
+        bits = self._ev_bits(path, EV_SYN, 32)
+        if not self._bit_is_set(bits, EV_KEY):
+            return False
+        key_bits = self._ev_bits(path, EV_KEY, 96)
+        has_gamepad_button = any(
+            self._bit_is_set(key_bits, code)
+            for code in tuple(BUTTON_MAP) + tuple(range(0x120, 0x140))
+        )
+        has_abs = self._bit_is_set(bits, EV_ABS)
+        name = self._device_name(path).lower()
+        return has_gamepad_button or (has_abs and any(
+            token in name for token in ("gamepad", "joystick", "controller", "xbox", "sony")
+        ))
+
+    def _is_keyboard(self, path: str) -> bool:
+        """Return True if the device exposes keyboard keys."""
+        name = self._device_name(path).lower()
+        if "keyboard" in name or "kbd" in name:
+            return True
+        bits = self._ev_bits(path, EV_KEY, 96)
+        required = (17, 30, 31, 32, 28)  # W/A/S/D/Enter
+        arrows = (103, 105, 106, 108)
+        return all(self._bit_is_set(bits, code) for code in required) and any(
+            self._bit_is_set(bits, code) for code in arrows
+        )
+
+    def _device_name(self, path: str) -> str:
+        event = os.path.basename(path)
+        name_path = f"/sys/class/input/{event}/device/name"
+        try:
+            with open(name_path) as f:
+                return f.read().strip()
+        except OSError:
+            return event
+
+    def _ev_bits(self, path: str, ev_type: int, size: int) -> bytes:
         import fcntl
-        EVIOCGBIT_EV = 0x80084520
+        request = EVIOCGBIT_BASE | (size << 16) | (0x20 + ev_type)
+        buf = bytearray(size)
         try:
             with open(path, "rb") as fd:
-                buf = bytearray(4)
-                fcntl.ioctl(fd, EVIOCGBIT_EV, buf)
-                bits = struct.unpack("<I", buf)[0]
-                return bool(bits & EV_ABS_bit) and bool(bits & EV_KEY_bit)
-        except Exception:
+                fcntl.ioctl(fd, request, buf)
+            return bytes(buf)
+        except OSError:
+            return b""
+
+    def _bit_is_set(self, bits: bytes, bit: int) -> bool:
+        idx = bit // 8
+        if idx >= len(bits):
             return False
+        return bool(bits[idx] & (1 << (bit % 8)))
 
     def run_server(self):
         if os.path.exists(SOCKET_PATH):

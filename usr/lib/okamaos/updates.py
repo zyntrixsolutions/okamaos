@@ -67,6 +67,7 @@ def check_os_update(current_version: str | None = None) -> dict | None:
         "title": latest.get("title", "OkamaOS update available"),
         "summary": latest.get("summary", ""),
         "download_url": latest.get("download_url", ""),
+        "sha256": latest.get("sha256", ""),
         "priority": latest.get("priority", "recommended"),
     }
 
@@ -97,6 +98,7 @@ def check_game_updates(installed: list | None = None) -> list:
                 "title": f"{app.get('name', app_id)} update available",
                 "summary": app.get("tagline", app.get("description", "")),
                 "download_url": app.get("download_url", ""),
+                "sha256": app.get("sha256", ""),
                 "priority": "available",
             })
 

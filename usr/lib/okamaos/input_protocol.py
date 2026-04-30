@@ -53,6 +53,10 @@ class InputClient:
         except (FileNotFoundError, ConnectionRefusedError, OSError):
             return False
 
+    @property
+    def connected(self) -> bool:
+        return self._connected
+
     def poll(self) -> list:
         """Return list of event dicts received since last poll."""
         if not self._connected:

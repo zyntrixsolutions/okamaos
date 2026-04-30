@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.1.0] - 2026-04-30
+
+### Added
+
+- Added first-class keyboard support for shell navigation, daemon input events, and developer terminal workflows.
+- Added live network status plumbing for Ethernet/Wi-Fi link, IP, default route, and internet reachability.
+- Added shell status badges for online state, OS/game update availability, Bluetooth, version, and input devices.
+- Added a cached cyber checkered fence/grid shell background for the retro-futuristic UI refresh.
+- Added Bluetooth readiness handling that powers adapters, registers the default agent, and reports connected devices.
+- Added SHA-256 verification for downloaded `.okupdate` bundles when feed metadata provides a hash.
+
+### Fixed
+
+- Broadened generic HID controller detection beyond one narrow evdev shape so common USB/Bluetooth controllers are picked up more reliably.
+- Updated network startup to try all wired interfaces and optional `wl*`/`wlan*` Wi-Fi devices instead of only `eth0`/`wlan0`.
+- Enabled kernel and Buildroot pieces needed for full keyboard terminals, generic HID input, Bluetooth DBus startup, HTTPS update checks, and CA validation.
+
+### Changed
+
+- Bumped runtime, installer, package, and shell-visible version tracking to `1.1.0`.
+
 ## [1.0.6] - 2026-04-30
 
 ### Fixed

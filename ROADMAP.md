@@ -20,6 +20,11 @@
 ## Runtime And Distribution
 
 - [x] Maintain version tracking through root `VERSION`, package version files, and runtime config.
+- [x] Ship first-class keyboard support for shell navigation, games, and developer/recovery terminal flows.
+- [x] Broaden generic evdev/HID controller detection for USB and Bluetooth controllers.
+- [x] Add live online and OS/game update indicators to the shell UI.
+- [x] Add the retro-futuristic cyber grid/fence shell background.
+- [x] Add SHA-256 verification for downloaded system update bundles when feed metadata includes hashes.
 - [x] Add a guided hard-drive installer for live images and VM disks.
 - [x] Package bootloader and kernel assets needed by installed-disk boots.
 - [x] Restore the normal Buildroot post-image ISO build path and canonical `output/okamaos.iso` artifact.
@@ -39,5 +44,8 @@
 - [x] Require explicit confirmation before partitioning and formatting a target disk.
 - [x] Copy the live root filesystem to a new target partition.
 - [x] Install a legacy BIOS Extlinux boot path for local disks.
+- [x] Show hard-drive installer availability from the Settings surface.
+- [x] Start Bluetooth in auto mode for plug-and-play HID controller readiness.
+- [x] Show live Ethernet/Wi-Fi internet status in Settings and CLI status.
 - [ ] Add UEFI boot support for newer hardware.
 - [ ] Add controller-driven installer access from Settings after hardware validation.

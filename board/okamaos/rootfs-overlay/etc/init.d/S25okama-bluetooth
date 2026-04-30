@@ -1,11 +1,11 @@
 #!/bin/sh
-# S25okama-bluetooth — start BlueZ only when Bluetooth is needed.
-# Checks /etc/okamaos/okama.conf BLUETOOTH_ENABLED and the presence of any
-# paired controller trust files before starting bluetoothd.
+# S25okama-bluetooth — start BlueZ for plug-and-play HID controllers.
+# BLUETOOTH_ENABLED=yes or auto starts the service when bluetoothd exists.
+# Existing trusted controller profiles are reconnected after the adapter powers on.
 
 CONF=/etc/okamaos/okama.conf
 CONTROLLERS_DIR=/var/okamaos/controllers
-BT_ENABLED=no
+BT_ENABLED=auto
 
 # Read config
 if [ -f "$CONF" ]; then
@@ -19,13 +19,19 @@ fi
 
 case "$1" in
   start)
-    if [ "$BT_ENABLED" = "yes" ]; then
+    if [ "$BT_ENABLED" = "yes" ] || [ "$BT_ENABLED" = "auto" ]; then
         echo "Starting Bluetooth (bluetoothd)..."
         if which bluetoothd >/dev/null 2>&1; then
-            bluetoothd --nodetach &
+            if which dbus-daemon >/dev/null 2>&1 && [ ! -S /var/run/dbus/system_bus_socket ]; then
+                mkdir -p /var/run/dbus
+                dbus-daemon --system --fork >/dev/null 2>&1 || true
+            fi
+            bluetoothd &
             sleep 1
-            # Auto-connect trusted controllers
             if which bluetoothctl >/dev/null 2>&1; then
+                bluetoothctl power on >/dev/null 2>&1 || true
+                bluetoothctl agent on >/dev/null 2>&1 || true
+                bluetoothctl default-agent >/dev/null 2>&1 || true
                 for f in "$CONTROLLERS_DIR"/*.json; do
                     [ -f "$f" ] || continue
                     MAC=$(python3 -c "import json,sys; d=json.load(open('$f')); print(d.get('mac',''))" 2>/dev/null)

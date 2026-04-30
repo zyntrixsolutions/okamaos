@@ -4,7 +4,7 @@ import os
 import re
 
 _DEFAULTS = {
-    "VERSION": "1.0.6",
+    "VERSION": "1.1.0",
     "UPDATE_FEED_URL": "https://zyntrixsolutions.github.io/okamaos/updates/feed.json",
     "APP_CATALOG_URL": "https://zyntrixsolutions.github.io/okamaos/catalog/apps.json",
     "UPDATE_CHECK_ENABLED": "yes",
@@ -17,12 +17,14 @@ _DEFAULTS = {
     "AUDIO_BACKEND": "alsa",
     "DEFAULT_VOLUME": "80",
     "CONTROLLER_PREFER": "usb",
+    "SYSTEM_KEYBOARD_ENABLED": "yes",
     "KEYBOARD_FALLBACK": "yes",
-    "BLUETOOTH_ENABLED": "no",
+    "BLUETOOTH_ENABLED": "auto",
     "BT_SCAN_TIMEOUT": "30",
     "BT_AUTO_RECONNECT": "yes",
     "NETWORK_ENABLED": "yes",
     "WIFI_ENABLED": "no",
+    "INTERNET_PROBE_TIMEOUT_SEC": "0.75",
     "GAMES_DIR": "/var/okamaos/games",
     "SAVES_DIR": "/var/okamaos/saves",
     "LOGS_DIR": "/var/okamaos/logs",

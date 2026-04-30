@@ -5,7 +5,7 @@ partnership with **OkamaLabs**. OkamaOS boots straight into a fullscreen
 controller-driven shell, runs one game at a time, and is designed to feel like
 a dedicated console — not a PC.
 
-> Version: **1.0.6 GUI Boot Restore**. Public download and update portal files live in
+> Version: **1.1.0 Cyber Hardware Readiness**. Public download and update portal files live in
 > `pages/` and deploy through GitHub Pages.
 
 > Status: **MVP foundation**. Buildable rootfs overlay, working CLI tooling,
@@ -17,7 +17,8 @@ a dedicated console — not a PC.
 
 - Buildroot-based, x86_64, BusyBox userland
 - No desktop, no window manager, no terminal in normal mode
-- Controller-first input via `okama-inputd` (USB + Bluetooth via BlueZ)
+- Full keyboard input plus generic USB/Bluetooth controller input via `okama-inputd`
+- Live shell indicators for online state and OS/game update availability
 - `.ok` package format with manifest validation
 - One-active-game lifecycle via `okama-run`
 - Live-to-disk installation via `okama-install`
@@ -44,6 +45,7 @@ land on `main`. See `pages/README.md` for catalog and update feed contracts.
 make naming-check        # verify no "akama" misspellings
 make package-demo        # build games/demo into a .ok file
 ./usr/bin/okama-cli status
+./usr/bin/okama-cli network status
 ./usr/bin/okama-cli verify build/demo.ok
 ```
 

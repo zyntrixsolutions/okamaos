@@ -1,6 +1,6 @@
 #!/bin/sh
 # S25okama-bluetooth — start BlueZ with plug-and-play controller support.
-# v2.0.0: Auto-pairing agent, auto-reconnect, and discovery support.
+# Auto-pairing agent, auto-reconnect, and discovery support.
 
 CONF=/etc/okamaos/okama.conf
 CONTROLLERS_DIR=/var/okamaos/controllers
@@ -51,7 +51,7 @@ auto_connect_controllers() {
 case "$1" in
   start)
     if [ "$BT_ENABLED" = "yes" ]; then
-        echo "Starting Bluetooth v2.0.0 (bluetoothd)..."
+        echo "Starting OkamaOS Bluetooth service..."
         if which bluetoothd >/dev/null 2>&1; then
             # Start bluetoothd with minimal plugins for gamepads
             bluetoothd --nodetach --plugin=input &

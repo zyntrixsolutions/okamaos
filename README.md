@@ -5,14 +5,14 @@ partnership with **OkamaLabs**. OkamaOS boots straight into a fullscreen
 controller-driven shell, runs one game at a time, and is designed to feel like
 a dedicated console — not a PC.
 
-> Version: **2.0.0 Cyberpunk Major Update**. Public download and update portal files live in
+> Version: **2.0.4 Bitmap UI**. Public download and update portal files live in
 > `pages/` and deploy through GitHub Pages.
 
-> Status: **Production Ready**. Full controller/keyboard support, animated cyberpunk UI,
+> Status: **Release Candidate**. Full controller/keyboard support, animated cyberpunk UI,
 > WiFi/Ethernet status monitoring, Bluetooth plug-and-play, generic HID drivers,
-> and hard disk installation with EFI support.
+> hard disk installation with EFI support, and a boot-readiness check for release builds.
 
-## v2.0.0 Highlights
+## v2.0.4 Highlights
 
 - **Cyberpunk Retro UI** — Animated checkered net/fence background with neon accents
 - **Full Keyboard + Controller Support** — Navigate with keyboard or any gamepad
@@ -21,6 +21,10 @@ a dedicated console — not a PC.
 - **Generic HID Drivers** — Support for Logitech, 8bitdo, and generic USB gamepads
 - **Update Notifications** — Visual badge when OS/game updates are available
 - **EFI Support** — Hard disk installer supports both BIOS and EFI boot
+- **Boot Readiness Check** — Release checks validate version, init, and SDL runtime contracts
+- **VirtualBox Guard** — VirtualBox video boots use a Pygame-free framebuffer UI instead of crashing in native SDL startup
+- **Crash Fallback** — Native UI crash codes switch to safe framebuffer mode instead of repeating segfault loops
+- **Bitmap Text Renderer** — Boot UI text no longer imports Pygame font, SDL_ttf, or Pygame freetype native libraries
 
 ## Highlights
 
@@ -51,6 +55,7 @@ land on `main`. See `pages/README.md` for catalog and update feed contracts.
 
 ```bash
 make naming-check        # verify no "akama" misspellings
+make boot-readiness-check # verify boot/runtime release contracts
 make package-demo        # build games/demo into a .ok file
 ./usr/bin/okama-cli status
 ./usr/bin/okama-cli verify build/demo.ok

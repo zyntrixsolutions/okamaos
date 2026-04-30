@@ -1,5 +1,58 @@
 # Changelog
 
+## [2.0.4] - 2026-04-30
+
+### Fixed
+
+- Removed `pygame.freetype` from the boot shell after live boot exposed the same page-alignment failure in the bundled freetype wheel library.
+- Added an in-process bitmap text renderer for `okama-shell`, keeping the graphical boot UI off all Pygame font, SDL_ttf, and freetype native paths.
+
+### Changed
+
+- Bumped runtime, installer, package, config, and documentation version tracking to `2.0.4`.
+- Extended `make boot-readiness-check` to reject both `pygame.font` and `pygame.freetype` in the boot shell.
+
+## [2.0.3] - 2026-04-30
+
+### Fixed
+
+- Added `okama-shell-launcher` so tty1 no longer loops raw native `Segmentation fault` output when SDL/Pygame crashes before Python can handle it.
+- Detects VirtualBox's `0x80ee` display adapter before native SDL startup and launches `okama-safe-ui` directly for that video path.
+- Added `okama-safe-ui`, a Pygame-free framebuffer UI for Play, Settings, and Power access when the native SDL UI is unsafe.
+
+### Changed
+
+- Bumped runtime, installer, package, config, and documentation version tracking to `2.0.3`.
+- Extended `make boot-readiness-check` to require the guarded launcher and framebuffer fallback path.
+
+## [2.0.2] - 2026-04-30
+
+### Fixed
+
+- Moved the boot shell text renderer from `pygame.font`/SDL_ttf to `pygame.freetype` so VirtualBox boots do not crash in the SDL_ttf native path.
+- Kept the graphical shell independent of the fragile font module while preserving the same fullscreen UI layout and labels.
+
+### Changed
+
+- Bumped runtime, installer, package, config, and documentation version tracking to `2.0.2`.
+- Extended `make boot-readiness-check` to fail if the boot shell starts using `pygame.font` again.
+
+## [2.0.1] - 2026-04-30
+
+### Fixed
+
+- Fixed GUI boot failure caused by pygame loading the bundled manylinux `libSDL2_ttf` instead of the Buildroot SDL2_ttf library.
+- Rebound pygame's SDL2_ttf wheel library to the Buildroot runtime, matching the existing SDL2, image, and mixer bindings.
+- Avoided shell-only ALSA startup noise on machines or VMs without a sound card by using SDL's silent audio fallback for the shell.
+- Switched `okama-run` from the obsolete SDL `fbcon` driver to the same SDL2 KMS/DRM path used by the shell.
+- Hid the pygame support banner during boot so startup output stays focused on actionable OkamaOS status.
+
+### Changed
+
+- Bumped runtime, installer, package, config, and documentation version tracking to `2.0.1`.
+- Added `make boot-readiness-check` to validate version alignment, init-script permissions, SDL2_ttf packaging, and shell/game SDL startup contracts before release builds.
+- Updated audio init messaging to report no-card fallback instead of continuing with confusing ALSA setup output.
+
 ## [2.0.0] - 2026-04-30 - MAJOR UPDATE
 
 ### Added

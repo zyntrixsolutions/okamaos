@@ -1,6 +1,6 @@
 #!/bin/sh
 # S40okama-network — bring up networking with WiFi/Ethernet auto-detection.
-# v2.0.0: Enhanced WiFi/Ethernet support with connectivity monitoring.
+# Enhanced WiFi/Ethernet support with connectivity monitoring.
 
 CONF=/etc/okamaos/okama.conf
 NET_ENABLED=yes
@@ -82,7 +82,7 @@ case "$1" in
         exit 0
     fi
     
-    echo "Starting OkamaOS Network v2.0.0..."
+    echo "Starting OkamaOS Network..."
     
     # Bring up loopback
     ip link set lo up 2>/dev/null || ifconfig lo up 2>/dev/null || true

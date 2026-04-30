@@ -27,7 +27,7 @@ QEMU_ROOTFS        ?= $(BR_OUTPUT)/images/rootfs.ext4
 
 .PHONY: help setup buildroot okamaos-build okamaos-run-qemu okamaos-clean \
         package-demo memory-test controller-test naming-check defconfig \
-        all clean
+        boot-readiness-check all clean
 
 help:
 	@echo "OkamaOS build targets:"
@@ -40,6 +40,7 @@ help:
 	@echo "  make memory-test      - run tools/measure-memory.sh"
 	@echo "  make controller-test  - run tools/controller-test.sh"
 	@echo "  make naming-check     - fail if 'akama' appears anywhere"
+	@echo "  make boot-readiness-check - verify boot/runtime release contracts"
 
 all: naming-check package-demo
 
@@ -89,5 +90,8 @@ controller-test:
 
 naming-check:
 	@bash $(TOPDIR)/tools/check-naming.sh
+
+boot-readiness-check:
+	@python3 $(TOPDIR)/tools/boot-readiness-check.py
 
 clean: okamaos-clean

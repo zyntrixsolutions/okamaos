@@ -1,0 +1,72 @@
+#!/bin/sh
+# okama-shell-launcher - guarded tty1 shell launcher for OkamaOS.
+
+LOG_DIR=${OKAMA_LOG_DIR:-/var/okamaos/logs}
+LOG_FILE="$LOG_DIR/shell.log"
+SAFE_FLAG=${OKAMA_SAFE_FLAG:-/run/okamaos/force-safe-ui}
+SHELL_BIN=${OKAMA_SHELL_BIN:-/usr/bin/okama-shell}
+SAFE_UI_BIN=${OKAMA_SAFE_UI_BIN:-/usr/bin/okama-safe-ui}
+
+mkdir -p "$LOG_DIR" "$(dirname "$SAFE_FLAG")"
+export PYTHONPATH=/usr/lib/okamaos
+
+log_line() {
+    printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$*" >> "$LOG_FILE"
+}
+
+is_native_crash_code() {
+    case "$1" in
+        134|135|136|139)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+has_virtualbox_video() {
+    for dev in /sys/bus/pci/devices/*; do
+        [ -r "$dev/vendor" ] || continue
+        [ -r "$dev/class" ] || continue
+        vendor=$(cat "$dev/vendor" 2>/dev/null)
+        class=$(cat "$dev/class" 2>/dev/null)
+        case "$vendor:$class" in
+            0x80ee:0x03*)
+                return 0
+                ;;
+        esac
+    done
+    return 1
+}
+
+run_safe_ui() {
+    reason="$1"
+    export OKAMA_SAFE_UI_REASON="$reason"
+    log_line "starting safe framebuffer UI: $reason"
+    printf '\nOkamaOS safe framebuffer UI: %s\n' "$reason"
+    "$SAFE_UI_BIN"
+}
+
+while true; do
+    if [ "${OKAMA_FORCE_SAFE_UI:-}" = "1" ] || [ -e "$SAFE_FLAG" ]; then
+        run_safe_ui "forced by boot configuration"
+        exit_code=$?
+    elif [ "${OKAMA_FORCE_NATIVE_UI:-}" != "1" ] && has_virtualbox_video; then
+        run_safe_ui "VirtualBox video path detected"
+        exit_code=$?
+    else
+        "$SHELL_BIN"
+        exit_code=$?
+        if is_native_crash_code "$exit_code"; then
+            printf '\nNative OkamaOS UI crashed with code %s; switching to safe framebuffer UI.\n' "$exit_code"
+            log_line "native okama-shell crashed with code $exit_code"
+            touch "$SAFE_FLAG"
+            run_safe_ui "native UI crash code $exit_code"
+            exit_code=$?
+        fi
+    fi
+
+    log_line "shell session exited with code $exit_code; restarting in 2s"
+    sleep 2
+done

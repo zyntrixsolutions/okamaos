@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""okama-shell — OkamaOS v2.0.0 fullscreen controller-first UI shell.
+"""okama-shell — OkamaOS v2.0.4 fullscreen controller-first UI shell.
 
 MAJOR UPDATE: Cyberpunk UI, Full Keyboard/Generic Controller Support,
 Network Status, Online Indicators, Bluetooth Plug-and-Play
@@ -35,6 +35,8 @@ import glob
 import math
 import random
 
+os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+
 _lib = os.environ.get("OKAMA_LIB", "")
 if not _lib:
     _lib = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../lib")
@@ -62,6 +64,7 @@ except Exception as exc:
     PYGAME_OK = False
     PYGAME_IMPORT_ERROR = exc
 
+import okamaos
 from okamaos.input_protocol import InputClient
 import okamaos.config as cfg_mod
 import okamaos.games as games_mod
@@ -108,6 +111,58 @@ BUTTON_HINT_B = "[B] Back"
 BUTTON_HINT_DPAD = "[↕] Navigate"
 BUTTON_HINT_START = "[START] Home"
 BUTTON_HINT_L1R1 = "[L1/R1] Tab"
+
+BITMAP_FONT = {
+    " ": ("00000", "00000", "00000", "00000", "00000", "00000", "00000"),
+    "!": ("00100", "00100", "00100", "00100", "00100", "00000", "00100"),
+    "?": ("01110", "10001", "00001", "00010", "00100", "00000", "00100"),
+    ".": ("00000", "00000", "00000", "00000", "00000", "01100", "01100"),
+    ",": ("00000", "00000", "00000", "00000", "01100", "00100", "01000"),
+    ":": ("00000", "01100", "01100", "00000", "01100", "01100", "00000"),
+    "-": ("00000", "00000", "00000", "11111", "00000", "00000", "00000"),
+    "_": ("00000", "00000", "00000", "00000", "00000", "00000", "11111"),
+    "/": ("00001", "00010", "00010", "00100", "01000", "01000", "10000"),
+    "(": ("00010", "00100", "01000", "01000", "01000", "00100", "00010"),
+    ")": ("01000", "00100", "00010", "00010", "00010", "00100", "01000"),
+    "[": ("01110", "01000", "01000", "01000", "01000", "01000", "01110"),
+    "]": ("01110", "00010", "00010", "00010", "00010", "00010", "01110"),
+    "0": ("01110", "10001", "10011", "10101", "11001", "10001", "01110"),
+    "1": ("00100", "01100", "00100", "00100", "00100", "00100", "01110"),
+    "2": ("01110", "10001", "00001", "00010", "00100", "01000", "11111"),
+    "3": ("11110", "00001", "00001", "01110", "00001", "00001", "11110"),
+    "4": ("00010", "00110", "01010", "10010", "11111", "00010", "00010"),
+    "5": ("11111", "10000", "10000", "11110", "00001", "00001", "11110"),
+    "6": ("00110", "01000", "10000", "11110", "10001", "10001", "01110"),
+    "7": ("11111", "00001", "00010", "00100", "01000", "01000", "01000"),
+    "8": ("01110", "10001", "10001", "01110", "10001", "10001", "01110"),
+    "9": ("01110", "10001", "10001", "01111", "00001", "00010", "11100"),
+    "A": ("01110", "10001", "10001", "11111", "10001", "10001", "10001"),
+    "B": ("11110", "10001", "10001", "11110", "10001", "10001", "11110"),
+    "C": ("01110", "10001", "10000", "10000", "10000", "10001", "01110"),
+    "D": ("11110", "10001", "10001", "10001", "10001", "10001", "11110"),
+    "E": ("11111", "10000", "10000", "11110", "10000", "10000", "11111"),
+    "F": ("11111", "10000", "10000", "11110", "10000", "10000", "10000"),
+    "G": ("01110", "10001", "10000", "10111", "10001", "10001", "01111"),
+    "H": ("10001", "10001", "10001", "11111", "10001", "10001", "10001"),
+    "I": ("01110", "00100", "00100", "00100", "00100", "00100", "01110"),
+    "J": ("00111", "00010", "00010", "00010", "10010", "10010", "01100"),
+    "K": ("10001", "10010", "10100", "11000", "10100", "10010", "10001"),
+    "L": ("10000", "10000", "10000", "10000", "10000", "10000", "11111"),
+    "M": ("10001", "11011", "10101", "10101", "10001", "10001", "10001"),
+    "N": ("10001", "11001", "10101", "10011", "10001", "10001", "10001"),
+    "O": ("01110", "10001", "10001", "10001", "10001", "10001", "01110"),
+    "P": ("11110", "10001", "10001", "11110", "10000", "10000", "10000"),
+    "Q": ("01110", "10001", "10001", "10001", "10101", "10010", "01101"),
+    "R": ("11110", "10001", "10001", "11110", "10100", "10010", "10001"),
+    "S": ("01111", "10000", "10000", "01110", "00001", "00001", "11110"),
+    "T": ("11111", "00100", "00100", "00100", "00100", "00100", "00100"),
+    "U": ("10001", "10001", "10001", "10001", "10001", "10001", "01110"),
+    "V": ("10001", "10001", "10001", "10001", "10001", "01010", "00100"),
+    "W": ("10001", "10001", "10001", "10101", "10101", "10101", "01010"),
+    "X": ("10001", "10001", "01010", "00100", "01010", "10001", "10001"),
+    "Y": ("10001", "10001", "01010", "00100", "00100", "00100", "00100"),
+    "Z": ("11111", "00001", "00010", "00100", "01000", "10000", "11111"),
+}
 
 
 # ---------------------------------------------------------------------------
@@ -371,7 +426,7 @@ def _text_shell():
     """Minimal text-mode shell for terminals / no-Pygame environments."""
     conf = cfg_mod.get()
     print("\n" + "=" * 48)
-    print("  OkamaOS v2.0.0 Shell  (text mode)")
+    print(f"  OkamaOS v{conf.get('VERSION', okamaos.VERSION)} Shell  (text mode)")
     print("=" * 48)
 
     while True:
@@ -414,6 +469,78 @@ def _log_shell_error(message: str):
         pass
 
 
+def _has_alsa_output() -> bool:
+    cards_path = "/proc/asound/cards"
+    try:
+        with open(cards_path, encoding="utf-8", errors="replace") as cards:
+            data = cards.read().strip().lower()
+        return bool(data) and "no soundcards" not in data
+    except FileNotFoundError:
+        return bool(glob.glob("/dev/snd/controlC*") or glob.glob("/dev/snd/pcm*"))
+    except Exception:
+        return False
+
+
+def _select_shell_audio_driver(conf) -> str:
+    configured = (conf.get("AUDIO_BACKEND", "alsa") or "alsa").strip().lower()
+    if configured == "alsa" and not _has_alsa_output():
+        return "dummy"
+    return configured or "dummy"
+
+
+def _configure_sdl_environment(conf, windowed: bool) -> None:
+    os.environ.setdefault("SDL_VIDEODRIVER", "kmsdrm")
+    os.environ.setdefault("SDL_KMSDRM_REQUIRE_DRM_MASTER", "0")
+    os.environ.setdefault("SDL_FBDEV",
+                          conf.get("FRAMEBUFFER_DEVICE", "/dev/fb0"))
+    os.environ.setdefault("SDL_AUDIODRIVER",
+                          _select_shell_audio_driver(conf))
+    os.environ.setdefault("SDL_RENDER_DRIVER", "software")
+    os.environ.setdefault("LIBGL_ALWAYS_SOFTWARE", "1")
+    os.environ.setdefault("MESA_LOADER_DRIVER_OVERRIDE", "kms_swrast")
+
+    if windowed:
+        os.environ["SDL_VIDEODRIVER"] = "x11"  # dev host
+
+
+class ShellFont:
+    """Small bitmap renderer that avoids pygame font/native freetype modules."""
+
+    def __init__(self, size: int, bold: bool = False):
+        self.scale = max(2, int(round(size / 7)))
+        self.bold = bold
+
+    def render(self, text: str, antialias_or_color, color=None):
+        if color is None:
+            color = antialias_or_color
+        text = str(text)
+        width = max(1, len(text) * 6 * self.scale + (1 if self.bold else 0))
+        height = 7 * self.scale
+        surf = pygame.Surface((width, height), pygame.SRCALPHA)
+        for idx, char in enumerate(text.upper()):
+            glyph = BITMAP_FONT.get(char, BITMAP_FONT["?"])
+            base_x = idx * 6 * self.scale
+            for row_idx, row in enumerate(glyph):
+                for col_idx, bit in enumerate(row):
+                    if bit == "1":
+                        rect = (
+                            base_x + col_idx * self.scale,
+                            row_idx * self.scale,
+                            self.scale,
+                            self.scale,
+                        )
+                        pygame.draw.rect(surf, color, rect)
+                        if self.bold:
+                            bold_rect = (
+                                rect[0] + max(1, self.scale // 4),
+                                rect[1],
+                                rect[2],
+                                rect[3],
+                            )
+                            pygame.draw.rect(surf, color, bold_rect)
+        return surf
+
+
 # ---------------------------------------------------------------------------
 # Pygame shell
 # ---------------------------------------------------------------------------
@@ -422,10 +549,11 @@ class OkamaShell:
         self.windowed = windowed
         self.dev_mode = dev_mode
         self.conf = cfg_mod.get()
+        self.version = self.conf.get("VERSION", okamaos.VERSION)
 
         flags = 0 if windowed else pygame.FULLSCREEN | pygame.NOFRAME
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT), flags)
-        pygame.display.set_caption("OkamaOS v2.0.0")
+        pygame.display.set_caption(f"OkamaOS v{self.version}")
         pygame.mouse.set_visible(False)
 
         self.clock = pygame.time.Clock()
@@ -469,42 +597,18 @@ class OkamaShell:
         self._start_update_check()
 
     def _init_fonts(self):
-        # Initialize pygame font module and verify it actually works
         try:
-            pygame.font.init()
-            # Test if font module is actually functional by creating a test font
-            test_font = pygame.font.Font(None, 24)
-            if test_font is None:
-                raise RuntimeError("pygame.font.Font returned None")
+            test_font = ShellFont(24)
+            if test_font.render("OkamaOS", COL_TEXT).get_width() <= 0:
+                raise RuntimeError("bitmap font rendered empty text")
         except Exception as e:
-            # Font module failed - this is critical for GUI
-            raise RuntimeError(f"Font module unavailable: {e}")
-        
-        # Try to use system fonts, fallback to default pygame font
-        try:
-            self.font_xl  = pygame.font.SysFont("DejaVu Sans", 72, bold=True)
-            self.font_lg  = pygame.font.SysFont("DejaVu Sans", 42, bold=True)
-            self.font_md  = pygame.font.SysFont("DejaVu Sans", 28)
-            self.font_sm  = pygame.font.SysFont("DejaVu Sans", 20)
-            self.font_hint= pygame.font.SysFont("DejaVu Sans", 18)
-            # Verify fonts loaded correctly
-            if not self.font_xl or not self.font_lg:
-                raise RuntimeError("SysFont returned None")
-        except Exception as e:
-            # Fallback to default pygame fonts
-            try:
-                default_xl = pygame.font.Font(None, 72)
-                default_lg = pygame.font.Font(None, 42)
-                default_md = pygame.font.Font(None, 28)
-                default_sm = pygame.font.Font(None, 20)
-                default_hint = pygame.font.Font(None, 18)
-            except Exception as e2:
-                raise RuntimeError(f"Cannot load any font: {e2}")
-            self.font_xl = default_xl
-            self.font_lg = default_lg
-            self.font_md = default_md
-            self.font_sm = default_sm
-            self.font_hint = default_hint
+            raise RuntimeError(f"Bitmap text renderer unavailable: {e}")
+
+        self.font_xl = ShellFont(72, bold=True)
+        self.font_lg = ShellFont(42, bold=True)
+        self.font_md = ShellFont(28)
+        self.font_sm = ShellFont(20)
+        self.font_hint = ShellFont(18)
 
     def _draw_logo(self, center_x: int, y: int, scale: float = 1.0):
         width = int(520 * scale)
@@ -594,6 +698,8 @@ class OkamaShell:
 
         # Controller events from okama-inputd
         for ev in self.input_client.poll():
+            if ev.get("controller") == -1:
+                continue
             if ev.get("type") == "button" and ev.get("state") == "pressed":
                 events.append({"src": "controller", "action": ev["button"]})
             elif ev.get("type") == "axis":
@@ -1043,22 +1149,12 @@ def main():
         _text_shell()
         return
 
-    os.environ.setdefault("SDL_VIDEODRIVER", "kmsdrm")
-    os.environ.setdefault("SDL_KMSDRM_REQUIRE_DRM_MASTER", "0")
-    os.environ.setdefault("SDL_FBDEV",
-                          conf.get("FRAMEBUFFER_DEVICE", "/dev/fb0"))
-    os.environ.setdefault("SDL_AUDIODRIVER", "alsa")
-    # Software rendering fallback for VMs without GPU acceleration
-    os.environ.setdefault("SDL_RENDER_DRIVER", "software")
-    os.environ.setdefault("LIBGL_ALWAYS_SOFTWARE", "1")
-
-    if args.windowed:
-        os.environ["SDL_VIDEODRIVER"] = "x11"  # dev host
+    _configure_sdl_environment(conf, args.windowed)
 
     try:
-        pygame.init()
+        pygame.display.init()
     except Exception as exc:
-        message = f"pygame.init() failed: {exc}"
+        message = f"pygame display initialization failed: {exc}"
         print(message, file=sys.stderr)
         print("Falling back to text shell.", file=sys.stderr)
         _log_shell_error(message)

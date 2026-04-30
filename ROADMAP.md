@@ -22,6 +22,7 @@
 - [x] Maintain version tracking through root `VERSION`, package version files, and runtime config.
 - [x] Add a guided hard-drive installer for live images and VM disks.
 - [x] Package bootloader and kernel assets needed by installed-disk boots.
+- [x] Restore the normal Buildroot post-image ISO build path and canonical `output/okamaos.iso` artifact.
 - [ ] Add signed update verification before automatic OS updates.
 - [ ] Publish a stable public release channel after hardware validation.
 

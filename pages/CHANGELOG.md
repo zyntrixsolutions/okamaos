@@ -1,5 +1,10 @@
 # OkamaOS Portal Changelog
 
+## 2026-04-30 - ISO Build Restore
+
+- Restored version tracking for OkamaOS `1.0.4`.
+- Documented the restored canonical `output/okamaos.iso` build artifact.
+
 ## 2026-04-29 - Safe System Update
 
 - Published a real `okamaos-v1.0.2.okupdate` system update bundle.

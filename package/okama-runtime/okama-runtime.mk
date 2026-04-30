@@ -6,7 +6,7 @@
 # tree under usr/bin and usr/lib/okamaos.
 ################################################################################
 
-OKAMA_RUNTIME_VERSION = 1.0.5
+OKAMA_RUNTIME_VERSION = 1.0.6
 OKAMA_RUNTIME_SOURCE =
 # No SITE/SITE_METHOD — this is an install-only meta-package that copies files directly
 OKAMA_RUNTIME_LICENSE = Proprietary
@@ -14,8 +14,36 @@ OKAMA_RUNTIME_DEPENDENCIES = python3 python-pip sdl2
 
 define OKAMA_RUNTIME_INSTALL_PYGAME_CMDS
 	# pygame dropped from Buildroot 2024.02 — install from PyPI into target
-	$(HOST_DIR)/bin/pip3 install --target=$(TARGET_DIR)/usr/lib/python3/dist-packages \
-		--no-deps --ignore-requires-python pygame==2.5.2 || true
+	rm -rf $(TARGET_DIR)/usr/lib/python3.11/site-packages/pygame \
+		$(TARGET_DIR)/usr/lib/python3.11/site-packages/pygame.libs \
+		$(TARGET_DIR)/usr/lib/python3.11/site-packages/pygame-*.data \
+		$(TARGET_DIR)/usr/lib/python3.11/site-packages/pygame-*.dist-info
+	rm -rf $(@D)/pygame-wheel
+	mkdir -p $(@D)/pygame-wheel $(TARGET_DIR)/usr/lib/python3.11/site-packages
+	python3 -m pip download --dest $(@D)/pygame-wheel \
+		--only-binary=:all: --no-deps --implementation cp \
+		--python-version 311 --abi cp311 --platform manylinux_2_17_x86_64 \
+		pygame==2.6.1
+	unzip -oq $(@D)/pygame-wheel/pygame-2.6.1-cp311-*.whl \
+		-d $(TARGET_DIR)/usr/lib/python3.11/site-packages
+	# Pygame wheels bundle SDL2 without OkamaOS' KMSDRM backend. Keep the
+	# Python modules from the wheel, but bind SDL runtime libraries to the
+	# Buildroot SDL2 stack configured for direct GUI boot.
+	if [ -d "$(TARGET_DIR)/usr/lib/python3.11/site-packages/pygame.libs" ]; then \
+		rm -f $(TARGET_DIR)/usr/lib/python3.11/site-packages/pygame.libs/libSDL2-2-*.so*; \
+		ln -sf ../../../libSDL2-2.0.so.0 \
+			$(TARGET_DIR)/usr/lib/python3.11/site-packages/pygame.libs/libSDL2-2-1667c208.0.so.0.2800.4; \
+		rm -f $(TARGET_DIR)/usr/lib/python3.11/site-packages/pygame.libs/libSDL2_image-2-*.so*; \
+		ln -sf ../../../libSDL2_image-2.0.so.0 \
+			$(TARGET_DIR)/usr/lib/python3.11/site-packages/pygame.libs/libSDL2_image-2-6bbdaa8d.0.so.0.2.3; \
+		rm -f $(TARGET_DIR)/usr/lib/python3.11/site-packages/pygame.libs/libSDL2_mixer-2-*.so*; \
+		ln -sf ../../../libSDL2_mixer-2.0.so.0 \
+			$(TARGET_DIR)/usr/lib/python3.11/site-packages/pygame.libs/libSDL2_mixer-2-673d03d7.0.so.0.600.3; \
+		for lib in $(TARGET_DIR)/usr/lib/python3.11/site-packages/pygame.libs/*.so*; do \
+			ln -sf python3.11/site-packages/pygame.libs/$$(basename $$lib) \
+				$(TARGET_DIR)/usr/lib/$$(basename $$lib); \
+		done; \
+	fi
 endef
 
 OKAMA_RUNTIME_POST_INSTALL_TARGET_HOOKS += OKAMA_RUNTIME_INSTALL_PYGAME_CMDS

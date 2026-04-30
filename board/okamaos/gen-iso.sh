@@ -68,15 +68,15 @@ insmod gfxterm
 set gfxmode=1024x768x32,1280x720x32,800x600x32,1024x768x16,800x600x16,auto
 terminal_output gfxterm
 
-menuentry "OkamaOS (safe graphics default)" {
-    set gfxpayload=800x600x32
-    linux  /boot/bzImage rw quiet loglevel=3 console=tty1 console=ttyS0,115200 earlyprintk=serial,ttyS0,115200 rdinit=/sbin/init rd.systemd.show_status=false vt.global_cursor_default=0 nomodeset video=vesafb:mtrr:3
+menuentry "OkamaOS (GUI default)" {
+    set gfxpayload=keep
+    linux  /boot/bzImage rw quiet loglevel=3 console=tty1 console=ttyS0,115200 earlyprintk=serial,ttyS0,115200 rdinit=/sbin/init rd.systemd.show_status=false vt.global_cursor_default=0
     initrd /boot/rootfs.cpio.gz
 }
 
-menuentry "OkamaOS" {
-    set gfxpayload=keep
-    linux  /boot/bzImage rw quiet loglevel=3 console=tty1 console=ttyS0,115200 earlyprintk=serial,ttyS0,115200 rdinit=/sbin/init rd.systemd.show_status=false vt.global_cursor_default=0
+menuentry "OkamaOS (safe graphics)" {
+    set gfxpayload=800x600x32
+    linux  /boot/bzImage rw quiet loglevel=3 console=tty1 console=ttyS0,115200 earlyprintk=serial,ttyS0,115200 rdinit=/sbin/init rd.systemd.show_status=false vt.global_cursor_default=0 nomodeset video=vesafb:mtrr:3
     initrd /boot/rootfs.cpio.gz
 }
 

@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.6] - 2026-04-30
+
+### Fixed
+
+- Restored GUI-first ISO startup after the v0.9.10 boot path; text mode is now a fallback only when the pygame GUI cannot initialize.
+- Enabled SDL2 KMS/DRM video support with Mesa GBM/EGL/GLES so pygame has a visible console graphics backend instead of rendering offscreen.
+- Added QEMU and VirtualBox-friendly DRM/Mesa support for virtio, SVGA, and software rendering paths.
+- Restored the default GRUB entry to the GUI/KMS path and kept `nomodeset` as a separate safe graphics fallback.
+
+### Changed
+
+- Bumped runtime, installer, and package version tracking to `1.0.6`.
+
 ## [1.0.5] - 2026-04-30
 
 ### Fixed
@@ -10,7 +23,7 @@
 - Enabled VESA, EFI, simple framebuffer, and simpledrm support required by the safe graphics ISO path.
 - Stopped mirroring the ISO into `output/images`; the build now leaves a single ISO at `output/okamaos.iso`.
 - Updated the boot splash version text and shell module path bootstrap for packaged Python runtime modules.
-- Launched the ISO shell in text mode by default to avoid the current framebuffer pygame startup hang.
+- Added a temporary text-mode ISO shell fallback while framebuffer pygame startup was being stabilized.
 
 ### Changed
 

@@ -26,7 +26,7 @@ case "$1" in
     openvt -c 1 -f -w -- sh -c "
         export PYTHONPATH=/usr/lib/okamaos
         while true; do
-            /usr/bin/okama-shell --text
+            /usr/bin/okama-shell
             echo \"okama-shell exited — restarting\" >> /var/okamaos/logs/shell.log
             sleep 2
         done

@@ -26,7 +26,9 @@
 - [x] Enable ISO initrd boot support and remove duplicate ISO output artifacts.
 - [x] Enable serial boot diagnostics for ISO startup failures.
 - [x] Enable framebuffer drivers required by the safe graphics ISO boot path.
-- [x] Keep the ISO boot path operable with the text shell while framebuffer pygame startup is stabilized.
+- [x] Restore GUI-first ISO boot and keep text mode as a genuine failure fallback only.
+- [x] Enable SDL2 KMS/DRM and Mesa GBM/EGL support for visible pygame startup.
+- [x] Keep safe graphics as an explicit fallback instead of making it the default GUI path.
 - [ ] Add signed update verification before automatic OS updates.
 - [ ] Publish a stable public release channel after hardware validation.
 

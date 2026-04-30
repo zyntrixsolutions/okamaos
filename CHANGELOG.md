@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.1] - 2026-04-30
+
+### Fixed
+
+- Restored reliable home-screen keyboard navigation by adding shell-level evdev keyboard reading and reconnecting to `okama-inputd` when the daemon socket appears after shell startup.
+- Broadened keyboard detection and accepted key-repeat events for arrows, WASD, keypad navigation, Enter, Space, Esc, Backspace, Tab, and Home.
+
+### Changed
+
+- Removed the horizontal yellow cyber-grid line and refined the home screen into larger, clearer action rows with live status tiles.
+- Bumped runtime, installer, package, and shell-visible version tracking to `1.1.1`.
+
 ## [1.1.0] - 2026-04-30
 
 ### Added

@@ -25,7 +25,7 @@ UEFI/BIOS firmware
   S40okama-network  (DHCP, optional WiFi — skipped if disabled)
   S99okama-shell    (okama-shell on tty1, respawn on crash)
        ↓
-  okama-shell  (fullscreen SDL2/Pygame keyboard/controller UI)
+  okama-shell  (fullscreen SDL2/Pygame keyboard/controller UI with local keyboard reader)
        ↓
   [user selects game]  →  okama-run  →  game process
        ↓
@@ -38,7 +38,7 @@ UEFI/BIOS firmware
 ┌─────────────────────────────────────────────┐
 │                 okama-shell                 │  ← fullscreen SDL2 UI
 │   Play | Settings | Power                  │
-│   keyboard + generic controller navigation │
+│   local keyboard + inputd controller nav    │
 └──────────┬────────────────┬────────────────┘
            │                │
            ▼                ▼

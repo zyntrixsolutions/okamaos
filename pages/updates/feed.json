@@ -3,26 +3,26 @@
   "channel": "public-preview",
   "updated_at": "2026-04-30T00:00:00Z",
   "latest": {
-    "version": "1.1.0",
-    "codename": "Cyber Hardware Readiness",
+    "version": "1.1.1",
+    "codename": "Keyboard Navigation Hotfix",
     "date": "2026-04-30",
     "status": "preview",
     "priority": "recommended",
     "minimum_supported_version": "0.1.0",
-    "title": "Keyboard, controller, online status, and Bluetooth readiness",
-    "summary": "OkamaOS now treats keyboard input as a first-class system path, broadens generic HID controller detection, shows live online and update status, refreshes the shell with a cyber grid background, and verifies system update hashes.",
+    "title": "Keyboard navigation hotfix and home UI refinement",
+    "summary": "OkamaOS now keeps shell navigation responsive by reading local evdev keyboard input, reconnecting to okama-inputd when it is late, broadening keyboard repeat handling, and refining the cyber home UI.",
     "notes": [
-      "Adds full keyboard shell navigation and developer terminal readiness.",
-      "Broadens generic USB and Bluetooth HID controller detection.",
-      "Shows live Ethernet/Wi-Fi internet state and OS/game update availability in the shell.",
-      "Starts Bluetooth in auto mode for plug-and-play controller readiness.",
-      "Verifies downloaded system update bundles with SHA-256 metadata."
+      "Restores reliable keyboard navigation on the shell home screen.",
+      "Adds a shell-local evdev keyboard reader for SDL/KMSDRM environments where Pygame key events are unavailable.",
+      "Reconnects the shell to okama-inputd after startup so late daemon sockets do not leave input dead.",
+      "Accepts key-repeat events for arrows, WASD, keypad navigation, Enter, Space, Esc, Backspace, Tab, and Home.",
+      "Refines the home UI and removes the horizontal yellow cyber-grid line."
     ],
     "release_notes_url": "CHANGELOG.md",
-    "download_url": "https://zyntrixsolutions.github.io/okamaos/updates/okamaos-v1.1.0.okupdate",
+    "download_url": "https://zyntrixsolutions.github.io/okamaos/updates/okamaos-v1.1.1.okupdate",
     "artifact_status": "bundle-ready",
-    "sha256": "5ec35921db9839fb354e5f1953d53392fc26b41d1561cd483bda0eaa46343377",
-    "size_bytes": 41465
+    "sha256": "a99eb5f39ba0b16d10578a931543d2f16403e276364cce041c6b7ac60277baf8",
+    "size_bytes": 43613
   },
   "channels": [
     {

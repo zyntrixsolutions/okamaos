@@ -40,11 +40,21 @@ class InputClient:
     """Read input events from okama-inputd's Unix socket (non-blocking)."""
 
     def __init__(self):
-        self._sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self._sock = self._new_socket()
         self._buf = b""
         self._connected = False
 
+    def _new_socket(self):
+        return socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+
     def connect(self) -> bool:
+        if self._connected:
+            return True
+        try:
+            self._sock.close()
+        except OSError:
+            pass
+        self._sock = self._new_socket()
         try:
             self._sock.connect(SOCKET_PATH)
             self._sock.setblocking(False)
@@ -76,6 +86,7 @@ class InputClient:
             pass
         except OSError:
             self._connected = False
+            self.close()
         return events
 
     def close(self):
@@ -83,3 +94,4 @@ class InputClient:
             self._sock.close()
         except OSError:
             pass
+        self._connected = False

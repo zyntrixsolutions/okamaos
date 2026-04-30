@@ -132,10 +132,19 @@ KEYBOARD_BUTTON_MAP = {
     15: "SELECT",     # Tab
     28: "A",          # Enter
     57: "A",          # Space
+    72: "DPAD_UP",    # keypad 8
+    75: "DPAD_LEFT",  # keypad 4
+    77: "DPAD_RIGHT", # keypad 6
+    80: "DPAD_DOWN",  # keypad 2
+    96: "A",          # keypad Enter
+    102: "HOME",
     103: "DPAD_UP",
+    104: "DPAD_UP",   # PageUp
     105: "DPAD_LEFT",
     106: "DPAD_RIGHT",
+    107: "DPAD_RIGHT",# End
     108: "DPAD_DOWN",
+    109: "DPAD_DOWN", # PageDown
     17: "DPAD_UP",    # W
     30: "DPAD_LEFT",  # A
     31: "DPAD_DOWN",  # S
@@ -354,7 +363,7 @@ class KeyboardThread(threading.Thread):
                 if len(data) < EVSIZE:
                     break
                 _, _, ev_type, code, value = struct.unpack(EVFMT, data)
-                if ev_type != EV_KEY or value not in (0, 1):
+                if ev_type != EV_KEY or value not in (0, 1, 2):
                     continue
                 button = KEYBOARD_BUTTON_MAP.get(code)
                 if button:
@@ -471,11 +480,15 @@ class InputDaemon:
         if "keyboard" in name or "kbd" in name:
             return True
         bits = self._ev_bits(path, EV_KEY, 96)
-        required = (17, 30, 31, 32, 28)  # W/A/S/D/Enter
-        arrows = (103, 105, 106, 108)
-        return all(self._bit_is_set(bits, code) for code in required) and any(
-            self._bit_is_set(bits, code) for code in arrows
+        nav_codes = (17, 30, 31, 32, 72, 75, 77, 80, 103, 105, 106, 108)
+        action_codes = (1, 14, 15, 28, 57, 96, 102)
+        has_nav = any(self._bit_is_set(bits, code) for code in nav_codes)
+        has_action = any(self._bit_is_set(bits, code) for code in action_codes)
+        mapped_count = sum(
+            1 for code in KEYBOARD_BUTTON_MAP
+            if self._bit_is_set(bits, code)
         )
+        return has_nav and has_action and mapped_count >= 3
 
     def _device_name(self, path: str) -> str:
         event = os.path.basename(path)

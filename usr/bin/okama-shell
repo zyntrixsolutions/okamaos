@@ -42,11 +42,14 @@ import threading
 # ---------------------------------------------------------------------------
 # Pygame bootstrap — graceful degradation if not available
 # ---------------------------------------------------------------------------
+PYGAME_IMPORT_ERROR = None
 try:
     import pygame
     PYGAME_OK = True
-except ImportError:
+except Exception as exc:
+    pygame = None
     PYGAME_OK = False
+    PYGAME_IMPORT_ERROR = exc
 
 from okamaos.input_protocol import InputClient
 import okamaos.config as cfg_mod
@@ -126,6 +129,15 @@ def _text_shell():
                 os.execv("/usr/bin/okama-run", ["okama-run", gid])
             else:
                 print("Invalid selection.")
+
+
+def _log_shell_error(message: str):
+    try:
+        os.makedirs("/var/okamaos/logs", exist_ok=True)
+        with open("/var/okamaos/logs/shell.log", "a", encoding="utf-8") as log:
+            log.write(message + "\n")
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -601,11 +613,19 @@ def main():
     conf = cfg_mod.get()
     dev = conf.is_dev_mode()
 
-    if args.text or not PYGAME_OK:
+    if args.text:
         _text_shell()
         return
 
-    os.environ.setdefault("SDL_VIDEODRIVER", "fbcon")
+    if not PYGAME_OK:
+        message = f"OkamaOS GUI unavailable: pygame import failed: {PYGAME_IMPORT_ERROR}"
+        print(message, file=sys.stderr)
+        _log_shell_error(message)
+        _text_shell()
+        return
+
+    os.environ.setdefault("SDL_VIDEODRIVER", "kmsdrm")
+    os.environ.setdefault("SDL_KMSDRM_REQUIRE_DRM_MASTER", "0")
     os.environ.setdefault("SDL_FBDEV",
                           conf.get("FRAMEBUFFER_DEVICE", "/dev/fb0"))
     os.environ.setdefault("SDL_AUDIODRIVER", "alsa")
@@ -613,9 +633,20 @@ def main():
     if args.windowed:
         os.environ["SDL_VIDEODRIVER"] = "x11"  # dev host
 
-    pygame.init()
-    shell = OkamaShell(windowed=args.windowed, dev_mode=dev)
-    shell.run()
+    try:
+        pygame.init()
+        shell = OkamaShell(windowed=args.windowed, dev_mode=dev)
+        shell.run()
+    except Exception as exc:
+        try:
+            pygame.quit()
+        except Exception:
+            pass
+        message = f"OkamaOS GUI failed to start: {exc}"
+        print(message, file=sys.stderr)
+        print("Falling back to text shell.", file=sys.stderr)
+        _log_shell_error(message)
+        _text_shell()
 
 
 if __name__ == "__main__":

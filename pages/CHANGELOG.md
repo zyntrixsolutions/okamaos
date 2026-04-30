@@ -1,5 +1,10 @@
 # OkamaOS Portal Changelog
 
+## 2026-04-30 - GUI Boot Restore
+
+- Restored GUI-first ISO startup for OkamaOS `1.0.6`.
+- Kept text mode as a fallback only when the pygame GUI cannot initialize.
+
 ## 2026-04-30 - ISO Boot Fix
 
 - Restored live ISO boot support for OkamaOS `1.0.5`.

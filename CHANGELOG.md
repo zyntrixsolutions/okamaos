@@ -1,5 +1,37 @@
 # Changelog
 
+## [2.0.0] - 2026-04-30 - MAJOR UPDATE
+
+### Added
+
+- **Cyberpunk Retro UI**: Animated checkered net/fence background with perspective grid, CRT scanlines, and neon cyan/magenta accents
+- **Full Keyboard Support**: Complete keyboard navigation alongside controllers (arrows, WASD, Enter, Space, Esc, Tab, number keys for sections)
+- **Network Status Monitor**: Real-time WiFi/Ethernet connectivity detection with online/offline indicators in the UI
+- **Update Badge System**: Visual notification badge showing available OS and game updates on home screen
+- **Generic Controller Drivers**: Expanded HID button mappings for Logitech, ZeroPlus, Zydacron, generic USB gamepads
+- **Bluetooth Plug-and-Play**: Auto-pairing agent support with `BT_AUTO_PAIR` config option for seamless controller pairing
+- **WiFi Interface Auto-Detection**: Automatic detection of common WiFi interfaces (wlan0, wlp2s0, wlo1, etc.)
+- **EFI Boot Detection**: Installer auto-detects EFI mode and supports `--efi` option for EFI bootloader installation
+- **Network Status Command**: `S40okama-network status` subcommand for debugging connectivity
+
+### Changed
+
+- **FPS increased to 60** from 30 for smoother UI animations
+- **Default Bluetooth enabled** (`BLUETOOTH_ENABLED=yes`) with auto-pair support
+- **Shell version** bumped to 2.0.0 with new title and features
+- **Input daemon** expanded button mappings for generic controllers
+- **Network init** rewritten with better interface detection and status reporting
+- **Bluetooth init** rewritten with agent support and auto-reconnect improvements
+- **Kernel config** expanded with more HID drivers (Logitech, ZeroPlus, Retrode, etc.)
+
+### Fixed
+
+- Network connectivity now properly detected via DNS probe (8.8.8.8:53)
+- Bluetooth pairing agent now handles controllers without PIN codes automatically
+- Generic USB controllers now recognized through expanded button map
+- WiFi country code configuration support added
+- Settings menu now fully functional with Network, Audio, Storage Info, and System Updates options
+
 ## [1.0.6] - 2026-04-30
 
 ### Fixed

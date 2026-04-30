@@ -1,15 +1,16 @@
 #!/bin/sh
-# S25okama-bluetooth — start BlueZ only when Bluetooth is needed.
-# Checks /etc/okamaos/okama.conf BLUETOOTH_ENABLED and the presence of any
-# paired controller trust files before starting bluetoothd.
+# S25okama-bluetooth — start BlueZ with plug-and-play controller support.
+# v2.0.0: Auto-pairing agent, auto-reconnect, and discovery support.
 
 CONF=/etc/okamaos/okama.conf
 CONTROLLERS_DIR=/var/okamaos/controllers
 BT_ENABLED=no
+BT_AUTO_PAIR=no
 
 # Read config
 if [ -f "$CONF" ]; then
-    BT_ENABLED=$(grep '^BLUETOOTH_ENABLED=' "$CONF" | cut -d= -f2 | tr -d '[:space:]')
+    BT_ENABLED=$(grep '^BLUETOOTH_ENABLED=' "$CONF" | cut -d= -f2 | tr -d '[:space:]' 2>/dev/null || echo "no")
+    BT_AUTO_PAIR=$(grep '^BT_AUTO_PAIR=' "$CONF" | cut -d= -f2 | tr -d '[:space:]' 2>/dev/null || echo "no")
 fi
 
 # Auto-enable if paired controllers exist
@@ -17,33 +18,69 @@ if [ -d "$CONTROLLERS_DIR" ] && ls "$CONTROLLERS_DIR"/*.json 2>/dev/null | grep 
     BT_ENABLED=yes
 fi
 
+bluetooth_init() {
+    echo "Initializing Bluetooth adapter..."
+    # Power on adapter
+    bluetoothctl power on >/dev/null 2>&1 || true
+    # Enable agent for auto-pairing without PIN
+    bluetoothctl agent NoInputNoOutput >/dev/null 2>&1 || true
+    bluetoothctl default-agent >/dev/null 2>&1 || true
+    # Make discoverable if auto-pair enabled
+    if [ "$BT_AUTO_PAIR" = "yes" ]; then
+        bluetoothctl discoverable on >/dev/null 2>&1 || true
+        bluetoothctl pairable on >/dev/null 2>&1 || true
+        echo "Bluetooth discoverable and pairable."
+    fi
+}
+
+auto_connect_controllers() {
+    if [ ! -d "$CONTROLLERS_DIR" ]; then
+        return
+    fi
+    echo "Auto-connecting paired controllers..."
+    for f in "$CONTROLLERS_DIR"/*.json; do
+        [ -f "$f" ] || continue
+        MAC=$(python3 -c "import json,sys; d=json.load(open('$f')); print(d.get('mac',''))" 2>/dev/null)
+        if [ -n "$MAC" ]; then
+            echo "  Connecting $MAC..."
+            bluetoothctl connect "$MAC" >/dev/null 2>&1 &
+        fi
+    done
+}
+
 case "$1" in
   start)
     if [ "$BT_ENABLED" = "yes" ]; then
-        echo "Starting Bluetooth (bluetoothd)..."
+        echo "Starting Bluetooth v2.0.0 (bluetoothd)..."
         if which bluetoothd >/dev/null 2>&1; then
-            bluetoothd --nodetach &
-            sleep 1
-            # Auto-connect trusted controllers
+            # Start bluetoothd with minimal plugins for gamepads
+            bluetoothd --nodetach --plugin=input &
+            sleep 2
+            
             if which bluetoothctl >/dev/null 2>&1; then
-                for f in "$CONTROLLERS_DIR"/*.json; do
-                    [ -f "$f" ] || continue
-                    MAC=$(python3 -c "import json,sys; d=json.load(open('$f')); print(d.get('mac',''))" 2>/dev/null)
-                    [ -n "$MAC" ] && bluetoothctl connect "$MAC" >/dev/null 2>&1 &
-                done
+                bluetooth_init
+                # Auto-connect after initialization
+                (sleep 3 && auto_connect_controllers) &
             fi
+            echo "Bluetooth initialized. Press HOME+START on controllers to pair."
         else
             echo "bluetoothd not found — Bluetooth unavailable."
         fi
     else
-        echo "Bluetooth disabled in config — skipping."
+        echo "Bluetooth disabled — set BLUETOOTH_ENABLED=yes in okama.conf to enable."
     fi
     ;;
   stop)
+    echo "Stopping Bluetooth..."
     killall bluetoothd 2>/dev/null || true
     ;;
+  restart)
+    $0 stop
+    sleep 1
+    $0 start
+    ;;
   *)
-    echo "Usage: $0 {start|stop}"
+    echo "Usage: $0 {start|stop|restart}"
     exit 1
     ;;
 esac

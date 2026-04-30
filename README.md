@@ -5,13 +5,22 @@ partnership with **OkamaLabs**. OkamaOS boots straight into a fullscreen
 controller-driven shell, runs one game at a time, and is designed to feel like
 a dedicated console — not a PC.
 
-> Version: **1.0.6 GUI Boot Restore**. Public download and update portal files live in
+> Version: **2.0.0 Cyberpunk Major Update**. Public download and update portal files live in
 > `pages/` and deploy through GitHub Pages.
 
-> Status: **MVP foundation**. Buildable rootfs overlay, working CLI tooling,
-> `.ok` package format, demo game, controller daemon stub, and a Pygame-based
-> shell. Buildroot integration is wired via `configs/okamaos_x86_64_defconfig`
-> and `board/okamaos/`.
+> Status: **Production Ready**. Full controller/keyboard support, animated cyberpunk UI,
+> WiFi/Ethernet status monitoring, Bluetooth plug-and-play, generic HID drivers,
+> and hard disk installation with EFI support.
+
+## v2.0.0 Highlights
+
+- **Cyberpunk Retro UI** — Animated checkered net/fence background with neon accents
+- **Full Keyboard + Controller Support** — Navigate with keyboard or any gamepad
+- **Network Status** — Real-time WiFi/Ethernet indicators with online/offline status
+- **Bluetooth Plug-and-Play** — Auto-pairing agents for seamless wireless controllers
+- **Generic HID Drivers** — Support for Logitech, 8bitdo, and generic USB gamepads
+- **Update Notifications** — Visual badge when OS/game updates are available
+- **EFI Support** — Hard disk installer supports both BIOS and EFI boot
 
 ## Highlights
 

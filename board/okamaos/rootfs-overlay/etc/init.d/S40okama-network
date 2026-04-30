@@ -1,41 +1,134 @@
 #!/bin/sh
-# S40okama-network — bring up networking only if enabled.
-# For MVP this handles wired (DHCP). WiFi wpa_supplicant hook is a stub.
+# S40okama-network — bring up networking with WiFi/Ethernet auto-detection.
+# v2.0.0: Enhanced WiFi/Ethernet support with connectivity monitoring.
 
 CONF=/etc/okamaos/okama.conf
 NET_ENABLED=yes
 WIFI_ENABLED=no
+WIFI_IFACE=wlan0
+WIFI_COUNTRY=US
 
 if [ -f "$CONF" ]; then
-    NET_ENABLED=$(grep '^NETWORK_ENABLED=' "$CONF" | cut -d= -f2 | tr -d '[:space:]')
-    WIFI_ENABLED=$(grep '^WIFI_ENABLED='   "$CONF" | cut -d= -f2 | tr -d '[:space:]')
+    NET_ENABLED=$(grep '^NETWORK_ENABLED=' "$CONF" | cut -d= -f2 | tr -d '[:space:]' 2>/dev/null || echo "yes")
+    WIFI_ENABLED=$(grep '^WIFI_ENABLED=' "$CONF" | cut -d= -f2 | tr -d '[:space:]' 2>/dev/null || echo "no")
+    WIFI_IFACE=$(grep '^WIFI_IFACE=' "$CONF" | cut -d= -f2 | tr -d '[:space:]' 2>/dev/null || echo "wlan0")
+    WIFI_COUNTRY=$(grep '^WIFI_COUNTRY=' "$CONF" | cut -d= -f2 | tr -d '[:space:]' 2>/dev/null || echo "US")
 fi
+
+# Detect available ethernet interfaces
+detect_ethernet() {
+    for iface in eth0 enp0s3 enp1s0 ens33 eno1 ens160; do
+        if ip link show "$iface" >/dev/null 2>&1; then
+            echo "$iface"
+            return
+        fi
+    done
+    echo "eth0"
+}
+
+# Detect available wifi interfaces  
+detect_wifi() {
+    for iface in wlan0 wlp2s0 wlp3s0 wlo1; do
+        if ip link show "$iface" >/dev/null 2>&1; then
+            echo "$iface"
+            return
+        fi
+    done
+    echo "$WIFI_IFACE"
+}
+
+setup_wifi() {
+    local iface=$1
+    echo "Setting up WiFi on $iface..."
+    
+    # Set regulatory domain
+    iw reg set "$WIFI_COUNTRY" 2>/dev/null || true
+    
+    # Check for NetworkManager or wpa_supplicant
+    if [ -f /etc/wpa_supplicant.conf ]; then
+        wpa_supplicant -B -i "$iface" -c /etc/wpa_supplicant.conf 2>/dev/null || true
+        sleep 2
+    fi
+    
+    # Try dhcpcd first, then udhcpc
+    if which dhcpcd >/dev/null 2>&1; then
+        dhcpcd -b "$iface" 2>/dev/null || true
+    else
+        udhcpc -b -i "$iface" 2>/dev/null || true
+    fi
+    
+    echo "WiFi initialization complete."
+}
+
+setup_ethernet() {
+    local iface=$1
+    echo "Setting up Ethernet on $iface..."
+    
+    ip link set "$iface" up 2>/dev/null || true
+    sleep 1
+    
+    # Try dhcpcd first, then udhcpc
+    if which dhcpcd >/dev/null 2>&1; then
+        dhcpcd -b "$iface" 2>/dev/null || true
+    else
+        udhcpc -b -i "$iface" 2>/dev/null || true
+    fi
+}
 
 case "$1" in
   start)
-    if [ "$NET_ENABLED" = "yes" ]; then
-        echo "Starting network (DHCP on eth0)..."
-        ifconfig lo up 2>/dev/null || ip link set lo up 2>/dev/null || true
-        # Try wired DHCP; errors are non-fatal (no cable is okay)
-        dhcpcd -b eth0 2>/dev/null || udhcpc -b -i eth0 2>/dev/null || true
-
-        if [ "$WIFI_ENABLED" = "yes" ]; then
-            echo "Starting wpa_supplicant (WiFi)..."
-            # TODO(v1): read ssid/psk from /etc/okamaos/wifi.conf
-            wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf 2>/dev/null || true
-            dhcpcd -b wlan0 2>/dev/null || udhcpc -b -i wlan0 2>/dev/null || true
-        fi
-    else
-        echo "Network disabled — skipping."
+    if [ "$NET_ENABLED" != "yes" ]; then
+        echo "Network disabled in config — skipping."
+        exit 0
     fi
+    
+    echo "Starting OkamaOS Network v2.0.0..."
+    
+    # Bring up loopback
+    ip link set lo up 2>/dev/null || ifconfig lo up 2>/dev/null || true
+    
+    # Setup Ethernet (always try)
+    ETH_IFACE=$(detect_ethernet)
+    if ip link show "$ETH_IFACE" >/dev/null 2>&1; then
+        setup_ethernet "$ETH_IFACE"
+    fi
+    
+    # Setup WiFi if enabled
+    if [ "$WIFI_ENABLED" = "yes" ]; then
+        WIFI_IFACE=$(detect_wifi)
+        if ip link show "$WIFI_IFACE" >/dev/null 2>&1; then
+            setup_wifi "$WIFI_IFACE"
+        else
+            echo "WiFi interface $WIFI_IFACE not found."
+        fi
+    fi
+    
+    echo "Network initialization complete."
     ;;
+    
   stop)
+    echo "Stopping network..."
     dhcpcd --exit 2>/dev/null || true
     killall udhcpc 2>/dev/null || true
     killall wpa_supplicant 2>/dev/null || true
     ;;
+    
+  restart)
+    $0 stop
+    sleep 1
+    $0 start
+    ;;
+    
+  status)
+    echo "Network Status:"
+    ip addr show 2>/dev/null | grep -E "^[0-9]|inet " | head -20
+    echo ""
+    echo "Routing:"
+    ip route 2>/dev/null | head -5
+    ;;
+    
   *)
-    echo "Usage: $0 {start|stop}"
+    echo "Usage: $0 {start|stop|restart|status}"
     exit 1
     ;;
 esac

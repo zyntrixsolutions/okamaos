@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""okama-shell — OkamaOS fullscreen controller-first UI shell.
+"""okama-shell — OkamaOS v2.0.0 fullscreen controller-first UI shell.
+
+MAJOR UPDATE: Cyberpunk UI, Full Keyboard/Generic Controller Support,
+Network Status, Online Indicators, Bluetooth Plug-and-Play
 
 Designed for Pygame on a framebuffer. No window manager, no desktop.
-Keyboard is secondary: only used for text entry and emergency navigation.
+Keyboard is now fully supported alongside controllers.
 
 Boot flow: init → S99okama-shell → okama-shell (loops forever)
 In-shell flow: home → navigate sections → launch game → game exits → home
 
-Sections (MVP):
+Sections:
   Play | Settings | Power
 
 Controller mapping (reads from okama-inputd socket):
@@ -16,14 +19,21 @@ Controller mapping (reads from okama-inputd socket):
   B: back
   START: home
   HOME: quick-menu
+  L1/R1: tab between sections
 
-Keyboard (emergency fallback only):
-  Arrow keys → navigation, Enter → select, Esc → back
+Keyboard (full support):
+  Arrow keys → navigation
+  Enter/Space → select
+  Esc/Backspace → back
+  Tab → next section
+  1-3 → direct section select
 """
 
 import sys
 import os
 import glob
+import math
+import random
 
 _lib = os.environ.get("OKAMA_LIB", "")
 if not _lib:
@@ -38,6 +48,7 @@ import time
 import json
 import argparse
 import threading
+import socket as sock_module
 
 # ---------------------------------------------------------------------------
 # Pygame bootstrap — graceful degradation if not available
@@ -58,36 +69,299 @@ import okamaos.bluetooth as bt_mod
 import okamaos.updates as updates_mod
 
 # ---------------------------------------------------------------------------
-# Constants
+# Constants - Cyberpunk Retro Theme
 # ---------------------------------------------------------------------------
 WIDTH, HEIGHT = 1280, 720
-FPS = 30
+FPS = 60  # Increased for smoother animations
 
-COL_BG        = (10,  10,  24)
-COL_ACCENT    = (80,  60, 200)
-COL_ACCENT2   = (140, 100, 255)
-COL_TEXT      = (230, 230, 240)
-COL_DIM       = (100, 100, 120)
-COL_SELECTED  = (60,  50, 160)
-COL_CARD      = (20,  20,  44)
-COL_WARN      = (220, 100,  30)
-COL_OK        = (60,  200,  80)
-COL_ERROR     = (220,  50,  50)
+# Core palette
+COL_BG        = (8,   8,   18)     # Deep dark blue-black
+COL_BG_GRID   = (16,  16,  32)     # Slightly lighter for grid
+COL_ACCENT    = (0,   255, 255)    # Cyan neon
+COL_ACCENT2   = (255, 0,   128)    # Magenta neon
+COL_ACCENT3   = (255, 255, 0)      # Yellow neon
+COL_TEXT      = (240, 240, 255)    # Bright white
+COL_DIM       = (120, 120, 140)    # Muted gray-blue
+COL_SELECTED  = (0,   180, 220)    # Bright cyan
+COL_CARD      = (20,  20,  40)     # Card background
+COL_CARD_HOVER= (30,  30,  60)     # Card hover state
+COL_WARN      = (255, 128, 0)      # Orange warning
+COL_OK        = (0,   255, 128)    # Green success
+COL_ERROR     = (255, 50,  80)     # Red error
+COL_NET_ONLINE= (0,   255, 128)    # Online indicator
+COL_NET_OFFLINE=(255, 80,  80)     # Offline indicator
 
 SECTIONS = ["Play", "Settings", "Power"]
 POWER_OPTIONS = ["Restart", "Shut Down", "Cancel"]
 SETTINGS_OPTIONS = [
     "Controllers",
     "Bluetooth",
-    "Audio (placeholder)",
-    "Network (placeholder)",
-    "Storage info",
+    "Network",
+    "Audio",
+    "Storage Info",
+    "System Updates",
 ]
 
+# Button hints
 BUTTON_HINT_A = "[A] Select"
 BUTTON_HINT_B = "[B] Back"
 BUTTON_HINT_DPAD = "[↕] Navigate"
 BUTTON_HINT_START = "[START] Home"
+BUTTON_HINT_L1R1 = "[L1/R1] Tab"
+
+
+# ---------------------------------------------------------------------------
+# Network Monitor Module
+# ---------------------------------------------------------------------------
+class NetworkMonitor:
+    """Monitor network connectivity status."""
+    
+    def __init__(self):
+        self.is_online = False
+        self.connection_type = "none"  # "ethernet", "wifi", "none"
+        self.ssid = None
+        self.last_check = 0
+        self.check_interval = 5.0
+        self._lock = threading.Lock()
+        self._thread = threading.Thread(target=self._monitor_loop, daemon=True)
+        self._running = True
+        self._thread.start()
+    
+    def _monitor_loop(self):
+        """Background thread for network monitoring."""
+        while self._running:
+            self._check_connection()
+            time.sleep(self.check_interval)
+    
+    def _check_connection(self):
+        """Check actual internet connectivity."""
+        online = False
+        conn_type = "none"
+        ssid = None
+        
+        try:
+            # Check if we have any network interface with an IP
+            result = subprocess.run(
+                ["ip", "route", "show"], 
+                capture_output=True, text=True, timeout=2
+            )
+            has_route = "default" in result.stdout
+            
+            # Determine connection type
+            if has_route:
+                # Check for WiFi
+                wifi_result = subprocess.run(
+                    ["iwgetid", "-r"], 
+                    capture_output=True, text=True, timeout=1
+                )
+                if wifi_result.returncode == 0 and wifi_result.stdout.strip():
+                    conn_type = "wifi"
+                    ssid = wifi_result.stdout.strip()
+                else:
+                    # Check for ethernet interfaces
+                    for iface in ["eth0", "enp0s3", "enp1s0", "ens33"]:
+                        ethtool_result = subprocess.run(
+                            ["cat", f"/sys/class/net/{iface}/operstate"],
+                            capture_output=True, text=True, timeout=1
+                        )
+                        if ethtool_result.returncode == 0 and "up" in ethtool_result.stdout:
+                            conn_type = "ethernet"
+                            break
+                
+                # Test actual internet connectivity
+                try:
+                    sock = sock_module.socket(sock_module.AF_INET, sock_module.SOCK_STREAM)
+                    sock.settimeout(3)
+                    result = sock.connect_ex(("8.8.8.8", 53))
+                    online = (result == 0)
+                    sock.close()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        
+        with self._lock:
+            self.is_online = online
+            self.connection_type = conn_type
+            self.ssid = ssid
+            self.last_check = time.time()
+    
+    def get_status(self):
+        """Get current network status."""
+        with self._lock:
+            return {
+                "online": self.is_online,
+                "type": self.connection_type,
+                "ssid": self.ssid,
+            }
+    
+    def stop(self):
+        self._running = False
+
+
+# ---------------------------------------------------------------------------
+# Cyberpunk Grid Background Renderer
+# ---------------------------------------------------------------------------
+class CyberGridBackground:
+    """Animated checkered net/fence cyberpunk background."""
+    
+    def __init__(self, width, height):
+        self.width = width
+        self.height = height
+        self.grid_size = 40
+        self.perspective_y = height * 0.6
+        self.horizon_y = height * 0.3
+        self.offset = 0.0
+        self.scanline_offset = 0
+        self.pulse = 0.0
+        
+    def update(self, dt):
+        """Update animation state."""
+        self.offset = (self.offset + dt * 30) % self.grid_size
+        self.scanline_offset = (self.scanline_offset + 1) % 4
+        self.pulse = (self.pulse + dt * 2) % (2 * math.pi)
+    
+    def draw(self, screen):
+        """Draw the cyberpunk grid background."""
+        # Base background
+        screen.fill(COL_BG)
+        
+        # Draw perspective grid (floor)
+        self._draw_perspective_grid(screen)
+        
+        # Draw ceiling grid
+        self._draw_ceiling_grid(screen)
+        
+        # Draw side fences
+        self._draw_side_fences(screen)
+        
+        # Draw animated scanlines
+        self._draw_scanlines(screen)
+        
+        # Draw vignette
+        self._draw_vignette(screen)
+        
+        # Draw pulsing accent lines
+        self._draw_accent_lines(screen)
+    
+    def _draw_perspective_grid(self, screen):
+        """Draw perspective floor grid (vanishing point effect)."""
+        vanishing_x = self.width // 2
+        vanishing_y = self.horizon_y
+        
+        # Vertical perspective lines
+        for i in range(-20, 21):
+            x_base = vanishing_x + i * 60
+            # Line from vanishing point to bottom
+            pygame.draw.line(
+                screen, 
+                (COL_BG_GRID[0] + 20, COL_BG_GRID[1] + 20, COL_BG_GRID[2] + 30),
+                (vanishing_x, vanishing_y),
+                (x_base + (i * 30), self.height),
+                1
+            )
+        
+        # Horizontal moving lines (perspective effect)
+        for i in range(15):
+            y = self.perspective_y + (self.height - self.perspective_y) * (i / 15) ** 1.5
+            y = (y + self.offset * ((i + 1) / 15)) % self.height
+            if y > self.perspective_y:
+                alpha = int(60 * (1 - (y - self.perspective_y) / (self.height - self.perspective_y)))
+                color = (COL_ACCENT[0] * alpha // 255, COL_ACCENT[1] * alpha // 255, COL_ACCENT[2] * alpha // 255)
+                pygame.draw.line(screen, color, (0, int(y)), (self.width, int(y)), 1)
+    
+    def _draw_ceiling_grid(self, screen):
+        """Draw ceiling grid above horizon."""
+        vanishing_x = self.width // 2
+        vanishing_y = self.horizon_y
+        
+        # Vertical ceiling lines
+        for i in range(-15, 16):
+            x_offset = i * 80
+            pygame.draw.line(
+                screen,
+                (COL_BG_GRID[0] + 10, COL_BG_GRID[1] + 10, COL_BG_GRID[2] + 20),
+                (vanishing_x, vanishing_y),
+                (vanishing_x + x_offset, 0),
+                1
+            )
+        
+        # Horizontal ceiling lines
+        for i in range(8):
+            y = (vanishing_y * (i / 8) ** 2) - self.offset * 0.3
+            y = max(0, y % vanishing_y)
+            alpha = int(40 * (1 - y / vanishing_y))
+            color = (COL_ACCENT2[0] * alpha // 255, COL_ACCENT2[1] * alpha // 255, COL_ACCENT2[2] * alpha // 255)
+            pygame.draw.line(screen, color, (0, int(y)), (self.width, int(y)), 1)
+    
+    def _draw_side_fences(self, screen):
+        """Draw side fence/net patterns."""
+        fence_width = 120
+        
+        # Left fence
+        for i in range(10):
+            x = i * (fence_width // 10)
+            alpha = int(80 * (1 - x / fence_width))
+            color = (COL_ACCENT[0] * alpha // 255, COL_ACCENT[1] * alpha // 255, COL_ACCENT[2] * alpha // 255)
+            # Diagonal lines
+            offset = (self.offset + i * 10) % 60
+            pygame.draw.line(screen, color, 
+                (x, self.horizon_y + offset), 
+                (x + 30, self.height), 1)
+            pygame.draw.line(screen, color,
+                (x, self.horizon_y - offset),
+                (x + 30, 0), 1)
+        
+        # Right fence
+        for i in range(10):
+            x = self.width - i * (fence_width // 10)
+            alpha = int(80 * (1 - (self.width - x) / fence_width))
+            color = (COL_ACCENT2[0] * alpha // 255, COL_ACCENT2[1] * alpha // 255, COL_ACCENT2[2] * alpha // 255)
+            offset = (self.offset + i * 10) % 60
+            pygame.draw.line(screen, color,
+                (x, self.horizon_y + offset),
+                (x - 30, self.height), 1)
+            pygame.draw.line(screen, color,
+                (x, self.horizon_y - offset),
+                (x - 30, 0), 1)
+    
+    def _draw_scanlines(self, screen):
+        """Draw retro CRT scanline effect."""
+        scanline_color = (0, 0, 0, 30)
+        for y in range(self.scanline_offset, self.height, 4):
+            overlay = pygame.Surface((self.width, 1), pygame.SRCALPHA)
+            overlay.fill(scanline_color)
+            screen.blit(overlay, (0, y))
+    
+    def _draw_vignette(self, screen):
+        """Draw vignette effect for depth."""
+        for i in range(100):
+            alpha = int(30 * (i / 100) ** 2)
+            color = (0, 0, 0, alpha)
+            # Top vignette
+            overlay = pygame.Surface((self.width, 2), pygame.SRCALPHA)
+            overlay.fill(color)
+            screen.blit(overlay, (0, i * 2))
+            # Bottom vignette
+            screen.blit(overlay, (0, self.height - i * 2 - 2))
+    
+    def _draw_accent_lines(self, screen):
+        """Draw pulsing accent lines."""
+        pulse_intensity = int(128 + 127 * math.sin(self.pulse))
+        
+        # Top accent line
+        pygame.draw.line(screen, 
+            (COL_ACCENT[0], COL_ACCENT[1], pulse_intensity), 
+            (0, self.horizon_y), (self.width, self.horizon_y), 2)
+        
+        # Bottom glow line
+        glow_y = self.height - 4
+        for i in range(3):
+            alpha = int(100 * (1 - i/3) * (0.5 + 0.5 * math.sin(self.pulse * 2)))
+            color = (COL_ACCENT2[0], COL_ACCENT2[1], COL_ACCENT2[2], alpha)
+            overlay = pygame.Surface((self.width, 2), pygame.SRCALPHA)
+            overlay.fill(color)
+            screen.blit(overlay, (0, glow_y + i * 2))
 
 
 # ---------------------------------------------------------------------------
@@ -97,7 +371,7 @@ def _text_shell():
     """Minimal text-mode shell for terminals / no-Pygame environments."""
     conf = cfg_mod.get()
     print("\n" + "=" * 48)
-    print("  OkamaOS Shell  (text mode)")
+    print("  OkamaOS v2.0.0 Shell  (text mode)")
     print("=" * 48)
 
     while True:
@@ -151,16 +425,25 @@ class OkamaShell:
 
         flags = 0 if windowed else pygame.FULLSCREEN | pygame.NOFRAME
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT), flags)
-        pygame.display.set_caption("OkamaOS")
+        pygame.display.set_caption("OkamaOS v2.0.0")
         pygame.mouse.set_visible(False)
 
         self.clock = pygame.time.Clock()
         self._init_fonts()
 
+        # Cyberpunk animated background
+        self.bg = CyberGridBackground(WIDTH, HEIGHT)
+
+        # Network monitor
+        self.net_monitor = NetworkMonitor()
+
+        # Input handling
         self.input_client = InputClient()
         self.input_client.connect()
+        self.keyboard_enabled = True
 
-        self.state = "home"       # home | play | settings | power | launching
+        # UI State
+        self.state = "home"
         self.section_idx = 0
         self.list_idx = 0
         self.settings_idx = 0
@@ -170,27 +453,58 @@ class OkamaShell:
         self.update_notices = []
         self.update_check_done = False
         self.update_check_error = ""
+        self.show_online_status = True
 
+        # Game list
         self.games = []
         self._refresh_games()
 
+        # Input timing
         self._input_cooldown = 0
         self._axis_threshold = 0.5
         self._axis_held: dict = {}
+        self._last_frame_time = time.time()
+
+        # Start update check
         self._start_update_check()
 
     def _init_fonts(self):
-        pygame.font.init()
+        # Initialize pygame font module and verify it actually works
+        try:
+            pygame.font.init()
+            # Test if font module is actually functional by creating a test font
+            test_font = pygame.font.Font(None, 24)
+            if test_font is None:
+                raise RuntimeError("pygame.font.Font returned None")
+        except Exception as e:
+            # Font module failed - this is critical for GUI
+            raise RuntimeError(f"Font module unavailable: {e}")
+        
+        # Try to use system fonts, fallback to default pygame font
         try:
             self.font_xl  = pygame.font.SysFont("DejaVu Sans", 72, bold=True)
             self.font_lg  = pygame.font.SysFont("DejaVu Sans", 42, bold=True)
             self.font_md  = pygame.font.SysFont("DejaVu Sans", 28)
             self.font_sm  = pygame.font.SysFont("DejaVu Sans", 20)
             self.font_hint= pygame.font.SysFont("DejaVu Sans", 18)
-        except Exception:
-            default = pygame.font.Font(None, 36)
-            self.font_xl = self.font_lg = self.font_md = \
-                self.font_sm = self.font_hint = default
+            # Verify fonts loaded correctly
+            if not self.font_xl or not self.font_lg:
+                raise RuntimeError("SysFont returned None")
+        except Exception as e:
+            # Fallback to default pygame fonts
+            try:
+                default_xl = pygame.font.Font(None, 72)
+                default_lg = pygame.font.Font(None, 42)
+                default_md = pygame.font.Font(None, 28)
+                default_sm = pygame.font.Font(None, 20)
+                default_hint = pygame.font.Font(None, 18)
+            except Exception as e2:
+                raise RuntimeError(f"Cannot load any font: {e2}")
+            self.font_xl = default_xl
+            self.font_lg = default_lg
+            self.font_md = default_md
+            self.font_sm = default_sm
+            self.font_hint = default_hint
 
     def _draw_logo(self, center_x: int, y: int, scale: float = 1.0):
         width = int(520 * scale)
@@ -247,7 +561,15 @@ class OkamaShell:
     def run(self):
         running = True
         while running:
-            dt = self.clock.tick(FPS)
+            now = time.time()
+            dt = now - self._last_frame_time
+            self._last_frame_time = now
+
+            self.clock.tick(FPS)
+
+            # Update animated background
+            self.bg.update(dt)
+
             events = self._collect_events()
 
             for e in events:
@@ -261,10 +583,11 @@ class OkamaShell:
             if self.message_timer > 0:
                 self.message_timer -= 1
 
+        self.net_monitor.stop()
         pygame.quit()
 
     # -----------------------------------------------------------------------
-    # Input collection (controller socket + keyboard fallback)
+    # Input collection (controller socket + full keyboard support)
     # -----------------------------------------------------------------------
     def _collect_events(self) -> list:
         events = []
@@ -276,19 +599,33 @@ class OkamaShell:
             elif ev.get("type") == "axis":
                 self._handle_axis_to_dpad(ev, events)
 
-        # Keyboard fallback (low priority)
+        # Full keyboard support (primary input alongside controllers)
         for pev in pygame.event.get():
             if pev.type == pygame.QUIT:
                 events.append({"type": "QUIT"})
             elif pev.type == pygame.KEYDOWN:
                 k = pev.key
                 mapping = {
+                    # Navigation
                     pygame.K_UP:     "DPAD_UP",
                     pygame.K_DOWN:   "DPAD_DOWN",
                     pygame.K_LEFT:   "DPAD_LEFT",
                     pygame.K_RIGHT:  "DPAD_RIGHT",
+                    pygame.K_w:      "DPAD_UP",
+                    pygame.K_s:      "DPAD_DOWN",
+                    pygame.K_a:      "DPAD_LEFT",
+                    pygame.K_d:      "DPAD_RIGHT",
+                    # Actions
                     pygame.K_RETURN: "A",
+                    pygame.K_SPACE:  "A",
                     pygame.K_ESCAPE: "B",
+                    pygame.K_BACKSPACE: "B",
+                    # Special
+                    pygame.K_TAB:    "TAB",
+                    pygame.K_HOME:   "START",
+                    pygame.K_1:      "SECTION_1",
+                    pygame.K_2:      "SECTION_2",
+                    pygame.K_3:      "SECTION_3",
                     pygame.K_q:      "QUIT" if self.dev_mode else None,
                 }
                 action = mapping.get(k)
@@ -329,10 +666,36 @@ class OkamaShell:
             action = ev.get("action")
             if not action:
                 continue
-            self._input_cooldown = 4  # ~130ms at 30 fps
+            self._input_cooldown = 6  # ~100ms at 60 fps
             self._dispatch(action)
 
     def _dispatch(self, action: str):
+        # Global shortcuts
+        if action == "L1" or action == "TAB":
+            self.section_idx = (self.section_idx - 1) % len(SECTIONS)
+            if self.state != "home":
+                self.state = "home"
+            return
+        elif action == "R1":
+            self.section_idx = (self.section_idx + 1) % len(SECTIONS)
+            if self.state != "home":
+                self.state = "home"
+            return
+        elif action == "START":
+            if self.state != "home":
+                self.state = "home"
+            return
+        elif action.startswith("SECTION_"):
+            try:
+                idx = int(action.split("_")[1]) - 1
+                if 0 <= idx < len(SECTIONS):
+                    self.section_idx = idx
+                    if self.state != "home":
+                        self.state = "home"
+            except (ValueError, IndexError):
+                pass
+            return
+
         if self.state == "home":
             self._home_input(action)
         elif self.state == "play":
@@ -400,7 +763,18 @@ class OkamaShell:
                     "Bluetooth pairing: use okama-cli bluetooth pair <mac>")
             elif opt == "Bluetooth":
                 s = bt_mod.status()
-                self._show_message(f"Bluetooth powered: {s['powered']}")
+                powered = s.get("powered", "no")
+                if powered == "yes":
+                    self._show_message(f"Bluetooth ON | Use okama-cli bluetooth pair <MAC>")
+                else:
+                    self._show_message("Bluetooth OFF. Enable in okama.conf")
+            elif opt == "Network":
+                net = self.net_monitor.get_status()
+                if net["online"]:
+                    conn = "WiFi" if net["type"] == "wifi" else "Ethernet"
+                    self._show_message(f"ONLINE via {conn} | Updates available")
+                else:
+                    self._show_message("OFFLINE | Connect cable or enable WiFi")
             else:
                 self._show_message(f"{opt} — coming in v1")
 
@@ -425,7 +799,8 @@ class OkamaShell:
     # Drawing
     # -----------------------------------------------------------------------
     def _draw(self):
-        self.screen.fill(COL_BG)
+        # Draw animated cyberpunk background
+        self.bg.draw(self.screen)
 
         if self.state == "home":
             self._draw_home()
@@ -436,6 +811,9 @@ class OkamaShell:
         elif self.state == "power":
             self._draw_power()
 
+        # Draw overlays
+        self._draw_online_status()
+        self._draw_update_badge()
         self._draw_message()
         self._draw_hints()
 
@@ -511,6 +889,47 @@ class OkamaShell:
         self.screen.blit(title_surf, (x + 22, y + 15))
         self.screen.blit(detail_surf, (x + 22, y + 52))
 
+    def _draw_online_status(self):
+        """Draw network connectivity indicator in top-right."""
+        if not self.show_online_status:
+            return
+        net = self.net_monitor.get_status()
+        if net["online"]:
+            color = COL_NET_ONLINE
+            if net["type"] == "wifi":
+                icon = "WiFi"
+            elif net["type"] == "ethernet":
+                icon = "ETH"
+            else:
+                icon = "ON"
+            text = f"{icon} ONLINE"
+        else:
+            color = COL_NET_OFFLINE
+            text = "OFFLINE"
+
+        surf = self.font_sm.render(text, True, color)
+        x = WIDTH - surf.get_width() - 20
+        y = 14
+        # Small glow badge
+        badge = pygame.Surface((surf.get_width() + 16, surf.get_height() + 8), pygame.SRCALPHA)
+        badge.fill((*color, 40))
+        self.screen.blit(badge, (x - 8, y - 4))
+        self.screen.blit(surf, (x, y))
+
+    def _draw_update_badge(self):
+        """Draw update notification badge on home screen."""
+        if self.state != "home" or not self.update_check_done or not self.update_notices:
+            return
+        total = len(self.update_notices)
+        badge_text = f"{total} UPDATE{'S' if total > 1 else ''}"
+        surf = self.font_sm.render(badge_text, True, COL_ACCENT3)
+        x = 20
+        y = 14
+        badge = pygame.Surface((surf.get_width() + 16, surf.get_height() + 8), pygame.SRCALPHA)
+        badge.fill((*COL_ACCENT3, 50))
+        self.screen.blit(badge, (x - 8, y - 4))
+        self.screen.blit(surf, (x, y))
+
     def _draw_play(self):
         title = self.font_lg.render("Play", True, COL_ACCENT2)
         self.screen.blit(title, (60, 40))
@@ -580,7 +999,7 @@ class OkamaShell:
             self.screen.blit(surf, (WIDTH // 2 - surf.get_width() // 2, HEIGHT - 82))
 
     def _draw_hints(self):
-        hints = f"  {BUTTON_HINT_DPAD}   {BUTTON_HINT_A}   {BUTTON_HINT_B}   {BUTTON_HINT_START}"
+        hints = f"  {BUTTON_HINT_DPAD}   {BUTTON_HINT_A}   {BUTTON_HINT_B}   {BUTTON_HINT_START}   {BUTTON_HINT_L1R1}"
         h = self.font_hint.render(hints, True, COL_DIM)
         self.screen.blit(h, (20, HEIGHT - 28))
 
@@ -629,12 +1048,25 @@ def main():
     os.environ.setdefault("SDL_FBDEV",
                           conf.get("FRAMEBUFFER_DEVICE", "/dev/fb0"))
     os.environ.setdefault("SDL_AUDIODRIVER", "alsa")
+    # Software rendering fallback for VMs without GPU acceleration
+    os.environ.setdefault("SDL_RENDER_DRIVER", "software")
+    os.environ.setdefault("LIBGL_ALWAYS_SOFTWARE", "1")
 
     if args.windowed:
         os.environ["SDL_VIDEODRIVER"] = "x11"  # dev host
 
     try:
         pygame.init()
+    except Exception as exc:
+        message = f"pygame.init() failed: {exc}"
+        print(message, file=sys.stderr)
+        print("Falling back to text shell.", file=sys.stderr)
+        _log_shell_error(message)
+        _text_shell()
+        return
+
+    # Try GUI shell with error handling for font/display issues
+    try:
         shell = OkamaShell(windowed=args.windowed, dev_mode=dev)
         shell.run()
     except Exception as exc:

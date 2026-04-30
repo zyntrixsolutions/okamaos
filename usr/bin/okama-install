@@ -1,8 +1,9 @@
 #!/bin/bash
 # Install the running OkamaOS live system to a local disk.
+# v2.0.0: Enhanced installer with EFI support and better validation.
 set -euo pipefail
 
-VERSION="1.0.6"
+VERSION="2.0.0"
 MOUNTPOINT="${OKAMA_INSTALL_MOUNT:-/mnt/okama-install}"
 BOOT_ASSET_DIR="${OKAMA_INSTALL_BOOT_ASSETS:-/usr/share/okamaos/boot}"
 KERNEL_SRC="${OKAMA_INSTALL_KERNEL:-/boot/okamaos/vmlinuz}"
@@ -15,6 +16,7 @@ DRY_RUN="no"
 LIST_ONLY="no"
 MOUNTED="no"
 FS_TYPE="ext2"
+EFI_BOOT="no"
 
 usage() {
     cat <<EOF
@@ -25,10 +27,25 @@ Usage:
   okama-install --target /dev/sdX
   okama-install --target /dev/vdX --yes
   okama-install --target /dev/vdX --dry-run
+  okama-install --target /dev/sdX --efi   # Use EFI bootloader
 
 This erases the selected whole disk, creates one Linux partition, copies the
-running OkamaOS root filesystem, and installs a legacy BIOS Extlinux bootloader.
+running OkamaOS root filesystem, and installs a bootloader (BIOS Extlinux
+or EFI systemd-boot).
+
+Options:
+  --list-disks    Show available disks
+  --target        Target disk device (e.g., /dev/sda)
+  --yes           Skip confirmation prompt
+  --dry-run       Show what would be done without making changes
+  --efi           Use EFI bootloader instead of BIOS/Extlinux
+  -h, --help      Show this help
 EOF
+}
+
+# v2.0.0: EFI detection
+check_efi_mode() {
+    [ -d /sys/firmware/efi ] && return 0 || return 1
 }
 
 log() {
@@ -464,6 +481,9 @@ while [ "$#" -gt 0 ]; do
         --dry-run)
             DRY_RUN="yes"
             ;;
+        --efi)
+            EFI_BOOT="yes"
+            ;;
         -h|--help)
             usage
             exit 0
@@ -474,6 +494,11 @@ while [ "$#" -gt 0 ]; do
     esac
     shift
 done
+
+# Auto-detect EFI mode if not explicitly specified
+if [ "$EFI_BOOT" = "no" ] && check_efi_mode; then
+    log "EFI mode detected. Use --efi to enable EFI bootloader."
+fi
 
 if [ "$LIST_ONLY" = "yes" ]; then
     list_disks

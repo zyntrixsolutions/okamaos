@@ -80,19 +80,37 @@ BTN_START  = 0x13b
 BTN_MODE   = 0x13c  # HOME / Guide
 
 BUTTON_MAP = {
-    0x130: "A",
-    0x131: "B",
-    0x133: "X",
-    0x134: "Y",
-    0x136: "L1",
-    0x137: "R1",
-    0x138: "L2",
-    0x139: "R2",
-    0x13a: "SELECT",
-    0x13b: "START",
-    0x13c: "HOME",
-    0x13d: "L3",
-    0x13e: "R3",
+    # Standard gamepad buttons
+    0x130: "A",      # BTN_SOUTH
+    0x131: "B",      # BTN_EAST
+    0x133: "X",      # BTN_WEST
+    0x134: "Y",      # BTN_NORTH
+    0x136: "L1",     # BTN_TL
+    0x137: "R1",     # BTN_TR
+    0x138: "L2",     # BTN_TL2
+    0x139: "R2",     # BTN_TR2
+    0x13a: "SELECT", # BTN_SELECT
+    0x13b: "START",  # BTN_START
+    0x13c: "HOME",   # BTN_MODE
+    0x13d: "L3",     # BTN_THUMBL
+    0x13e: "R3",     # BTN_THUMBR
+    # Alternative/common HID codes for generic controllers
+    0x120: "A",      # Generic X
+    0x121: "B",      # Generic A
+    0x122: "X",      # Generic B
+    0x123: "Y",      # Generic Y
+    0x124: "L1",     # Generic L1
+    0x125: "R1",     # Generic R1
+    0x126: "L2",     # Generic L2
+    0x127: "R2",     # Generic R2
+    0x128: "SELECT", # Generic SELECT
+    0x129: "START",  # Generic START
+    0x12a: "HOME",   # Generic HOME
+    # XBox-style alternative codes
+    0x2c0: "A",
+    0x2c1: "B",
+    0x2c2: "X",
+    0x2c3: "Y",
 }
 
 AXIS_MAP = {

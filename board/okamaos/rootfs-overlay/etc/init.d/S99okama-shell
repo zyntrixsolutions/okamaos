@@ -1,39 +1,15 @@
 #!/bin/sh
-# S99okama-shell — launch the OkamaOS controller shell on tty1.
-# This is the last init.d script to run. It keeps okama-shell respawning
-# on crash so the console never drops to a login prompt.
-
-DEVMODE_CONF=/etc/okamaos/devmode.conf
-DEV_ENABLED=no
-if [ -f "$DEVMODE_CONF" ]; then
-    DEV_ENABLED=$(grep '^ENABLED=' "$DEVMODE_CONF" | cut -d= -f2 | tr -d '[:space:]')
-fi
-
-respawn_shell() {
-    while true; do
-        PYTHONPATH=/usr/lib/okamaos /usr/bin/okama-shell </dev/tty1 >/dev/tty1 2>&1
-        EXIT_CODE=$?
-        echo "okama-shell exited (code $EXIT_CODE) — restarting in 2s..." \
-             >> /var/okamaos/logs/shell.log
-        sleep 2
-    done
-}
+# S99okama-shell — launch the guarded OkamaOS shell on tty1.
+# The launcher owns crash handling and the safe framebuffer fallback.
 
 case "$1" in
   start)
     echo "Launching okama-shell on tty1..."
     # Run on tty1 in the background (init will not wait for it)
-    openvt -c 1 -f -w -- sh -c "
-        export PYTHONPATH=/usr/lib/okamaos
-        while true; do
-            /usr/bin/okama-shell
-            echo \"okama-shell exited — restarting\" >> /var/okamaos/logs/shell.log
-            sleep 2
-        done
-    " &
+    openvt -c 1 -f -w -- /usr/bin/okama-shell-launcher &
     ;;
   stop)
-    killall okama-shell 2>/dev/null || true
+    killall okama-shell-launcher okama-safe-ui okama-shell 2>/dev/null || true
     ;;
   *)
     echo "Usage: $0 {start|stop}"

@@ -1,5 +1,17 @@
 # OkamaOS Portal Changelog
 
+## 2026-04-30 - Bitmap UI
+
+- Prepared OkamaOS `2.0.4` with a boot UI text renderer that does not load Pygame font, SDL_ttf, or freetype native libraries.
+- Kept the VirtualBox guard and safe framebuffer UI from `2.0.3`.
+- Extended readiness checks to block native font-module regressions.
+
+## 2026-04-30 - VirtualBox Guard
+
+- Prepared OkamaOS `2.0.3` to avoid native SDL segfault loops on VirtualBox video adapters.
+- Added a guarded shell launcher that switches to a direct framebuffer UI when native SDL startup is unsafe.
+- Added a safe Play, Settings, and Power UI that does not import Pygame or SDL.
+
 ## 2026-04-30 - UI Recovery
 
 - Prepared OkamaOS `2.0.2` to recover VirtualBox GUI boot.

@@ -1,0 +1,438 @@
+#!/usr/bin/env python3
+"""okama-safe-ui - Pygame-free framebuffer UI for OkamaOS v2.0.4."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+import select
+import struct
+import subprocess
+import sys
+import termios
+import time
+import tty
+
+
+COL_BG = (7, 8, 18)
+COL_GRID = (16, 28, 52)
+COL_TEXT = (238, 240, 255)
+COL_DIM = (128, 132, 154)
+COL_CYAN = (0, 238, 238)
+COL_MAGENTA = (255, 0, 128)
+COL_GREEN = (0, 245, 120)
+COL_WARN = (255, 156, 36)
+COL_CARD = (24, 26, 48)
+
+SECTIONS = ["Play", "Settings", "Power"]
+POWER_OPTIONS = ["Restart", "Shut Down", "Cancel"]
+
+FONT = {
+    " ": ("00000", "00000", "00000", "00000", "00000", "00000", "00000"),
+    "!": ("00100", "00100", "00100", "00100", "00100", "00000", "00100"),
+    "?": ("01110", "10001", "00001", "00010", "00100", "00000", "00100"),
+    ".": ("00000", "00000", "00000", "00000", "00000", "01100", "01100"),
+    ",": ("00000", "00000", "00000", "00000", "01100", "00100", "01000"),
+    ":": ("00000", "01100", "01100", "00000", "01100", "01100", "00000"),
+    "-": ("00000", "00000", "00000", "11111", "00000", "00000", "00000"),
+    "_": ("00000", "00000", "00000", "00000", "00000", "00000", "11111"),
+    "/": ("00001", "00010", "00010", "00100", "01000", "01000", "10000"),
+    "(": ("00010", "00100", "01000", "01000", "01000", "00100", "00010"),
+    ")": ("01000", "00100", "00010", "00010", "00010", "00100", "01000"),
+    "[": ("01110", "01000", "01000", "01000", "01000", "01000", "01110"),
+    "]": ("01110", "00010", "00010", "00010", "00010", "00010", "01110"),
+    "0": ("01110", "10001", "10011", "10101", "11001", "10001", "01110"),
+    "1": ("00100", "01100", "00100", "00100", "00100", "00100", "01110"),
+    "2": ("01110", "10001", "00001", "00010", "00100", "01000", "11111"),
+    "3": ("11110", "00001", "00001", "01110", "00001", "00001", "11110"),
+    "4": ("00010", "00110", "01010", "10010", "11111", "00010", "00010"),
+    "5": ("11111", "10000", "10000", "11110", "00001", "00001", "11110"),
+    "6": ("00110", "01000", "10000", "11110", "10001", "10001", "01110"),
+    "7": ("11111", "00001", "00010", "00100", "01000", "01000", "01000"),
+    "8": ("01110", "10001", "10001", "01110", "10001", "10001", "01110"),
+    "9": ("01110", "10001", "10001", "01111", "00001", "00010", "11100"),
+    "A": ("01110", "10001", "10001", "11111", "10001", "10001", "10001"),
+    "B": ("11110", "10001", "10001", "11110", "10001", "10001", "11110"),
+    "C": ("01110", "10001", "10000", "10000", "10000", "10001", "01110"),
+    "D": ("11110", "10001", "10001", "10001", "10001", "10001", "11110"),
+    "E": ("11111", "10000", "10000", "11110", "10000", "10000", "11111"),
+    "F": ("11111", "10000", "10000", "11110", "10000", "10000", "10000"),
+    "G": ("01110", "10001", "10000", "10111", "10001", "10001", "01111"),
+    "H": ("10001", "10001", "10001", "11111", "10001", "10001", "10001"),
+    "I": ("01110", "00100", "00100", "00100", "00100", "00100", "01110"),
+    "J": ("00111", "00010", "00010", "00010", "10010", "10010", "01100"),
+    "K": ("10001", "10010", "10100", "11000", "10100", "10010", "10001"),
+    "L": ("10000", "10000", "10000", "10000", "10000", "10000", "11111"),
+    "M": ("10001", "11011", "10101", "10101", "10001", "10001", "10001"),
+    "N": ("10001", "11001", "10101", "10011", "10001", "10001", "10001"),
+    "O": ("01110", "10001", "10001", "10001", "10001", "10001", "01110"),
+    "P": ("11110", "10001", "10001", "11110", "10000", "10000", "10000"),
+    "Q": ("01110", "10001", "10001", "10001", "10101", "10010", "01101"),
+    "R": ("11110", "10001", "10001", "11110", "10100", "10010", "10001"),
+    "S": ("01111", "10000", "10000", "01110", "00001", "00001", "11110"),
+    "T": ("11111", "00100", "00100", "00100", "00100", "00100", "00100"),
+    "U": ("10001", "10001", "10001", "10001", "10001", "10001", "01110"),
+    "V": ("10001", "10001", "10001", "10001", "10001", "01010", "00100"),
+    "W": ("10001", "10001", "10001", "10101", "10101", "10101", "01010"),
+    "X": ("10001", "10001", "01010", "00100", "01010", "10001", "10001"),
+    "Y": ("10001", "10001", "01010", "00100", "00100", "00100", "00100"),
+    "Z": ("11111", "00001", "00010", "00100", "01000", "10000", "11111"),
+}
+
+
+def _read_text(path: Path, default: str = "") -> str:
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return default
+
+
+class Framebuffer:
+    def __init__(self) -> None:
+        self.dev = os.environ.get("OKAMA_FBDEV", "/dev/fb0")
+        name = os.path.basename(self.dev)
+        sysfs = Path("/sys/class/graphics") / name
+        width_env = os.environ.get("OKAMA_FB_WIDTH")
+        height_env = os.environ.get("OKAMA_FB_HEIGHT")
+        if width_env and height_env:
+            self.width = int(width_env)
+            self.height = int(height_env)
+        else:
+            raw_size = _read_text(sysfs / "virtual_size", "1024,768")
+            self.width, self.height = [int(part) for part in raw_size.split(",", 1)]
+
+        self.bpp = int(os.environ.get("OKAMA_FB_BPP") or _read_text(sysfs / "bits_per_pixel", "32"))
+        if self.bpp not in (16, 24, 32):
+            raise RuntimeError(f"unsupported framebuffer depth: {self.bpp}")
+        self.bytes_per_pixel = self.bpp // 8
+        stride = os.environ.get("OKAMA_FB_STRIDE") or _read_text(sysfs / "stride", "")
+        self.line_length = int(stride) if stride.isdigit() else self.width * self.bytes_per_pixel
+        self.frame = bytearray(self.line_length * self.height)
+
+    def _pixel(self, color: tuple[int, int, int]) -> bytes:
+        r, g, b = color
+        if self.bpp == 16:
+            value = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3)
+            return struct.pack("<H", value)
+        if self.bpp == 24:
+            return bytes((b, g, r))
+        return struct.pack("<I", (r << 16) | (g << 8) | b)
+
+    def clear(self, color: tuple[int, int, int]) -> None:
+        row = self._pixel(color) * self.width
+        if len(row) < self.line_length:
+            row += b"\0" * (self.line_length - len(row))
+        self.frame[:] = row * self.height
+
+    def rect(self, x: int, y: int, w: int, h: int, color: tuple[int, int, int]) -> None:
+        x0 = max(0, min(self.width, x))
+        y0 = max(0, min(self.height, y))
+        x1 = max(0, min(self.width, x + w))
+        y1 = max(0, min(self.height, y + h))
+        if x1 <= x0 or y1 <= y0:
+            return
+        row = self._pixel(color) * (x1 - x0)
+        start_x = x0 * self.bytes_per_pixel
+        for yy in range(y0, y1):
+            pos = yy * self.line_length + start_x
+            self.frame[pos:pos + len(row)] = row
+
+    def text_size(self, text: str, scale: int) -> tuple[int, int]:
+        return (max(1, len(text)) * 6 * scale, 7 * scale)
+
+    def text(self, text: str, x: int, y: int, scale: int, color: tuple[int, int, int]) -> None:
+        cursor = x
+        for char in text.upper():
+            glyph = FONT.get(char, FONT["?"])
+            for row_idx, row in enumerate(glyph):
+                for col_idx, bit in enumerate(row):
+                    if bit == "1":
+                        self.rect(cursor + col_idx * scale, y + row_idx * scale, scale, scale, color)
+            cursor += 6 * scale
+
+    def present(self) -> None:
+        with open(self.dev, "r+b", buffering=0) as fb:
+            fb.seek(0)
+            fb.write(self.frame)
+
+
+def list_games() -> list[dict]:
+    games_dir = Path(os.environ.get("OKAMA_GAMES", "/var/okamaos/games"))
+    games: list[dict] = []
+    try:
+        for directory in sorted(games_dir.iterdir()):
+            manifest = directory / "manifest.ok.json"
+            if manifest.is_file():
+                try:
+                    games.append(json.loads(manifest.read_text(encoding="utf-8")))
+                except (OSError, json.JSONDecodeError):
+                    continue
+    except OSError:
+        pass
+    return games
+
+
+class SafeUI:
+    def __init__(self, fb: Framebuffer) -> None:
+        self.fb = fb
+        self.state = "home"
+        self.section = 0
+        self.game_idx = 0
+        self.power_idx = 0
+        self.games = list_games()
+        self.message = os.environ.get("OKAMA_SAFE_UI_REASON", "safe video mode")
+
+    def draw_button(self, label: str, x: int, y: int, w: int, h: int, selected: bool) -> None:
+        fill = COL_CYAN if selected else COL_CARD
+        edge = COL_MAGENTA if selected else COL_GRID
+        self.fb.rect(x - 3, y - 3, w + 6, h + 6, edge)
+        self.fb.rect(x, y, w, h, fill)
+        tw, th = self.fb.text_size(label, 4)
+        self.fb.text(label, x + (w - tw) // 2, y + (h - th) // 2, 4, COL_TEXT)
+
+    def draw_header(self) -> None:
+        w = self.fb.width
+        self.fb.text("OKAMAOS", max(20, w // 2 - 210), 44, 10, COL_TEXT)
+        self.fb.text("SAFE VIDEO MODE", max(20, w // 2 - 145), 132, 4, COL_GREEN)
+        self.fb.text(self.message[:42], 28, 18, 2, COL_WARN)
+        self.fb.text("OFFLINE", w - 160, 20, 3, COL_MAGENTA)
+        y = max(190, self.fb.height // 3)
+        self.fb.rect(0, y, w, 3, COL_GREEN)
+        for x in range(0, w, 80):
+            self.fb.rect(x, y, 1, max(80, self.fb.height - y - 120), COL_GRID)
+
+    def draw_home(self) -> None:
+        button_w = min(260, max(150, self.fb.width // 5))
+        gap = max(20, self.fb.width // 38)
+        total = button_w * 3 + gap * 2
+        x = (self.fb.width - total) // 2
+        y = self.fb.height // 2 - 10
+        for idx, label in enumerate(SECTIONS):
+            self.draw_button(label, x + idx * (button_w + gap), y, button_w, 70, idx == self.section)
+        game_label = f"{len(self.games)} game(s) installed"
+        tw, _ = self.fb.text_size(game_label, 3)
+        self.fb.text(game_label, (self.fb.width - tw) // 2, y + 95, 3, COL_DIM)
+
+    def draw_play(self) -> None:
+        self.fb.text("PLAY", 42, 54, 7, COL_CYAN)
+        if not self.games:
+            self.fb.text("NO GAMES INSTALLED", 54, 160, 4, COL_DIM)
+            return
+        y = 150
+        for idx, game in enumerate(self.games[:7]):
+            selected = idx == self.game_idx
+            self.fb.rect(44, y - 8, self.fb.width - 88, 58, COL_CYAN if selected else COL_CARD)
+            self.fb.text(game.get("name", "GAME")[:28], 62, y + 4, 4, COL_TEXT)
+            self.fb.text(game.get("id", "")[:36], 62, y + 34, 2, COL_DIM)
+            y += 72
+
+    def draw_settings(self) -> None:
+        self.fb.text("SETTINGS", 42, 54, 7, COL_MAGENTA)
+        lines = [
+            "Renderer: safe framebuffer",
+            "Native UI: bypassed for this video path",
+            "Keyboard: arrows / enter / backspace",
+            "Logs: /var/okamaos/logs/shell.log",
+        ]
+        y = 160
+        for line in lines:
+            self.fb.text(line, 62, y, 3, COL_TEXT)
+            y += 52
+
+    def draw_power(self) -> None:
+        self.fb.text("POWER", 42, 54, 7, COL_WARN)
+        x = self.fb.width // 2 - 190
+        y = 180
+        for idx, label in enumerate(POWER_OPTIONS):
+            self.draw_button(label, x, y + idx * 92, 380, 64, idx == self.power_idx)
+
+    def draw_footer(self) -> None:
+        footer = "[Arrows] Navigate   [Enter] Select   [Backspace/Esc] Back"
+        self.fb.text(footer, 28, self.fb.height - 42, 2, COL_DIM)
+
+    def draw(self) -> None:
+        self.fb.clear(COL_BG)
+        self.draw_header()
+        if self.state == "home":
+            self.draw_home()
+        elif self.state == "play":
+            self.draw_play()
+        elif self.state == "settings":
+            self.draw_settings()
+        elif self.state == "power":
+            self.draw_power()
+        self.draw_footer()
+        self.fb.present()
+
+    def select(self) -> None:
+        if self.state == "home":
+            chosen = SECTIONS[self.section].lower()
+            self.state = chosen
+            return
+        if self.state == "play" and self.games:
+            game_id = self.games[self.game_idx].get("id")
+            if game_id:
+                subprocess.call(["/usr/bin/okama-run", game_id])
+                self.games = list_games()
+            return
+        if self.state == "power":
+            choice = POWER_OPTIONS[self.power_idx]
+            if choice == "Restart":
+                subprocess.call(["reboot"])
+            elif choice == "Shut Down":
+                subprocess.call(["poweroff"])
+            else:
+                self.state = "home"
+
+    def back(self) -> None:
+        self.state = "home"
+
+    def handle_key(self, key: str) -> None:
+        if key == "back":
+            self.back()
+        elif self.state == "home":
+            if key == "left":
+                self.section = (self.section - 1) % len(SECTIONS)
+            elif key in ("right", "tab"):
+                self.section = (self.section + 1) % len(SECTIONS)
+            elif key == "enter":
+                self.select()
+        elif self.state == "play":
+            if key == "up" and self.games:
+                self.game_idx = max(0, self.game_idx - 1)
+            elif key == "down" and self.games:
+                self.game_idx = min(len(self.games) - 1, self.game_idx + 1)
+            elif key == "enter":
+                self.select()
+        elif self.state == "settings":
+            if key == "enter":
+                self.state = "home"
+        elif self.state == "power":
+            if key == "up":
+                self.power_idx = (self.power_idx - 1) % len(POWER_OPTIONS)
+            elif key == "down":
+                self.power_idx = (self.power_idx + 1) % len(POWER_OPTIONS)
+            elif key == "enter":
+                self.select()
+
+    def run(self, render_once: bool = False) -> None:
+        self.draw()
+        if render_once:
+            return
+        reader = KeyReader()
+        with reader:
+            while True:
+                key = reader.read_key()
+                if key:
+                    self.handle_key(key)
+                    self.draw()
+
+
+class KeyReader:
+    def __init__(self) -> None:
+        self.fd = sys.stdin.fileno()
+        self.old_attrs = None
+
+    def __enter__(self) -> "KeyReader":
+        if sys.stdin.isatty():
+            self.old_attrs = termios.tcgetattr(self.fd)
+            tty.setcbreak(self.fd)
+            sys.stdout.write("\033[?25l")
+            sys.stdout.flush()
+        return self
+
+    def __exit__(self, *args) -> None:
+        if self.old_attrs is not None:
+            termios.tcsetattr(self.fd, termios.TCSADRAIN, self.old_attrs)
+            sys.stdout.write("\033[?25h")
+            sys.stdout.flush()
+
+    def read_key(self) -> str | None:
+        ready, _, _ = select.select([self.fd], [], [], 0.25)
+        if not ready:
+            return None
+        data = os.read(self.fd, 1)
+        if not data:
+            return None
+        char = data.decode("utf-8", "ignore")
+        if char in ("\r", "\n", " "):
+            return "enter"
+        if char in ("\x7f", "\b"):
+            return "back"
+        if char == "\t":
+            return "tab"
+        if char.lower() == "q":
+            return "back"
+        if char == "\x1b":
+            time.sleep(0.01)
+            more = b""
+            while select.select([self.fd], [], [], 0)[0]:
+                more += os.read(self.fd, 1)
+                if len(more) >= 2:
+                    break
+            seq = more.decode("utf-8", "ignore")
+            return {
+                "[A": "up",
+                "[B": "down",
+                "[C": "right",
+                "[D": "left",
+                "": "back",
+            }.get(seq)
+        return None
+
+
+def text_fallback() -> int:
+    games = list_games()
+    while True:
+        print("\n" + "=" * 44)
+        print("OkamaOS Safe Console")
+        print("=" * 44)
+        print("[1] Play")
+        print("[2] Settings")
+        print("[3] Power")
+        print("[q] Refresh")
+        choice = input("Select > ").strip().lower()
+        if choice == "1":
+            games = list_games()
+            if not games:
+                print("No games installed.")
+                continue
+            for idx, game in enumerate(games, 1):
+                print(f"[{idx}] {game.get('name', 'Game')} ({game.get('id', '?')})")
+            selected = input("Game > ").strip()
+            if selected.isdigit() and 1 <= int(selected) <= len(games):
+                game_id = games[int(selected) - 1].get("id")
+                if game_id:
+                    subprocess.call(["/usr/bin/okama-run", game_id])
+        elif choice == "2":
+            print("Renderer: safe console fallback")
+            print("Logs: /var/okamaos/logs/shell.log")
+        elif choice == "3":
+            action = input("[r] reboot, [p] poweroff, anything else cancels > ").strip().lower()
+            if action == "r":
+                subprocess.call(["reboot"])
+            elif action == "p":
+                subprocess.call(["poweroff"])
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(prog="okama-safe-ui")
+    parser.add_argument("--render-once", action="store_true",
+                        help="draw one framebuffer frame and exit")
+    args = parser.parse_args()
+
+    try:
+        ui = SafeUI(Framebuffer())
+        ui.run(render_once=args.render_once)
+        return 0
+    except Exception as exc:
+        print(f"okama-safe-ui failed: {exc}", file=sys.stderr)
+        if args.render_once:
+            return 1
+        return text_fallback()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

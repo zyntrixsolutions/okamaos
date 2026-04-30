@@ -1,5 +1,30 @@
 # Changelog
 
+## [2.0.4] - 2026-04-30
+
+### Fixed
+
+- Removed `pygame.freetype` from the boot shell after live boot exposed the same page-alignment failure in the bundled freetype wheel library.
+- Added an in-process bitmap text renderer for `okama-shell`, keeping the graphical boot UI off all Pygame font, SDL_ttf, and freetype native paths.
+
+### Changed
+
+- Bumped runtime, installer, package, config, and documentation version tracking to `2.0.4`.
+- Extended `make boot-readiness-check` to reject both `pygame.font` and `pygame.freetype` in the boot shell.
+
+## [2.0.3] - 2026-04-30
+
+### Fixed
+
+- Added `okama-shell-launcher` so tty1 no longer loops raw native `Segmentation fault` output when SDL/Pygame crashes before Python can handle it.
+- Detects VirtualBox's `0x80ee` display adapter before native SDL startup and launches `okama-safe-ui` directly for that video path.
+- Added `okama-safe-ui`, a Pygame-free framebuffer UI for Play, Settings, and Power access when the native SDL UI is unsafe.
+
+### Changed
+
+- Bumped runtime, installer, package, config, and documentation version tracking to `2.0.3`.
+- Extended `make boot-readiness-check` to require the guarded launcher and framebuffer fallback path.
+
 ## [2.0.2] - 2026-04-30
 
 ### Fixed

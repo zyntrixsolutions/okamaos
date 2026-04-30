@@ -1,9 +1,9 @@
 #!/bin/bash
 # Install the running OkamaOS live system to a local disk.
-# v2.0.2: Enhanced installer with EFI support and better validation.
+# v2.0.4: Enhanced installer with EFI support and better validation.
 set -euo pipefail
 
-VERSION="2.0.2"
+VERSION="2.0.4"
 MOUNTPOINT="${OKAMA_INSTALL_MOUNT:-/mnt/okama-install}"
 BOOT_ASSET_DIR="${OKAMA_INSTALL_BOOT_ASSETS:-/usr/share/okamaos/boot}"
 KERNEL_SRC="${OKAMA_INSTALL_KERNEL:-/boot/okamaos/vmlinuz}"

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""okama-shell — OkamaOS v2.0.2 fullscreen controller-first UI shell.
+"""okama-shell — OkamaOS v2.0.4 fullscreen controller-first UI shell.
 
 MAJOR UPDATE: Cyberpunk UI, Full Keyboard/Generic Controller Support,
 Network Status, Online Indicators, Bluetooth Plug-and-Play
@@ -58,11 +58,9 @@ import socket as sock_module
 PYGAME_IMPORT_ERROR = None
 try:
     import pygame
-    import pygame.freetype as pygame_freetype
     PYGAME_OK = True
 except Exception as exc:
     pygame = None
-    pygame_freetype = None
     PYGAME_OK = False
     PYGAME_IMPORT_ERROR = exc
 
@@ -113,6 +111,58 @@ BUTTON_HINT_B = "[B] Back"
 BUTTON_HINT_DPAD = "[↕] Navigate"
 BUTTON_HINT_START = "[START] Home"
 BUTTON_HINT_L1R1 = "[L1/R1] Tab"
+
+BITMAP_FONT = {
+    " ": ("00000", "00000", "00000", "00000", "00000", "00000", "00000"),
+    "!": ("00100", "00100", "00100", "00100", "00100", "00000", "00100"),
+    "?": ("01110", "10001", "00001", "00010", "00100", "00000", "00100"),
+    ".": ("00000", "00000", "00000", "00000", "00000", "01100", "01100"),
+    ",": ("00000", "00000", "00000", "00000", "01100", "00100", "01000"),
+    ":": ("00000", "01100", "01100", "00000", "01100", "01100", "00000"),
+    "-": ("00000", "00000", "00000", "11111", "00000", "00000", "00000"),
+    "_": ("00000", "00000", "00000", "00000", "00000", "00000", "11111"),
+    "/": ("00001", "00010", "00010", "00100", "01000", "01000", "10000"),
+    "(": ("00010", "00100", "01000", "01000", "01000", "00100", "00010"),
+    ")": ("01000", "00100", "00010", "00010", "00010", "00100", "01000"),
+    "[": ("01110", "01000", "01000", "01000", "01000", "01000", "01110"),
+    "]": ("01110", "00010", "00010", "00010", "00010", "00010", "01110"),
+    "0": ("01110", "10001", "10011", "10101", "11001", "10001", "01110"),
+    "1": ("00100", "01100", "00100", "00100", "00100", "00100", "01110"),
+    "2": ("01110", "10001", "00001", "00010", "00100", "01000", "11111"),
+    "3": ("11110", "00001", "00001", "01110", "00001", "00001", "11110"),
+    "4": ("00010", "00110", "01010", "10010", "11111", "00010", "00010"),
+    "5": ("11111", "10000", "10000", "11110", "00001", "00001", "11110"),
+    "6": ("00110", "01000", "10000", "11110", "10001", "10001", "01110"),
+    "7": ("11111", "00001", "00010", "00100", "01000", "01000", "01000"),
+    "8": ("01110", "10001", "10001", "01110", "10001", "10001", "01110"),
+    "9": ("01110", "10001", "10001", "01111", "00001", "00010", "11100"),
+    "A": ("01110", "10001", "10001", "11111", "10001", "10001", "10001"),
+    "B": ("11110", "10001", "10001", "11110", "10001", "10001", "11110"),
+    "C": ("01110", "10001", "10000", "10000", "10000", "10001", "01110"),
+    "D": ("11110", "10001", "10001", "10001", "10001", "10001", "11110"),
+    "E": ("11111", "10000", "10000", "11110", "10000", "10000", "11111"),
+    "F": ("11111", "10000", "10000", "11110", "10000", "10000", "10000"),
+    "G": ("01110", "10001", "10000", "10111", "10001", "10001", "01111"),
+    "H": ("10001", "10001", "10001", "11111", "10001", "10001", "10001"),
+    "I": ("01110", "00100", "00100", "00100", "00100", "00100", "01110"),
+    "J": ("00111", "00010", "00010", "00010", "10010", "10010", "01100"),
+    "K": ("10001", "10010", "10100", "11000", "10100", "10010", "10001"),
+    "L": ("10000", "10000", "10000", "10000", "10000", "10000", "11111"),
+    "M": ("10001", "11011", "10101", "10101", "10001", "10001", "10001"),
+    "N": ("10001", "11001", "10101", "10011", "10001", "10001", "10001"),
+    "O": ("01110", "10001", "10001", "10001", "10001", "10001", "01110"),
+    "P": ("11110", "10001", "10001", "11110", "10000", "10000", "10000"),
+    "Q": ("01110", "10001", "10001", "10001", "10101", "10010", "01101"),
+    "R": ("11110", "10001", "10001", "11110", "10100", "10010", "10001"),
+    "S": ("01111", "10000", "10000", "01110", "00001", "00001", "11110"),
+    "T": ("11111", "00100", "00100", "00100", "00100", "00100", "00100"),
+    "U": ("10001", "10001", "10001", "10001", "10001", "10001", "01110"),
+    "V": ("10001", "10001", "10001", "10001", "10001", "01010", "00100"),
+    "W": ("10001", "10001", "10001", "10101", "10101", "10101", "01010"),
+    "X": ("10001", "10001", "01010", "00100", "01010", "10001", "10001"),
+    "Y": ("10001", "10001", "01010", "00100", "00100", "00100", "00100"),
+    "Z": ("11111", "00001", "00010", "00100", "01000", "10000", "11111"),
+}
 
 
 # ---------------------------------------------------------------------------
@@ -454,18 +504,40 @@ def _configure_sdl_environment(conf, windowed: bool) -> None:
 
 
 class ShellFont:
-    """Small wrapper that keeps the shell off pygame.font/SDL_ttf."""
+    """Small bitmap renderer that avoids pygame font/native freetype modules."""
 
     def __init__(self, size: int, bold: bool = False):
-        if pygame_freetype is None:
-            raise RuntimeError("pygame.freetype is not available")
-        self._font = pygame_freetype.Font(None, size)
-        self._font.strong = bold
+        self.scale = max(2, int(round(size / 7)))
+        self.bold = bold
 
     def render(self, text: str, antialias_or_color, color=None):
         if color is None:
             color = antialias_or_color
-        surf, _ = self._font.render(str(text), fgcolor=color)
+        text = str(text)
+        width = max(1, len(text) * 6 * self.scale + (1 if self.bold else 0))
+        height = 7 * self.scale
+        surf = pygame.Surface((width, height), pygame.SRCALPHA)
+        for idx, char in enumerate(text.upper()):
+            glyph = BITMAP_FONT.get(char, BITMAP_FONT["?"])
+            base_x = idx * 6 * self.scale
+            for row_idx, row in enumerate(glyph):
+                for col_idx, bit in enumerate(row):
+                    if bit == "1":
+                        rect = (
+                            base_x + col_idx * self.scale,
+                            row_idx * self.scale,
+                            self.scale,
+                            self.scale,
+                        )
+                        pygame.draw.rect(surf, color, rect)
+                        if self.bold:
+                            bold_rect = (
+                                rect[0] + max(1, self.scale // 4),
+                                rect[1],
+                                rect[2],
+                                rect[3],
+                            )
+                            pygame.draw.rect(surf, color, bold_rect)
         return surf
 
 
@@ -526,12 +598,11 @@ class OkamaShell:
 
     def _init_fonts(self):
         try:
-            pygame_freetype.init()
             test_font = ShellFont(24)
             if test_font.render("OkamaOS", COL_TEXT).get_width() <= 0:
-                raise RuntimeError("pygame.freetype rendered empty text")
+                raise RuntimeError("bitmap font rendered empty text")
         except Exception as e:
-            raise RuntimeError(f"Freetype text renderer unavailable: {e}")
+            raise RuntimeError(f"Bitmap text renderer unavailable: {e}")
 
         self.font_xl = ShellFont(72, bold=True)
         self.font_lg = ShellFont(42, bold=True)

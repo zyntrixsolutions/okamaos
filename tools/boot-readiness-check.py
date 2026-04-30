@@ -74,6 +74,8 @@ def check_versions(runner: CheckRunner, version: str) -> None:
             f'VERSION="{version}"',
         "usr/bin/okama-shell":
             f"OkamaOS v{version}",
+        "usr/bin/okama-safe-ui":
+            f"OkamaOS v{version}",
     }
     for path, marker in version_markers.items():
         runner.require(contains(path, marker), f"{path} contains {marker}")
@@ -120,13 +122,28 @@ def check_startup_scripts(runner: CheckRunner) -> None:
 
 def check_shell_and_game_runtime(runner: CheckRunner) -> None:
     shell = "usr/bin/okama-shell"
+    launcher = "usr/bin/okama-shell-launcher"
+    safe_ui = "usr/bin/okama-safe-ui"
     run = "usr/bin/okama-run"
+    init = "board/okamaos/rootfs-overlay/etc/init.d/S99okama-shell"
+    runner.require(contains(init, "okama-shell-launcher"),
+                   "init starts the guarded shell launcher")
+    runner.require(contains(launcher, "has_virtualbox_video"),
+                   "launcher detects VirtualBox video before native SDL startup")
+    runner.require(contains(launcher, "okama-safe-ui"),
+                   "launcher falls back to safe framebuffer UI after native crashes")
+    runner.require(contains(safe_ui, "class Framebuffer"),
+                   "safe UI renders directly to the Linux framebuffer")
+    runner.require(not contains(safe_ui, "import pygame"),
+                   "safe UI does not import pygame or SDL")
     runner.require(contains(shell, "PYGAME_HIDE_SUPPORT_PROMPT"),
                    "shell hides pygame startup banner")
-    runner.require(contains(shell, "pygame.freetype"),
-                   "shell uses pygame.freetype text rendering")
+    runner.require(contains(shell, "BITMAP_FONT"),
+                   "shell uses an in-process bitmap text renderer")
     runner.require(not contains(shell, "pygame.font."),
                    "shell avoids pygame.font/SDL_ttf during boot UI startup")
+    runner.require(not contains(shell, "pygame.freetype"),
+                   "shell avoids pygame.freetype/native freetype during boot UI startup")
     runner.require(contains(shell, "pygame.display.init()"),
                    "shell initializes display without initializing audio")
     runner.require(not contains(shell, "pygame.init()"),

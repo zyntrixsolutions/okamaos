@@ -2,11 +2,11 @@
 
 ## Overview
 
-`okama-inputd` is the central controller daemon. It:
+`okama-inputd` is the central system input daemon. It:
 
-1. Scans `/dev/input/event*` every 2 seconds for new gamepads
+1. Scans `/dev/input/event*` every 2 seconds for new keyboards and gamepads
 2. Spawns one reader thread per device
-3. Translates raw evdev events through `controller-profiles.json`
+3. Translates raw evdev events through generic keyboard/gamepad mappings
 4. Broadcasts unified JSON events over a Unix socket: `/run/okama-inputd.sock`
 
 All consumers — `okama-shell`, games via `okamaos.input_protocol.InputClient` —
@@ -72,20 +72,22 @@ Axis values below `±0.08` are zeroed (dead zone).
 | Tab left/right | L1 / R1                  |
 | Page up/down   | L2 / R2                  |
 
-## Keyboard Fallback
+## Keyboard Support
 
-The keyboard is **never required** in normal mode.
+Keyboard input is a first-class OkamaOS system input path. The shell, text-mode
+shell, and developer terminal are expected to work with a normal USB, laptop,
+or virtual keyboard even when no controller is connected.
 
 | Situation                  | Keyboard allowed?                   |
 |----------------------------|-------------------------------------|
-| Normal navigation          | No — controller only                |
-| Text entry (name/search)   | Yes — physical keyboard shown       |
-| Emergency navigation       | Yes — arrow keys, Enter, Esc        |
+| Normal navigation          | Yes — arrows/WASD, Enter, Space, Esc |
+| Text entry (name/search)   | Yes — full keyboard                 |
+| Developer terminal         | Yes — full keyboard                 |
 | Developer mode debugging   | Yes — full keyboard access          |
 
-Keyboard events are read from `pygame.event` in `okama-shell` and `okama-run`
-as a secondary source only. The UI always shows **controller button hints**,
-never keyboard hints.
+`okama-shell` reads direct Pygame keyboard events and also accepts keyboard
+events from `okama-inputd`. Only one action is dispatched per input frame, so
+the direct and daemon paths do not double-trigger navigation.
 
 ## Adding a Game Controller
 
@@ -106,6 +108,9 @@ CONFIG_HID_NINTENDO=y       # Switch Pro Controller (kernel ≥ 5.16)
 CONFIG_HID_MICROSOFT=y      # Xbox One Bluetooth
 CONFIG_INPUT_EVDEV=y        # evdev interface
 CONFIG_INPUT_JOYDEV=y       # joystick interface
+CONFIG_INPUT_KEYBOARD=y     # system keyboard support
+CONFIG_KEYBOARD_ATKBD=y     # AT/PS2 and common virtual keyboards
+CONFIG_HIDRAW=y             # generic HID access for controllers
 ```
 
 ## Controller Profiles (`/etc/okamaos/controller-profiles.json`)

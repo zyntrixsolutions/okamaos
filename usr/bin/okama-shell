@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""okama-shell — OkamaOS fullscreen controller-first UI shell.
+"""okama-shell — OkamaOS fullscreen keyboard and controller UI shell.
 
 Designed for Pygame on a framebuffer. No window manager, no desktop.
-Keyboard is secondary: only used for text entry and emergency navigation.
+Keyboard and generic controllers are both first-class system input paths.
 
 Boot flow: init → S99okama-shell → okama-shell (loops forever)
 In-shell flow: home → navigate sections → launch game → game exits → home
@@ -17,8 +17,8 @@ Controller mapping (reads from okama-inputd socket):
   START: home
   HOME: quick-menu
 
-Keyboard (emergency fallback only):
-  Arrow keys → navigation, Enter → select, Esc → back
+Keyboard:
+  Arrow keys / WASD: navigate, Enter / Space: select, Esc / Backspace: back
 """
 
 import sys
@@ -55,6 +55,7 @@ from okamaos.input_protocol import InputClient
 import okamaos.config as cfg_mod
 import okamaos.games as games_mod
 import okamaos.bluetooth as bt_mod
+import okamaos.network as net_mod
 import okamaos.updates as updates_mod
 
 # ---------------------------------------------------------------------------
@@ -63,13 +64,15 @@ import okamaos.updates as updates_mod
 WIDTH, HEIGHT = 1280, 720
 FPS = 30
 
-COL_BG        = (10,  10,  24)
-COL_ACCENT    = (80,  60, 200)
-COL_ACCENT2   = (140, 100, 255)
+COL_BG        = (6,   8,   18)
+COL_GRID      = (31,  210, 190)
+COL_GRID2     = (255, 70,  180)
+COL_ACCENT    = (26,  132, 255)
+COL_ACCENT2   = (255, 205, 72)
 COL_TEXT      = (230, 230, 240)
-COL_DIM       = (100, 100, 120)
-COL_SELECTED  = (60,  50, 160)
-COL_CARD      = (20,  20,  44)
+COL_DIM       = (126, 138, 158)
+COL_SELECTED  = (28,  74,  118)
+COL_CARD      = (13,  20,  36)
 COL_WARN      = (220, 100,  30)
 COL_OK        = (60,  200,  80)
 COL_ERROR     = (220,  50,  50)
@@ -77,16 +80,18 @@ COL_ERROR     = (220,  50,  50)
 SECTIONS = ["Play", "Settings", "Power"]
 POWER_OPTIONS = ["Restart", "Shut Down", "Cancel"]
 SETTINGS_OPTIONS = [
-    "Controllers",
+    "Input Devices",
+    "Network",
     "Bluetooth",
     "Audio (placeholder)",
-    "Network (placeholder)",
+    "Updates",
     "Storage info",
+    "Install to Disk",
 ]
 
-BUTTON_HINT_A = "[A] Select"
-BUTTON_HINT_B = "[B] Back"
-BUTTON_HINT_DPAD = "[↕] Navigate"
+BUTTON_HINT_A = "[A/Enter] Select"
+BUTTON_HINT_B = "[B/Esc] Back"
+BUTTON_HINT_DPAD = "[D-pad/Arrows/WASD] Move"
 BUTTON_HINT_START = "[START] Home"
 
 
@@ -156,6 +161,7 @@ class OkamaShell:
 
         self.clock = pygame.time.Clock()
         self._init_fonts()
+        self.background = self._build_background()
 
         self.input_client = InputClient()
         self.input_client.connect()
@@ -170,6 +176,19 @@ class OkamaShell:
         self.update_notices = []
         self.update_check_done = False
         self.update_check_error = ""
+        self.network_status = {
+            "online": "no",
+            "internet": "unknown",
+            "summary": "checking network",
+            "interfaces": [],
+        }
+        self.bluetooth_status = {
+            "available": "unknown",
+            "powered": "unknown",
+            "connected_count": 0,
+        }
+        self.input_devices = {}
+        self._status_lock = threading.Lock()
 
         self.games = []
         self._refresh_games()
@@ -178,6 +197,7 @@ class OkamaShell:
         self._axis_threshold = 0.5
         self._axis_held: dict = {}
         self._start_update_check()
+        self._start_status_loop()
 
     def _init_fonts(self):
         pygame.font.init()
@@ -191,6 +211,43 @@ class OkamaShell:
             default = pygame.font.Font(None, 36)
             self.font_xl = self.font_lg = self.font_md = \
                 self.font_sm = self.font_hint = default
+
+    def _build_background(self):
+        surf = pygame.Surface((WIDTH, HEIGHT))
+        for y in range(HEIGHT):
+            t = y / HEIGHT
+            base = (
+                int(5 + 5 * t),
+                int(8 + 16 * t),
+                int(18 + 20 * t),
+            )
+            pygame.draw.line(surf, base, (0, y), (WIDTH, y))
+
+        horizon = int(HEIGHT * 0.42)
+        for y in range(horizon, HEIGHT, 28):
+            depth = (y - horizon) / max(1, HEIGHT - horizon)
+            alpha = int(35 + depth * 130)
+            color = (*COL_GRID, min(alpha, 180))
+            line = pygame.Surface((WIDTH, 2), pygame.SRCALPHA)
+            line.fill(color)
+            surf.blit(line, (0, y))
+
+        vanish_x = WIDTH // 2
+        for x in range(-WIDTH, WIDTH * 2, 80):
+            color = COL_GRID if (x // 80) % 2 == 0 else COL_GRID2
+            pygame.draw.line(surf, color, (vanish_x, horizon), (x, HEIGHT), 1)
+
+        fence_top = 118
+        fence_bottom = horizon + 22
+        for x in range(0, WIDTH + 1, 56):
+            pygame.draw.line(surf, (38, 78, 92), (x, fence_top),
+                             (x + 40, fence_bottom), 1)
+        for y in range(fence_top, fence_bottom, 34):
+            pygame.draw.line(surf, (72, 60, 95), (0, y),
+                             (WIDTH, y + 16), 1)
+        pygame.draw.line(surf, COL_ACCENT2, (0, fence_bottom),
+                         (WIDTH, fence_bottom), 2)
+        return surf.convert()
 
     def _draw_logo(self, center_x: int, y: int, scale: float = 1.0):
         width = int(520 * scale)
@@ -244,6 +301,18 @@ class OkamaShell:
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def _start_status_loop(self):
+        def worker():
+            while True:
+                net_status = net_mod.status()
+                bt_status = bt_mod.status()
+                with self._status_lock:
+                    self.network_status = net_status
+                    self.bluetooth_status = bt_status
+                time.sleep(8)
+
+        threading.Thread(target=worker, daemon=True).start()
+
     def run(self):
         running = True
         while running:
@@ -264,40 +333,64 @@ class OkamaShell:
         pygame.quit()
 
     # -----------------------------------------------------------------------
-    # Input collection (controller socket + keyboard fallback)
+    # Input collection (controller socket + direct keyboard)
     # -----------------------------------------------------------------------
     def _collect_events(self) -> list:
         events = []
 
-        # Controller events from okama-inputd
-        for ev in self.input_client.poll():
-            if ev.get("type") == "button" and ev.get("state") == "pressed":
-                events.append({"src": "controller", "action": ev["button"]})
-            elif ev.get("type") == "axis":
-                self._handle_axis_to_dpad(ev, events)
-
-        # Keyboard fallback (low priority)
+        direct_keyboard_actions = set()
         for pev in pygame.event.get():
             if pev.type == pygame.QUIT:
                 events.append({"type": "QUIT"})
             elif pev.type == pygame.KEYDOWN:
-                k = pev.key
-                mapping = {
-                    pygame.K_UP:     "DPAD_UP",
-                    pygame.K_DOWN:   "DPAD_DOWN",
-                    pygame.K_LEFT:   "DPAD_LEFT",
-                    pygame.K_RIGHT:  "DPAD_RIGHT",
-                    pygame.K_RETURN: "A",
-                    pygame.K_ESCAPE: "B",
-                    pygame.K_q:      "QUIT" if self.dev_mode else None,
-                }
-                action = mapping.get(k)
+                action = self._map_keyboard_action(pev.key)
                 if action == "QUIT":
                     events.append({"type": "QUIT"})
                 elif action:
                     events.append({"src": "keyboard", "action": action})
+                    direct_keyboard_actions.add(action)
+
+        for ev in self.input_client.poll():
+            ev_type = ev.get("type")
+            controller = ev.get("controller")
+            if ev_type == "connect":
+                self.input_devices[str(controller)] = ev
+                continue
+            if ev_type == "disconnect":
+                self.input_devices.pop(str(controller), None)
+                continue
+            if ev_type == "button" and ev.get("state") == "pressed":
+                action = ev.get("button")
+                if controller == -1 and action in direct_keyboard_actions:
+                    continue
+                src = "keyboard" if controller == -1 else "controller"
+                events.append({"src": src, "action": action})
+            elif ev_type == "axis":
+                self._handle_axis_to_dpad(ev, events)
 
         return events
+
+    def _map_keyboard_action(self, key: int) -> str | None:
+        mapping = {
+            pygame.K_UP: "DPAD_UP",
+            pygame.K_w: "DPAD_UP",
+            pygame.K_DOWN: "DPAD_DOWN",
+            pygame.K_s: "DPAD_DOWN",
+            pygame.K_LEFT: "DPAD_LEFT",
+            pygame.K_a: "DPAD_LEFT",
+            pygame.K_RIGHT: "DPAD_RIGHT",
+            pygame.K_d: "DPAD_RIGHT",
+            pygame.K_RETURN: "A",
+            pygame.K_KP_ENTER: "A",
+            pygame.K_SPACE: "A",
+            pygame.K_ESCAPE: "B",
+            pygame.K_BACKSPACE: "B",
+            pygame.K_TAB: "SELECT",
+            pygame.K_HOME: "START",
+            pygame.K_h: "START",
+            pygame.K_q: "QUIT" if self.dev_mode else None,
+        }
+        return mapping.get(key)
 
     def _handle_axis_to_dpad(self, ev: dict, out: list):
         axis = ev.get("axis", "")
@@ -331,8 +424,11 @@ class OkamaShell:
                 continue
             self._input_cooldown = 4  # ~130ms at 30 fps
             self._dispatch(action)
+            return
 
     def _dispatch(self, action: str):
+        if action == "HOME":
+            action = "START"
         if self.state == "home":
             self._home_input(action)
         elif self.state == "play":
@@ -344,9 +440,9 @@ class OkamaShell:
 
     def _home_input(self, action: str):
         n = len(SECTIONS)
-        if action == "DPAD_RIGHT":
+        if action in ("DPAD_RIGHT", "DPAD_DOWN"):
             self.section_idx = (self.section_idx + 1) % n
-        elif action == "DPAD_LEFT":
+        elif action in ("DPAD_LEFT", "DPAD_UP"):
             self.section_idx = (self.section_idx - 1) % n
         elif action == "A":
             section = SECTIONS[self.section_idx]
@@ -394,15 +490,41 @@ class OkamaShell:
             self.settings_idx = (self.settings_idx - 1) % n
         elif action == "A":
             opt = SETTINGS_OPTIONS[self.settings_idx]
-            if opt == "Controllers":
-                self._show_message(
-                    "Controller: connected (USB HID). "
-                    "Bluetooth pairing: use okama-cli bluetooth pair <mac>")
+            if opt == "Input Devices":
+                self._show_message(self._input_summary())
+            elif opt == "Network":
+                with self._status_lock:
+                    s = dict(self.network_status)
+                self._show_message(s.get("summary", "network status unknown"))
             elif opt == "Bluetooth":
-                s = bt_mod.status()
-                self._show_message(f"Bluetooth powered: {s['powered']}")
+                with self._status_lock:
+                    s = dict(self.bluetooth_status)
+                if s.get("available") == "yes":
+                    self._show_message(
+                        f"Bluetooth {s.get('powered', 'unknown')}; "
+                        f"{s.get('connected_count', 0)} connected")
+                else:
+                    self._show_message("Bluetooth adapter/service unavailable")
+            elif opt == "Updates":
+                if not self.update_check_done:
+                    self._show_message("Update check still running")
+                elif self.update_notices:
+                    self._show_message(f"{len(self.update_notices)} update(s) available")
+                else:
+                    self._show_message("No updates available")
+            elif opt == "Install to Disk":
+                self._show_message("Use okama-install --list-disks, then --target /dev/sdX")
             else:
-                self._show_message(f"{opt} — coming in v1")
+                self._show_message(f"{opt} status ready")
+
+    def _input_summary(self) -> str:
+        keyboard = any(d.get("bus") == "keyboard" for d in self.input_devices.values())
+        controllers = [
+            d for d in self.input_devices.values()
+            if d.get("bus") != "keyboard" and d.get("controller") != -1
+        ]
+        keyboard_text = "kbd: ready" if keyboard or self.input_client.connected else "kbd: direct"
+        return f"{keyboard_text}, pads: {len(controllers)}"
 
     def _power_input(self, action: str):
         n = len(POWER_OPTIONS)
@@ -418,14 +540,15 @@ class OkamaShell:
                 subprocess.call(["poweroff"])
             elif opt == "Cancel":
                 self.state = "home"
-        elif action == "B":
+        elif action == "B" or action == "START":
             self.state = "home"
 
     # -----------------------------------------------------------------------
     # Drawing
     # -----------------------------------------------------------------------
     def _draw(self):
-        self.screen.fill(COL_BG)
+        self.screen.blit(self.background, (0, 0))
+        self._draw_status_bar()
 
         if self.state == "home":
             self._draw_home()
@@ -446,7 +569,7 @@ class OkamaShell:
 
     def _draw_home(self):
         # Brand mark
-        self._draw_logo(WIDTH // 2, 46, 1.0)
+        self._draw_logo(WIDTH // 2, 64, 1.0)
 
         # Section pills
         pill_w, pill_h = 200, 60
@@ -458,10 +581,10 @@ class OkamaShell:
             x = start_x + i * (pill_w + 20)
             color = COL_ACCENT if i == self.section_idx else COL_CARD
             pygame.draw.rect(self.screen, color, (x, y, pill_w, pill_h),
-                             border_radius=12)
+                             border_radius=8)
             if i == self.section_idx:
                 pygame.draw.rect(self.screen, COL_ACCENT2,
-                                 (x, y, pill_w, pill_h), 2, border_radius=12)
+                                 (x, y, pill_w, pill_h), 2, border_radius=8)
             label = self.font_md.render(section, True, COL_TEXT)
             self.screen.blit(label,
                 (x + pill_w // 2 - label.get_width() // 2,
@@ -501,9 +624,9 @@ class OkamaShell:
         card_w, card_h = 760, 88
         x = WIDTH // 2 - card_w // 2
         pygame.draw.rect(self.screen, COL_CARD, (x, y, card_w, card_h),
-                         border_radius=12)
+                         border_radius=8)
         pygame.draw.rect(self.screen, COL_OK, (x, y, card_w, card_h), 2,
-                         border_radius=12)
+                         border_radius=8)
         title_surf = self.font_md.render(title, True, COL_OK)
         detail_surf = self.font_sm.render(
             f"{detail} available. Run okama-update check for download links.",
@@ -532,7 +655,7 @@ class OkamaShell:
                 break
             color = COL_SELECTED if i == self.list_idx else COL_CARD
             pygame.draw.rect(self.screen, color, (40, y, WIDTH - 80, card_h),
-                             border_radius=10)
+                             border_radius=8)
 
             name = self.font_md.render(g["name"], True, COL_TEXT)
             ver  = self.font_sm.render(
@@ -549,12 +672,15 @@ class OkamaShell:
         self.screen.blit(title, (60, 40))
 
         for i, opt in enumerate(SETTINGS_OPTIONS):
-            y = 120 + i * 64
+            y = 116 + i * 70
             color = COL_SELECTED if i == self.settings_idx else COL_CARD
-            pygame.draw.rect(self.screen, color, (40, y, WIDTH - 80, 52),
+            pygame.draw.rect(self.screen, color, (40, y, WIDTH - 80, 58),
                              border_radius=8)
             label = self.font_md.render(opt, True, COL_TEXT)
-            self.screen.blit(label, (60, y + 12))
+            detail, detail_color = self._settings_detail(opt)
+            detail_surf = self.font_sm.render(detail, True, detail_color)
+            self.screen.blit(label, (60, y + 7))
+            self.screen.blit(detail_surf, (60, y + 34))
 
     def _draw_power(self):
         title = self.font_lg.render("Power", True, COL_WARN)
@@ -564,7 +690,7 @@ class OkamaShell:
             y = 240 + i * 80
             color = COL_WARN if i == self.power_idx else COL_CARD
             pygame.draw.rect(self.screen, color,
-                             (WIDTH // 2 - 150, y, 300, 60), border_radius=10)
+                             (WIDTH // 2 - 150, y, 300, 60), border_radius=8)
             label = self.font_md.render(opt, True, COL_TEXT)
             self.screen.blit(label,
                 (WIDTH // 2 - label.get_width() // 2, y + 15))
@@ -583,6 +709,76 @@ class OkamaShell:
         hints = f"  {BUTTON_HINT_DPAD}   {BUTTON_HINT_A}   {BUTTON_HINT_B}   {BUTTON_HINT_START}"
         h = self.font_hint.render(hints, True, COL_DIM)
         self.screen.blit(h, (20, HEIGHT - 28))
+
+    def _draw_status_bar(self):
+        with self._status_lock:
+            net_status = dict(self.network_status)
+            bt_status = dict(self.bluetooth_status)
+        online = net_status.get("online") == "yes"
+        update_label = "updates: checking"
+        update_color = COL_DIM
+        if self.update_check_done:
+            if self.update_notices:
+                update_label = f"updates: {len(self.update_notices)}"
+                update_color = COL_ACCENT2
+            else:
+                update_label = "updates: current"
+                update_color = COL_OK
+        input_label = self._input_summary()
+        bt_label = "bt: ready" if bt_status.get("available") == "yes" else "bt: off"
+        labels = [
+            (f"v{self.conf.get('VERSION', '?')}", COL_TEXT),
+            ("online" if online else "offline", COL_OK if online else COL_ERROR),
+            (update_label, update_color),
+            (bt_label, COL_OK if bt_status.get("powered") == "yes" else COL_DIM),
+            (input_label, COL_TEXT),
+        ]
+        x = 16
+        for label, color in labels:
+            x = self._draw_badge(label, x, 12, color) + 8
+
+    def _draw_badge(self, label: str, x: int, y: int, color):
+        text = self.font_hint.render(label, True, color)
+        w = text.get_width() + 20
+        h = 28
+        bg = pygame.Surface((w, h), pygame.SRCALPHA)
+        bg.fill((6, 12, 22, 190))
+        self.screen.blit(bg, (x, y))
+        pygame.draw.rect(self.screen, color, (x, y, w, h), 1, border_radius=6)
+        self.screen.blit(text, (x + 10, y + 5))
+        return x + w
+
+    def _settings_detail(self, opt: str) -> tuple[str, tuple]:
+        if opt == "Input Devices":
+            return self._input_summary(), COL_OK
+        if opt == "Network":
+            with self._status_lock:
+                s = dict(self.network_status)
+            color = COL_OK if s.get("online") == "yes" else COL_ERROR
+            return s.get("summary", "status unavailable"), color
+        if opt == "Bluetooth":
+            with self._status_lock:
+                s = dict(self.bluetooth_status)
+            if s.get("available") == "yes":
+                return (
+                    f"powered {s.get('powered', 'unknown')}; "
+                    f"{s.get('connected_count', 0)} connected",
+                    COL_OK if s.get("powered") == "yes" else COL_WARN,
+                )
+            return "adapter or bluetoothctl unavailable", COL_DIM
+        if opt == "Updates":
+            if not self.update_check_done:
+                return "checking public OS and game feeds", COL_DIM
+            if self.update_notices:
+                return f"{len(self.update_notices)} OS/game update(s) available", COL_ACCENT2
+            if self.update_check_error:
+                return self.update_check_error[:80], COL_WARN
+            return "OS and installed games are current", COL_OK
+        if opt == "Install to Disk":
+            return "okama-install is available for hard-drive installs", COL_OK
+        if opt == "Storage info":
+            return "games, saves, and updates preserved by installer/update paths", COL_DIM
+        return "ALSA output active when hardware is present", COL_DIM
 
     def _draw_debug_overlay(self):
         try:

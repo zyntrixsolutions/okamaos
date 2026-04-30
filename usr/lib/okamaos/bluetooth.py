@@ -23,20 +23,64 @@ def _btctl(*args, timeout: int = 10) -> str:
         return "ERROR: bluetoothctl timed out"
 
 
+def _have_cmd(cmd: str) -> bool:
+    return subprocess.call(
+        ["sh", "-c", f"command -v {cmd} >/dev/null 2>&1"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    ) == 0
+
+
+def ensure_ready() -> dict:
+    """Power the default adapter and make BlueZ ready for controller pairing."""
+    if not _have_cmd("bluetoothctl"):
+        return {"available": "no", "powered": "no", "error": "bluetoothctl not found"}
+    _btctl("power", "on")
+    _btctl("agent", "on")
+    _btctl("default-agent")
+    return status()
+
+
 def status() -> dict:
+    if not _have_cmd("bluetoothctl"):
+        return {
+            "available": "no",
+            "powered": "no",
+            "discovering": "no",
+            "connected_count": 0,
+            "trusted_count": len(list_trusted()),
+            "raw": "ERROR: bluetoothctl not found",
+        }
     out = _btctl("show")
+    available = "no" if "No default controller available" in out or out.startswith("ERROR:") else "yes"
     powered = "yes" if "Powered: yes" in out else "no"
     discovering = "yes" if "Discovering: yes" in out else "no"
-    return {"powered": powered, "discovering": discovering, "raw": out.strip()}
+    connected = connected_devices()
+    return {
+        "available": available,
+        "powered": powered,
+        "discovering": discovering,
+        "connected_count": len(connected),
+        "trusted_count": len(list_trusted()),
+        "connected": connected,
+        "raw": out.strip(),
+    }
 
 
 def scan(timeout: int = 15) -> list:
     """Scan for nearby BT devices. Returns list of {mac, name} dicts."""
-    subprocess.Popen(["bluetoothctl", "scan", "on"],
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    ensure_ready()
+    try:
+        subprocess.Popen(["bluetoothctl", "scan", "on"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except FileNotFoundError:
+        return []
     time.sleep(timeout)
-    subprocess.Popen(["bluetoothctl", "scan", "off"],
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        subprocess.Popen(["bluetoothctl", "scan", "off"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except FileNotFoundError:
+        return []
     out = _btctl("devices")
     devices = []
     for line in out.splitlines():
@@ -47,6 +91,7 @@ def scan(timeout: int = 15) -> list:
 
 
 def pair(mac: str) -> bool:
+    ensure_ready()
     out = _btctl("pair", mac, timeout=30)
     return "Pairing successful" in out or "already paired" in out.lower()
 
@@ -57,6 +102,7 @@ def trust(mac: str) -> bool:
 
 
 def connect(mac: str) -> bool:
+    ensure_ready()
     out = _btctl("connect", mac, timeout=15)
     return "Connection successful" in out
 
@@ -99,3 +145,13 @@ def list_trusted() -> list:
     except FileNotFoundError:
         pass
     return profiles
+
+
+def connected_devices() -> list:
+    out = _btctl("devices", "Connected")
+    devices = []
+    for line in out.splitlines():
+        m = re.match(r"Device ([0-9A-F:]{17}) (.+)", line.strip())
+        if m:
+            devices.append({"mac": m.group(1), "name": m.group(2)})
+    return devices

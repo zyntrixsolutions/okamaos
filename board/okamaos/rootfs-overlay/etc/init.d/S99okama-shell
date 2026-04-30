@@ -1,5 +1,5 @@
 #!/bin/sh
-# S99okama-shell — launch the OkamaOS controller shell on tty1.
+# S99okama-shell — launch the OkamaOS keyboard/controller shell on tty1.
 # This is the last init.d script to run. It keeps okama-shell respawning
 # on crash so the console never drops to a login prompt.
 

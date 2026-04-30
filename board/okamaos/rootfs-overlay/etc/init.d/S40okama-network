@@ -1,6 +1,6 @@
 #!/bin/sh
 # S40okama-network — bring up networking only if enabled.
-# For MVP this handles wired (DHCP). WiFi wpa_supplicant hook is a stub.
+# Handles generic wired interfaces and optional WPA Wi-Fi DHCP.
 
 CONF=/etc/okamaos/okama.conf
 NET_ENABLED=yes
@@ -14,16 +14,31 @@ fi
 case "$1" in
   start)
     if [ "$NET_ENABLED" = "yes" ]; then
-        echo "Starting network (DHCP on eth0)..."
+        echo "Starting network..."
         ifconfig lo up 2>/dev/null || ip link set lo up 2>/dev/null || true
-        # Try wired DHCP; errors are non-fatal (no cable is okay)
-        dhcpcd -b eth0 2>/dev/null || udhcpc -b -i eth0 2>/dev/null || true
+
+        for iface_path in /sys/class/net/*; do
+            iface=$(basename "$iface_path")
+            case "$iface" in
+                lo|wl*|wlan*) continue ;;
+            esac
+            [ -e "$iface_path" ] || continue
+            echo "Starting DHCP on $iface..."
+            ifconfig "$iface" up 2>/dev/null || ip link set "$iface" up 2>/dev/null || true
+            dhcpcd -b "$iface" 2>/dev/null || udhcpc -b -i "$iface" 2>/dev/null || true
+        done
 
         if [ "$WIFI_ENABLED" = "yes" ]; then
             echo "Starting wpa_supplicant (WiFi)..."
-            # TODO(v1): read ssid/psk from /etc/okamaos/wifi.conf
-            wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf 2>/dev/null || true
-            dhcpcd -b wlan0 2>/dev/null || udhcpc -b -i wlan0 2>/dev/null || true
+            for iface_path in /sys/class/net/wl* /sys/class/net/wlan*; do
+                [ -e "$iface_path" ] || continue
+                iface=$(basename "$iface_path")
+                ifconfig "$iface" up 2>/dev/null || ip link set "$iface" up 2>/dev/null || true
+                if [ -f /etc/wpa_supplicant.conf ]; then
+                    wpa_supplicant -B -i "$iface" -c /etc/wpa_supplicant.conf 2>/dev/null || true
+                fi
+                dhcpcd -b "$iface" 2>/dev/null || udhcpc -b -i "$iface" 2>/dev/null || true
+            done
         fi
     else
         echo "Network disabled — skipping."

@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.abspath(_lib))
 
 import argparse
 import datetime as _dt
+import hashlib
 import json
 import posixpath
 import shutil
@@ -82,11 +83,13 @@ def cmd_check(args):
             print(f"  Summary       : {notice['summary']}")
         if notice.get("download_url"):
             print(f"  Download      : {notice['download_url']}")
+        if notice.get("sha256"):
+            print(f"  SHA-256       : {notice['sha256']}")
 
 
 def cmd_apply(args):
     try:
-        update_path = _resolve_update_file(args.update_file)
+        update_path = _resolve_update_file(args.update_file, expected_sha256=args.sha256)
         summary = _apply_bundle(update_path, dry_run=args.dry_run)
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
@@ -116,17 +119,56 @@ def cmd_rollback(args):
     print("  Reboot   : recommended")
 
 
-def _resolve_update_file(source: str) -> str:
+def _resolve_update_file(source: str, expected_sha256: str = "") -> str:
     if source.startswith(("http://", "https://")):
         downloads_dir = _data_path(os.path.join(UPDATES_DIR, "downloads"))
         os.makedirs(downloads_dir, exist_ok=True)
         name = os.path.basename(urllib.parse.urlparse(source).path) or "update.okupdate"
         dest = os.path.join(downloads_dir, name)
         urllib.request.urlretrieve(source, dest)
+        expected = expected_sha256 or _feed_hash_for_url(source)
+        if expected:
+            _verify_sha256(dest, expected)
         return dest
     if not os.path.exists(source):
         raise FileNotFoundError(f"file not found: {source}")
+    if expected_sha256:
+        _verify_sha256(source, expected_sha256)
     return source
+
+
+def _feed_hash_for_url(source: str) -> str:
+    try:
+        feed_url = cfg_mod.get().get("UPDATE_FEED_URL", UPDATE_SERVER)
+        with urllib.request.urlopen(feed_url, timeout=3) as response:
+            feed = json.loads(response.read().decode("utf-8"))
+    except Exception:
+        return ""
+    latest = feed.get("latest", {})
+    if latest.get("download_url") == source:
+        return latest.get("sha256", "")
+    for item in feed.get("updates", []):
+        if item.get("download_url") == source:
+            return item.get("sha256", "")
+    return ""
+
+
+def _sha256_file(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _verify_sha256(path: str, expected: str) -> None:
+    expected = expected.strip().lower()
+    actual = _sha256_file(path)
+    if actual != expected:
+        raise ValueError(
+            f"SHA-256 mismatch for {os.path.basename(path)}: "
+            f"expected {expected}, got {actual}"
+        )
 
 
 def _apply_bundle(path: str, dry_run: bool = False) -> dict:
@@ -384,6 +426,8 @@ def main():
 
     pa = sub.add_parser("apply")
     pa.add_argument("--dry-run", action="store_true")
+    pa.add_argument("--sha256", default="",
+                    help="Expected SHA-256 for the update bundle")
     pa.add_argument("update_file")
 
     sub.add_parser("rollback")

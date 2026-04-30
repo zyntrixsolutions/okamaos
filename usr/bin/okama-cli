@@ -14,6 +14,7 @@ Usage:
   okama-cli poweroff | reboot
   okama-cli bluetooth status | scan | pair <mac> | trust <mac>
               | connect <mac> | disconnect <mac> | forget <mac>
+  okama-cli network status
   okama-cli controllers list | test | default <id>
 """
 
@@ -35,6 +36,7 @@ import okamaos.games as games_mod
 import okamaos.manifest as manifest_mod
 import okamaos.package as pkg_mod
 import okamaos.bluetooth as bt_mod
+import okamaos.network as net_mod
 import okamaos.parent as parent_mod
 
 
@@ -62,6 +64,7 @@ def cmd_status(args):
             active_game = "unknown"
 
     bt = bt_mod.status()
+    net = net_mod.status(skip_internet=False)
 
     print(f"OkamaOS version : {conf.get('VERSION', '?')}")
     print(f"Kernel          : {platform.release()}")
@@ -69,7 +72,9 @@ def cmd_status(args):
     print(f"RAM available   : {avail}")
     print(f"Installed games : {len(installed)}")
     print(f"Active game     : {active_game}")
-    print(f"Bluetooth       : {bt['powered']}")
+    print(f"Network online  : {net['online']} ({net['summary']})")
+    print(f"Bluetooth       : {bt['powered']} ({bt.get('connected_count', 0)} connected)")
+    print(f"Keyboard        : system enabled")
     print(f"Developer mode  : {'yes' if conf.is_dev_mode() else 'no'}")
 
 
@@ -171,8 +176,14 @@ def cmd_bluetooth(args):
     action = args.action
     if action == "status":
         s = bt_mod.status()
+        print(f"Available : {s.get('available', 'unknown')}")
         print(f"Powered   : {s['powered']}")
         print(f"Discovering: {s['discovering']}")
+        print(f"Connected : {s.get('connected_count', 0)}")
+    elif action == "ready":
+        s = bt_mod.ensure_ready()
+        print(f"Available : {s.get('available', 'unknown')}")
+        print(f"Powered   : {s.get('powered', 'unknown')}")
     elif action == "scan":
         print("Scanning (15 s)…")
         devices = bt_mod.scan()
@@ -196,6 +207,23 @@ def cmd_bluetooth(args):
         print("Disconnected" if bt_mod.disconnect(args.mac) else "FAIL")
     elif action == "forget":
         print("Forgotten" if bt_mod.forget(args.mac) else "FAIL")
+
+
+def cmd_network(args):
+    s = net_mod.status()
+    print(f"Enabled   : {s['enabled']}")
+    print(f"Online    : {s['online']}")
+    print(f"Internet  : {s['internet']}")
+    print(f"Summary   : {s['summary']}")
+    if s["interfaces"]:
+        print("Interfaces:")
+        for iface in s["interfaces"]:
+            print(
+                f"  {iface['name']:12s} {iface['type']:8s} "
+                f"link={iface['link']} ip={iface['has_ip']} route={iface['default_route']}"
+            )
+    else:
+        print("Interfaces: none")
 
 
 def cmd_controllers(args):
@@ -253,8 +281,11 @@ def build_parser():
 
     pbt = sub.add_parser("bluetooth")
     pbt.add_argument("action",
-        choices=["status", "scan", "pair", "trust", "connect", "disconnect", "forget"])
+        choices=["status", "ready", "scan", "pair", "trust", "connect", "disconnect", "forget"])
     pbt.add_argument("mac", nargs="?")
+
+    pn = sub.add_parser("network")
+    pn.add_argument("action", choices=["status"])
 
     pct = sub.add_parser("controllers")
     pct.add_argument("action", choices=["list", "test", "default"])
@@ -277,6 +308,7 @@ def main():
         "dev":         cmd_dev,
         "parent":      cmd_parent,
         "bluetooth":   cmd_bluetooth,
+        "network":     cmd_network,
         "controllers": cmd_controllers,
         "poweroff":    cmd_poweroff,
         "reboot":      cmd_reboot,

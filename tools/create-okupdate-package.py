@@ -13,13 +13,11 @@ DEFAULT_INCLUDE_GLOBS = [
     "usr/bin/okama-*",
     "usr/lib/okamaos/*.py",
     "usr/share/okamaos/brand/*",
-    "board/okamaos/rootfs-overlay/etc/init.d/S01okama-boot-splash",
+    "board/okamaos/rootfs-overlay/etc/init.d/S*",
     "board/okamaos/rootfs-overlay/etc/profile",
 ]
 
 TARGET_RENAMES = {
-    "board/okamaos/rootfs-overlay/etc/init.d/S01okama-boot-splash":
-        "etc/init.d/S01okama-boot-splash",
     "board/okamaos/rootfs-overlay/etc/profile":
         "etc/profile",
 }
@@ -42,7 +40,10 @@ def gather_files(repo: Path) -> list[tuple[Path, str]]:
         for path in sorted(repo.glob(pattern)):
             if path.is_file():
                 rel = path.relative_to(repo).as_posix()
-                files.append((path, TARGET_RENAMES.get(rel, rel)))
+                target = TARGET_RENAMES.get(rel, rel)
+                if rel.startswith("board/okamaos/rootfs-overlay/"):
+                    target = rel.removeprefix("board/okamaos/rootfs-overlay/")
+                files.append((path, target))
     return files
 
 
@@ -65,7 +66,7 @@ def main() -> None:
         "version": args.version,
         "codename": args.codename,
         "channel": "public-preview",
-        "date": "2026-04-29",
+        "date": "2026-04-30",
         "summary": args.summary,
         "overlay_root": "files",
         "requires_reboot": True,
@@ -84,6 +85,9 @@ def main() -> None:
                     "UPDATE_CHECK_TIMEOUT_SEC": "2",
                     "UPDATE_BACKUP_DIR": "/var/okamaos/updates/backups",
                     "UPDATE_HISTORY_DIR": "/var/okamaos/updates/history",
+                    "SYSTEM_KEYBOARD_ENABLED": "yes",
+                    "BLUETOOTH_ENABLED": "auto",
+                    "INTERNET_PROBE_TIMEOUT_SEC": "0.75",
                 },
             }
         ],

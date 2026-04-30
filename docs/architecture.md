@@ -2,8 +2,8 @@
 
 ## System Overview
 
-OkamaOS is a controller-first console Linux OS built on Buildroot for x86_64
-low-cost PCs. It replaces the entire conventional Linux desktop stack with a
+OkamaOS is a keyboard-and-controller console Linux OS built on Buildroot for
+x86_64 low-cost PCs. It replaces the conventional Linux desktop stack with a
 single-purpose game console loop.
 
 ## Boot Sequence
@@ -19,13 +19,13 @@ UEFI/BIOS firmware
        ↓
   S10okama-mounts   (proc, sys, devtmpfs, tmpfs /run)
   S20okama-devices  (eudev or mdev)
-  S25okama-bluetooth (only if enabled or paired controllers exist)
-  S30okama-inputd   (controller daemon → /run/okama-inputd.sock)
+  S25okama-bluetooth (auto/yes starts BlueZ for HID controllers)
+  S30okama-inputd   (keyboard/controller daemon → /run/okama-inputd.sock)
   S35okama-audio    (ALSA init, master unmute)
   S40okama-network  (DHCP, optional WiFi — skipped if disabled)
   S99okama-shell    (okama-shell on tty1, respawn on crash)
        ↓
-  okama-shell  (fullscreen SDL2/Pygame controller UI)
+  okama-shell  (fullscreen SDL2/Pygame keyboard/controller UI)
        ↓
   [user selects game]  →  okama-run  →  game process
        ↓
@@ -38,7 +38,7 @@ UEFI/BIOS firmware
 ┌─────────────────────────────────────────────┐
 │                 okama-shell                 │  ← fullscreen SDL2 UI
 │   Play | Settings | Power                  │
-│   controller-first, no keyboard in normal  │
+│   keyboard + generic controller navigation │
 └──────────┬────────────────┬────────────────┘
            │                │
            ▼                ▼
@@ -98,8 +98,8 @@ UEFI/BIOS firmware
 
 - **One game at a time** — `LOCK_FILE=/var/run/okama-game.lock`
 - **No desktop** — no X11, no Wayland, no compositor, no WM
-- **No terminal in normal mode** — tty2 getty only in developer mode
-- **Controller is primary** — keyboard only for text entry + emergency nav
+- **No desktop** — terminal access stays on tty2/developer or recovery flows
+- **Keyboard and controller input are both first-class** — UI, games, and terminal flows must work with generic devices
 - **Games get priority** — non-essential services suspended on launch
 - **Read-only root planned for v1** — data partition at `/var/okamaos`
 
@@ -123,7 +123,7 @@ UEFI/BIOS firmware
 ## Data Flow: Input Events
 
 ```
-Hardware (USB HID / BT HID)
+Hardware (USB keyboard / USB HID / BT HID)
   → kernel evdev (/dev/input/eventN)
     → okama-inputd thread (per device)
       → normalize via controller-profiles.json

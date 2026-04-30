@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.4] - 2026-04-30
+
+### Fixed
+
+- Restored the normal `make okamaos-build` ISO generation path through the Buildroot post-image hook.
+- Restored the canonical `output/okamaos.iso` artifact while keeping an `output/images/okamaos.iso` mirror for image-directory tooling.
+- Replaced the broken ISOLINUX-only ISO staging path with the GRUB2 hybrid ISO generator so VirtualBox no longer fails on a missing `ldlinux.c32`.
+
+### Changed
+
+- Bumped runtime and package version tracking to `1.0.4`.
+
 ## [1.0.3] - 2026-04-29
 
 ### Added

@@ -50,7 +50,7 @@ BR2_TARGET_SYSLINUX_ISOLINUX=y
 BR2_PACKAGE_PYTHON3=y
 BR2_PACKAGE_PYTHON3_PY_PYC=y
 BR2_PACKAGE_PYTHON_PIP=y
-# NOTE: pygame removed from Buildroot 2024.02; okama-runtime installs pygame==2.5.2
+# NOTE: pygame removed from Buildroot 2024.02; okama-runtime installs pygame==2.6.1
 #       from PyPI via the host pip3 during post-install (requires network at build time)
 BR2_PACKAGE_SDL2=y
 BR2_PACKAGE_SDL2_KMSDRM=y

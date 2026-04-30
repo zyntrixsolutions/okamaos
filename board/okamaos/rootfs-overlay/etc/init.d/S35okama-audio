@@ -4,6 +4,14 @@
 case "$1" in
   start)
     if which amixer >/dev/null 2>&1; then
+        if [ ! -f /proc/asound/cards ] && [ ! -d /dev/snd ]; then
+            echo "No ALSA device tree detected; shell and games will use silent SDL fallback."
+            exit 0
+        fi
+        if [ -f /proc/asound/cards ] && grep -qi "no soundcards" /proc/asound/cards; then
+            echo "No ALSA sound card detected; shell and games will use silent SDL fallback."
+            exit 0
+        fi
         echo "Initializing ALSA audio..."
         alsactl init 2>/dev/null || true
         CONF=/etc/okamaos/okama.conf

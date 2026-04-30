@@ -1,11 +1,12 @@
-# OkamaOS Architecture v2.0.0
+# OkamaOS Architecture v2.0.1
 
 ## System Overview
 
 OkamaOS is a controller-first console Linux OS built on Buildroot for x86_64
 low-cost PCs. It replaces the entire conventional Linux desktop stack with a
-single-purpose game console loop. Version 2.0.0 adds cyberpunk retro UI,
-full keyboard support, network status monitoring, and Bluetooth plug-and-play.
+single-purpose game console loop. Version 2.0.1 keeps the cyberpunk retro UI,
+full keyboard support, network status monitoring, Bluetooth plug-and-play, and
+adds boot-readiness checks for the SDL2/Pygame runtime contract.
 
 ## Boot Sequence
 
@@ -20,10 +21,10 @@ UEFI/BIOS firmware
        ↓
   S10okama-mounts   (proc, sys, devtmpfs, tmpfs /run)
   S20okama-devices  (eudev or mdev)
-  S25okama-bluetooth (v2.0.0: auto-pair agent, auto-reconnect)
+  S25okama-bluetooth (auto-pair agent, auto-reconnect)
   S30okama-inputd   (controller daemon → /run/okama-inputd.sock)
-  S35okama-audio    (ALSA init, master unmute)
-  S40okama-network  (v2.0.0: WiFi/Ethernet auto-detect, status monitoring)
+  S35okama-audio    (ALSA init or silent SDL fallback when no card exists)
+  S40okama-network  (WiFi/Ethernet auto-detect, status monitoring)
   S99okama-shell    (okama-shell on tty1, respawn on crash)
        ↓
   okama-shell  (fullscreen SDL2/Pygame with cyberpunk animated UI)

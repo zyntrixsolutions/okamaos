@@ -13,6 +13,8 @@ Usage:
 import sys
 import os
 
+os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+
 _lib = os.environ.get("OKAMA_LIB", "")
 if not _lib:
     _lib = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../lib")
@@ -36,6 +38,29 @@ LOG_DIR = "/var/okamaos/logs"
 SUSPEND_SERVICES = [
     "S40okama-network",
 ]
+
+
+def has_alsa_output() -> bool:
+    cards_path = "/proc/asound/cards"
+    try:
+        with open(cards_path, encoding="utf-8", errors="replace") as cards:
+            data = cards.read().strip().lower()
+        return bool(data) and "no soundcards" not in data
+    except FileNotFoundError:
+        try:
+            return any(name.startswith(("controlC", "pcm"))
+                       for name in os.listdir("/dev/snd"))
+        except FileNotFoundError:
+            return False
+    except Exception:
+        return False
+
+
+def select_sdl_audio_driver(conf) -> str:
+    configured = (conf.get("AUDIO_BACKEND", "alsa") or "alsa").strip().lower()
+    if configured == "alsa" and not has_alsa_output():
+        return "dummy"
+    return configured or "dummy"
 
 
 def acquire_lock(game_id: str) -> None:
@@ -125,9 +150,14 @@ def main():
     env["PYTHONPATH"] = "/usr/lib/okamaos"
     env["OKAMA_GAME_ID"] = game_id
     env["OKAMA_GAME_DIR"] = game_dir
-    env["SDL_VIDEODRIVER"] = "fbcon"
-    env["SDL_FBDEV"] = conf.get("FRAMEBUFFER_DEVICE", "/dev/fb0")
-    env["SDL_AUDIODRIVER"] = "alsa"
+    env.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+    env.setdefault("SDL_VIDEODRIVER", "kmsdrm")
+    env.setdefault("SDL_KMSDRM_REQUIRE_DRM_MASTER", "0")
+    env.setdefault("SDL_FBDEV", conf.get("FRAMEBUFFER_DEVICE", "/dev/fb0"))
+    env.setdefault("SDL_AUDIODRIVER", select_sdl_audio_driver(conf))
+    env.setdefault("SDL_RENDER_DRIVER", "software")
+    env.setdefault("LIBGL_ALWAYS_SOFTWARE", "1")
+    env.setdefault("MESA_LOADER_DRIVER_OVERRIDE", "kms_swrast")
 
     try:
         cmd = build_launch_cmd(manifest, game_dir)

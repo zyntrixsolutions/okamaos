@@ -1,5 +1,11 @@
 # OkamaOS Portal Changelog
 
+## 2026-04-30 - Boot Readiness
+
+- Prepared OkamaOS `2.0.1` as a boot-readiness release candidate.
+- Fixed pygame font startup by binding SDL2_ttf to the Buildroot runtime library.
+- Added a boot-readiness check for release versioning, init scripts, and SDL startup contracts.
+
 ## 2026-04-30 - GUI Boot Restore
 
 - Restored GUI-first ISO startup for OkamaOS `1.0.6`.

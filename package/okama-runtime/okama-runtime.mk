@@ -6,11 +6,11 @@
 # tree under usr/bin and usr/lib/okamaos.
 ################################################################################
 
-OKAMA_RUNTIME_VERSION = 1.0.6
+OKAMA_RUNTIME_VERSION = 2.0.1
 OKAMA_RUNTIME_SOURCE =
 # No SITE/SITE_METHOD — this is an install-only meta-package that copies files directly
 OKAMA_RUNTIME_LICENSE = Proprietary
-OKAMA_RUNTIME_DEPENDENCIES = python3 python-pip sdl2
+OKAMA_RUNTIME_DEPENDENCIES = python3 python-pip sdl2 sdl2_image sdl2_mixer sdl2_ttf
 
 define OKAMA_RUNTIME_INSTALL_PYGAME_CMDS
 	# pygame dropped from Buildroot 2024.02 — install from PyPI into target
@@ -28,7 +28,9 @@ define OKAMA_RUNTIME_INSTALL_PYGAME_CMDS
 		-d $(TARGET_DIR)/usr/lib/python3.11/site-packages
 	# Pygame wheels bundle SDL2 without OkamaOS' KMSDRM backend. Keep the
 	# Python modules from the wheel, but bind SDL runtime libraries to the
-	# Buildroot SDL2 stack configured for direct GUI boot.
+	# Buildroot SDL2 stack configured for direct GUI boot. The bundled ttf
+	# library is also replaced because some VM/live-boot loaders reject the
+	# manylinux wheel's ELF segment layout during pygame.font initialization.
 	if [ -d "$(TARGET_DIR)/usr/lib/python3.11/site-packages/pygame.libs" ]; then \
 		rm -f $(TARGET_DIR)/usr/lib/python3.11/site-packages/pygame.libs/libSDL2-2-*.so*; \
 		ln -sf ../../../libSDL2-2.0.so.0 \
@@ -39,6 +41,9 @@ define OKAMA_RUNTIME_INSTALL_PYGAME_CMDS
 		rm -f $(TARGET_DIR)/usr/lib/python3.11/site-packages/pygame.libs/libSDL2_mixer-2-*.so*; \
 		ln -sf ../../../libSDL2_mixer-2.0.so.0 \
 			$(TARGET_DIR)/usr/lib/python3.11/site-packages/pygame.libs/libSDL2_mixer-2-673d03d7.0.so.0.600.3; \
+		rm -f $(TARGET_DIR)/usr/lib/python3.11/site-packages/pygame.libs/libSDL2_ttf-2-*.so*; \
+		ln -sf ../../../libSDL2_ttf-2.0.so.0 \
+			$(TARGET_DIR)/usr/lib/python3.11/site-packages/pygame.libs/libSDL2_ttf-2-e6bdbc24.0.so.0.2000.1; \
 		for lib in $(TARGET_DIR)/usr/lib/python3.11/site-packages/pygame.libs/*.so*; do \
 			ln -sf python3.11/site-packages/pygame.libs/$$(basename $$lib) \
 				$(TARGET_DIR)/usr/lib/$$(basename $$lib); \

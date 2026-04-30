@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.0.1] - 2026-04-30
+
+### Fixed
+
+- Fixed GUI boot failure caused by pygame loading the bundled manylinux `libSDL2_ttf` instead of the Buildroot SDL2_ttf library.
+- Rebound pygame's SDL2_ttf wheel library to the Buildroot runtime, matching the existing SDL2, image, and mixer bindings.
+- Avoided shell-only ALSA startup noise on machines or VMs without a sound card by using SDL's silent audio fallback for the shell.
+- Switched `okama-run` from the obsolete SDL `fbcon` driver to the same SDL2 KMS/DRM path used by the shell.
+- Hid the pygame support banner during boot so startup output stays focused on actionable OkamaOS status.
+
+### Changed
+
+- Bumped runtime, installer, package, config, and documentation version tracking to `2.0.1`.
+- Added `make boot-readiness-check` to validate version alignment, init-script permissions, SDL2_ttf packaging, and shell/game SDL startup contracts before release builds.
+- Updated audio init messaging to report no-card fallback instead of continuing with confusing ALSA setup output.
+
 ## [2.0.0] - 2026-04-30 - MAJOR UPDATE
 
 ### Added

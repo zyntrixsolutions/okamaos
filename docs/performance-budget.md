@@ -66,8 +66,8 @@ Output includes:
 - BusyBox replaces most GNU utilities (~1 MB vs. ~50 MB for full coreutils)
 - Python started once per service; no per-request interpreter launch
 - pygame display initialized lazily (only when shell starts drawing)
-- SDL2 video driver: `fbcon` (framebuffer) — no X11 server, saves ~20 MB
-- No compositor — DRM/KMS direct (v1) or framebuffer direct (MVP)
+- SDL2 video driver: `kmsdrm` — no X11 server, saves ~20 MB
+- No compositor — DRM/KMS direct shell and game startup
 - tmpfs at `/run` — kernel handles, no daemon needed
 
 ### Services

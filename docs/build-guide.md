@@ -223,6 +223,7 @@ boot-mode details.
 | `make memory-test`   | Run `tools/measure-memory.sh`                      |
 | `make controller-test` | Run `tools/controller-test.sh`                  |
 | `make naming-check`  | Fail if `akama` misspelling found anywhere          |
+| `make boot-readiness-check` | Validate boot/runtime release contracts     |
 
 ---
 
@@ -245,7 +246,7 @@ QEMU_FLAGS="-vga virtio" make okamaos-run-qemu
 Or set SDL video driver for the shell:
 ```bash
 # Inside QEMU shell:
-SDL_VIDEODRIVER=fbcon okama-shell
+SDL_VIDEODRIVER=kmsdrm okama-shell
 # or:
 SDL_VIDEODRIVER=x11 DISPLAY=:0 okama-shell --windowed
 ```
@@ -253,7 +254,7 @@ SDL_VIDEODRIVER=x11 DISPLAY=:0 okama-shell --windowed
 ### okama-shell: pygame not found
 
 pygame is not installed as a host package by default.
-- In Buildroot: `BR2_PACKAGE_PYTHON_PYGAME=y` in the defconfig (already set)
+- In Buildroot: `okama-runtime` installs pygame and binds its SDL libraries to the Buildroot SDL2 stack.
 - On host: `pip install pygame`
 
 ### naming-check fails

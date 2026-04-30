@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""okama-shell — OkamaOS v2.0.0 fullscreen controller-first UI shell.
+"""okama-shell — OkamaOS v2.0.1 fullscreen controller-first UI shell.
 
 MAJOR UPDATE: Cyberpunk UI, Full Keyboard/Generic Controller Support,
 Network Status, Online Indicators, Bluetooth Plug-and-Play
@@ -35,6 +35,8 @@ import glob
 import math
 import random
 
+os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+
 _lib = os.environ.get("OKAMA_LIB", "")
 if not _lib:
     _lib = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../lib")
@@ -62,6 +64,7 @@ except Exception as exc:
     PYGAME_OK = False
     PYGAME_IMPORT_ERROR = exc
 
+import okamaos
 from okamaos.input_protocol import InputClient
 import okamaos.config as cfg_mod
 import okamaos.games as games_mod
@@ -371,7 +374,7 @@ def _text_shell():
     """Minimal text-mode shell for terminals / no-Pygame environments."""
     conf = cfg_mod.get()
     print("\n" + "=" * 48)
-    print("  OkamaOS v2.0.0 Shell  (text mode)")
+    print(f"  OkamaOS v{conf.get('VERSION', okamaos.VERSION)} Shell  (text mode)")
     print("=" * 48)
 
     while True:
@@ -414,6 +417,40 @@ def _log_shell_error(message: str):
         pass
 
 
+def _has_alsa_output() -> bool:
+    cards_path = "/proc/asound/cards"
+    try:
+        with open(cards_path, encoding="utf-8", errors="replace") as cards:
+            data = cards.read().strip().lower()
+        return bool(data) and "no soundcards" not in data
+    except FileNotFoundError:
+        return bool(glob.glob("/dev/snd/controlC*") or glob.glob("/dev/snd/pcm*"))
+    except Exception:
+        return False
+
+
+def _select_shell_audio_driver(conf) -> str:
+    configured = (conf.get("AUDIO_BACKEND", "alsa") or "alsa").strip().lower()
+    if configured == "alsa" and not _has_alsa_output():
+        return "dummy"
+    return configured or "dummy"
+
+
+def _configure_sdl_environment(conf, windowed: bool) -> None:
+    os.environ.setdefault("SDL_VIDEODRIVER", "kmsdrm")
+    os.environ.setdefault("SDL_KMSDRM_REQUIRE_DRM_MASTER", "0")
+    os.environ.setdefault("SDL_FBDEV",
+                          conf.get("FRAMEBUFFER_DEVICE", "/dev/fb0"))
+    os.environ.setdefault("SDL_AUDIODRIVER",
+                          _select_shell_audio_driver(conf))
+    os.environ.setdefault("SDL_RENDER_DRIVER", "software")
+    os.environ.setdefault("LIBGL_ALWAYS_SOFTWARE", "1")
+    os.environ.setdefault("MESA_LOADER_DRIVER_OVERRIDE", "kms_swrast")
+
+    if windowed:
+        os.environ["SDL_VIDEODRIVER"] = "x11"  # dev host
+
+
 # ---------------------------------------------------------------------------
 # Pygame shell
 # ---------------------------------------------------------------------------
@@ -422,10 +459,11 @@ class OkamaShell:
         self.windowed = windowed
         self.dev_mode = dev_mode
         self.conf = cfg_mod.get()
+        self.version = self.conf.get("VERSION", okamaos.VERSION)
 
         flags = 0 if windowed else pygame.FULLSCREEN | pygame.NOFRAME
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT), flags)
-        pygame.display.set_caption("OkamaOS v2.0.0")
+        pygame.display.set_caption(f"OkamaOS v{self.version}")
         pygame.mouse.set_visible(False)
 
         self.clock = pygame.time.Clock()
@@ -594,6 +632,8 @@ class OkamaShell:
 
         # Controller events from okama-inputd
         for ev in self.input_client.poll():
+            if ev.get("controller") == -1:
+                continue
             if ev.get("type") == "button" and ev.get("state") == "pressed":
                 events.append({"src": "controller", "action": ev["button"]})
             elif ev.get("type") == "axis":
@@ -1043,22 +1083,12 @@ def main():
         _text_shell()
         return
 
-    os.environ.setdefault("SDL_VIDEODRIVER", "kmsdrm")
-    os.environ.setdefault("SDL_KMSDRM_REQUIRE_DRM_MASTER", "0")
-    os.environ.setdefault("SDL_FBDEV",
-                          conf.get("FRAMEBUFFER_DEVICE", "/dev/fb0"))
-    os.environ.setdefault("SDL_AUDIODRIVER", "alsa")
-    # Software rendering fallback for VMs without GPU acceleration
-    os.environ.setdefault("SDL_RENDER_DRIVER", "software")
-    os.environ.setdefault("LIBGL_ALWAYS_SOFTWARE", "1")
-
-    if args.windowed:
-        os.environ["SDL_VIDEODRIVER"] = "x11"  # dev host
+    _configure_sdl_environment(conf, args.windowed)
 
     try:
-        pygame.init()
+        pygame.display.init()
     except Exception as exc:
-        message = f"pygame.init() failed: {exc}"
+        message = f"pygame display initialization failed: {exc}"
         print(message, file=sys.stderr)
         print("Falling back to text shell.", file=sys.stderr)
         _log_shell_error(message)

@@ -29,6 +29,8 @@
 - [x] Restore GUI-first ISO boot and keep text mode as a genuine failure fallback only.
 - [x] Enable SDL2 KMS/DRM and Mesa GBM/EGL support for visible pygame startup.
 - [x] Keep safe graphics as an explicit fallback instead of making it the default GUI path.
+- [x] Add boot-readiness checks for version alignment, init-script permissions, SDL2_ttf packaging, and shell/game SDL startup contracts.
+- [x] Rebind pygame SDL2_ttf to the Buildroot library so GUI font loading works on VM/live boots.
 - [ ] Add signed update verification before automatic OS updates.
 - [ ] Publish a stable public release channel after hardware validation.
 

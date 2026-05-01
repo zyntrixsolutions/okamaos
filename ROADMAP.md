@@ -216,6 +216,12 @@
 - [x] Preserve hero version visibility outside the top header
 - [x] Version metadata bumped to `1.1.2`
 
+### v1.1.3 — Dev Console Interactive Terminal ✅
+- [x] Route Dev Console through a persistent PTY-backed shell session
+- [x] Send Enter input to the active shell so confirmation prompts can continue
+- [x] Stream command output and logs while long-running operations stay open
+- [x] Version metadata bumped to `1.1.3`
+
 ### v1.x — Console Polish
 - [x] Silent boot (`quiet loglevel=0`, boot log redirect) — completed in v0.3
 - [ ] Boot time < 8 seconds

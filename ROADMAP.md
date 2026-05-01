@@ -239,6 +239,26 @@
 - [x] Add button-based d-pad support for Xbox and PlayStation controllers
 - [x] Version metadata bumped to `1.1.5`
 
+### studio-v0.1.0 — Okama Studio MVP ✅
+- [x] **Next.js 16 App Router** scaffold inside `studio/` with React 19, Tailwind v4, OkamaOS design tokens
+- [x] **Sidebar + Header shell** with Dashboard / Studio / Learn / Library / Settings nav
+- [x] **Dashboard**: new-game wizard (platformer/top-down/RPG/blank templates), recent-projects grid, feature highlights
+- [x] **AI game builder**: Gemini (2.0 Flash, 1.5 Flash/Pro) and Qwen (Max/Plus/Turbo) streaming chat, model router, full game engine system prompt
+- [x] **3-panel Studio IDE**: FileTree, Monaco Editor (`okama-dark` theme), right panel (AI Chat / Preview / Assets / Export)
+- [x] **In-browser Python preview**: Pyodide 0.26 WASM runner; pygame stdout bridge; canvas surface adapter
+- [x] **Asset Manager**: drag-and-drop image/audio upload, pygame snippet generator, AI-integrate button
+- [x] **`.ok` Package Builder**: JSZip + SHA-256, manifest editor, `.ok` + `.ok.sig` download
+- [x] **Learn Hub**: 10-chapter curriculum (variables → collision detection), XP tracking, lesson lock progression
+- [x] **Lesson pages**: theory, live demo PyPlayground, exercises with hint/solution toggle, AI Tutor panel
+- [x] **Library page**: project cards, one-click export, delete with confirm modal
+- [x] **Settings page**: model selector, Gemini + Qwen API key manager (localStorage only), publisher profile
+- [x] **Project persistence**: localStorage-backed save/load with auto-save debounce
+- [ ] studio-v0.2.0 — Pyodide full pygame canvas rendering (SDL2 → OffscreenCanvas)
+- [ ] studio-v0.2.0 — Remaining 10 curriculum chapters (audio, particles, tilesets, save states, packaging)
+- [ ] studio-v0.2.0 — AI asset generation (sprite sheets from text prompt via image model)
+- [ ] studio-v0.2.0 — Multi-file project export (zip source + .ok in one click)
+- [ ] studio-v0.3.0 — OkamaOS Game Store publish flow (sign + push to catalog)
+
 ### v1.x — Console Polish
 - [x] Silent boot (`quiet loglevel=0`, boot log redirect) — completed in v0.3
 - [ ] Boot time < 8 seconds

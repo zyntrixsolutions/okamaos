@@ -5,6 +5,24 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [studio-0.1.0] - 2026-05-01
+
+### Added (Okama Studio — `studio/`)
+- **Next.js 16 game engine studio**: scaffolded `studio/` sub-app with Next.js 16.2.4 App Router, React 19, and Tailwind CSS v4 using OkamaOS design tokens (ink, green, yellow, cyan, coral palette)
+- **AI game builder**: streaming AI collaboration via Google Gemini (1.5 Flash/Pro, 2.0 Flash) and Qwen (Max/Plus/Turbo); model router with runtime switching via Settings
+- **3-panel Studio IDE**: FileTree sidebar, Monaco Editor (custom `okama-dark` theme), right panel with AI Chat / Preview / Assets / Export tabs
+- **In-browser Python preview**: Pyodide 0.26 WASM runner — no install needed; pygame stdout captured and surfaced in console panel
+- **Asset Manager**: drag-and-drop image and audio uploads with one-click AI integration prompt generation
+- **`.ok` package builder**: JSZip-based export with SHA-256 signing, manifest validation, and companion `.ok.sig` file download
+- **Dashboard**: new game wizard (4 genre templates with AI starter code), recent projects grid, and platform feature highlights
+- **Learn Hub**: 10-chapter Python × Pygame curriculum (variables → collision detection) with live PyPlayground cells and XP tracking
+- **AI Tutor**: per-lesson streaming tutor panel using Qwen/Gemini tutor prompt; tracks student code context
+- **Lesson pages**: theory, live demo playground, exercise with hint/solution toggle, XP + completion tracking in localStorage
+- **Library page**: project grid with Open/Export/.ok/Delete actions and confirm-delete modal
+- **Settings page**: model selector, Gemini and Qwen API key manager (localStorage-only, never server-side), publisher ID and display name
+- **OkamaOS design system**: CRT scanline overlay, custom scrollbars, all palette tokens in Tailwind v4 `@theme` block
+- **`env.example`**: documents that keys are client-side only
+
 ## [1.1.5] - 2026-05-01
 
 ### Fixed

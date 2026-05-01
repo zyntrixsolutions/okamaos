@@ -99,11 +99,15 @@ for standard HID gamepads.
 ```
 CONFIG_USB_HID=y            # generic USB HID (most controllers)
 CONFIG_HID_GENERIC=y        # HID generic fallback
+CONFIG_INPUT_JOYSTICK=y     # joystick driver menu for xpad
 CONFIG_JOYSTICK_XPAD=y      # Xbox USB controllers
 CONFIG_HID_PLAYSTATION=y    # DualShock 4, DualSense (kernel ≥ 5.16)
 CONFIG_HID_SONY=y           # fallback Sony HID (older kernels)
 CONFIG_HID_NINTENDO=y       # Switch Pro Controller (kernel ≥ 5.16)
 CONFIG_HID_MICROSOFT=y      # Xbox One Bluetooth
+CONFIG_NEW_LEDS=y           # Sony/PlayStation lightbar dependencies
+CONFIG_LEDS_CLASS=y
+CONFIG_LEDS_CLASS_MULTICOLOR=y
 CONFIG_INPUT_EVDEV=y        # evdev interface
 CONFIG_INPUT_JOYDEV=y       # joystick interface
 ```
@@ -166,3 +170,11 @@ while game_running:
 ```
 
 `InputClient.poll()` is non-blocking; call it every frame.
+
+## Xbox and PlayStation Polish
+
+Installed boots load `usbhid`, `hid-generic`, `joydev`, `evdev`, `xpad`,
+`hid-microsoft`, `hid-sony`, and `hid-playstation` before `okama-inputd`
+starts. `okama-inputd` also suppresses duplicate button/axis events and supports
+both hat-axis and `BTN_DPAD_*` d-pad styles so Xbox, DualShock 4, and DualSense
+controllers do not flood shell navigation.

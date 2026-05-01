@@ -4,7 +4,7 @@
 
 export PATH="/usr/bin:/usr/sbin:/bin:/sbin"
 export PYTHONPATH="/usr/lib"
-export OKAMAOS_VERSION="1.1.4"
+export OKAMAOS_VERSION="1.1.5"
 export TZ="SAST-2"
 export OKAMA_LOG="/var/okamaos/logs"
 export OKAMA_GAMES="/var/okamaos/games"

@@ -908,7 +908,7 @@ class OkamaShell:
             if ev.get("src") != "mouse" and self._input_cooldown > 0:
                 continue
             if ev.get("src") != "mouse":
-                self._input_cooldown = max(1, FPS // 8)  # ~125ms
+                self._input_cooldown = max(1, FPS // 12)  # ~80ms at 60 FPS
 
             self._dispatch(action, ev)
 
@@ -3502,13 +3502,11 @@ class FbWriter:
         elif self.bpp in (15, 16):
             if not (red_len and green_len and blue_len):
                 red_len, green_len, blue_len = (5, 6, 5) if self.bpp == 16 else (5, 5, 5)
-            self._fmt = "RGB"
             self._packed = True
-            self._chan = (
-                (red_off, red_len, 8 - red_len),
-                (green_off, green_len, 8 - green_len),
-                (blue_off, blue_len, 8 - blue_len),
-            )
+            red_mask = ((1 << red_len) - 1) << red_off
+            green_mask = ((1 << green_len) - 1) << green_off
+            blue_mask = ((1 << blue_len) - 1) << blue_off
+            self._masks = (red_mask, green_mask, blue_mask, 0)
         else:
             raise RuntimeError(f"unsupported framebuffer depth: {self.bpp} bpp")
 
@@ -3526,28 +3524,19 @@ class FbWriter:
         map_len = self.mem_len or (self.stride * self.h)
         self._mm = _mmap.mmap(self._fb.fileno(), map_len)
         self._base_offset = self.yoff * self.stride + self.xoff * self.bytes_pp
+        self._packed_surface = None
+        if self._packed:
+            self._packed_surface = pygame.Surface((self.w, self.h), 0, self.bpp, self._masks)
+        print(
+            f"Framebuffer: {self.w}x{self.h} {self.bpp}bpp stride={self.stride}",
+            file=sys.stderr)
         self._ok = True
 
-    def _pack_rgb(self, surface):
-        raw = pygame.image.tostring(surface, "RGB")
-        out = bytearray(self.w * self.h * self.bytes_pp)
-        red, green, blue = self._chan
-        ri = 0
-        oi = 0
-        for _ in range(self.w * self.h):
-            pixel = 0
-            for value, channel in ((raw[ri], red), (raw[ri + 1], green), (raw[ri + 2], blue)):
-                off, bits, drop = channel
-                if drop >= 0:
-                    value >>= drop
-                else:
-                    value <<= -drop
-                pixel |= (value & ((1 << bits) - 1)) << off
-            for byte_idx in range(self.bytes_pp):
-                out[oi + byte_idx] = (pixel >> (byte_idx * 8)) & 0xff
-            ri += 3
-            oi += self.bytes_pp
-        return bytes(out)
+    def _frame_bytes(self, surface):
+        if self._packed and self._packed_surface is not None:
+            self._packed_surface.blit(surface, (0, 0))
+            return self._packed_surface.get_buffer().raw, self._packed_surface.get_pitch()
+        return pygame.image.tostring(surface, self._fmt), self.w * self.bytes_pp
 
     def present(self, surface):
         if not self._ok:
@@ -3555,16 +3544,16 @@ class FbWriter:
         try:
             if (surface.get_width(), surface.get_height()) != (self.w, self.h):
                 surface = pygame.transform.scale(surface, (self.w, self.h))
-            raw = self._pack_rgb(surface) if self._packed else pygame.image.tostring(surface, self._fmt)
+            raw, src_stride = self._frame_bytes(surface)
             row_bytes = self.w * self.bytes_pp
-            if self.stride == row_bytes:
+            if self.stride == row_bytes and src_stride == row_bytes:
                 # Fast path: framebuffer rows are tightly packed
                 self._mm.seek(self._base_offset)
                 self._mm.write(raw)
             else:
                 # Slow path: framebuffer has per-row padding — write row by row
                 for y in range(self.h):
-                    src = y * row_bytes
+                    src = y * src_stride
                     self._mm.seek(self._base_offset + y * self.stride)
                     self._mm.write(raw[src:src + row_bytes])
         except Exception:

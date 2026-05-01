@@ -5,7 +5,7 @@ partnership with **OkamaLabs**. OkamaOS boots straight into a fullscreen
 controller-driven shell, runs one game at a time, and is designed to feel like
 a dedicated console — not a PC.
 
-> Status: **v1.1.1 patch update**. Buildable ISO, polished First Wave shell,
+> Status: **v1.1.2 patch update**. Buildable ISO, polished First Wave shell,
 > live Bluetooth/update status, rollback-capable OTA bundle apply from
 > downloads, USB/media package discovery, live USB persistence, hard-drive
 > migration tooling, `.ok` package format, and Pygame-based games.

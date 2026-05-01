@@ -5,10 +5,11 @@ partnership with **OkamaLabs**. OkamaOS boots straight into a fullscreen
 controller-driven shell, runs one game at a time, and is designed to feel like
 a dedicated console — not a PC.
 
-> Status: **v1.1.2 patch update**. Buildable ISO, polished First Wave shell,
+> Status: **v1.1.3 patch update**. Buildable ISO, polished First Wave shell,
 > live Bluetooth/update status, rollback-capable OTA bundle apply from
 > downloads, USB/media package discovery, live USB persistence, hard-drive
-> migration tooling, `.ok` package format, and Pygame-based games.
+> migration tooling, PTY-backed Dev Console terminal, `.ok` package format,
+> and Pygame-based games.
 
 ## Highlights
 
@@ -22,6 +23,7 @@ a dedicated console — not a PC.
 - Safe game replacement with local backups and save-data preservation
 - Safe `.okupdate` system apply with backup/rollback guardrails
 - `okama-install` hard-drive migration and live USB persistence setup
+- PTY-backed Dev Console for persistent commands, prompts, and logs
 - One-active-game lifecycle via `okama-run`
 - Idle RAM target: **<250MB**
 - Parent mode (PIN-gated risky actions) and Developer mode (off by default)

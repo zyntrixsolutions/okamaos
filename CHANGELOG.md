@@ -5,6 +5,15 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.1.3] - 2026-05-01
+
+### Fixed
+- **Dev Console interactive commands**: Dev Console now uses a PTY-backed persistent shell session so commands that prompt for confirmation, including `okama-install`, can receive follow-up input instead of being blocked by a stale "command still running" state.
+- **Dev Console logs**: shell output now streams through a background reader while the session remains open, keeping long-running command progress and prompts visible in the console history.
+
+### Changed
+- **Version metadata**: bumped runtime, root config, shell-visible metadata, package metadata, installer metadata, docs, and roadmap tracking to `1.1.3`.
+
 ## [1.1.2] - 2026-05-01
 
 ### Fixed

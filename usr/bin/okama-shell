@@ -40,6 +40,7 @@ import argparse
 import struct
 import threading
 import queue
+import pty
 import glob
 import shutil
 import datetime
@@ -509,7 +510,10 @@ class OkamaShell:
         self._dev_console_cmd = ""
         self._dev_console_scroll = 0
         self._dev_shell_proc = None
-        self._dev_shell_busy = False
+        self._dev_shell_fd = None
+        self._dev_shell_reader = None
+        self._dev_console_lock = threading.Lock()
+        self._dev_terminal_line = ""
         self._dev_command_history: list = []
         self._dev_history_idx = None
         self._dev_history_draft = ""
@@ -2699,23 +2703,53 @@ class OkamaShell:
                 self._dev_console_cmd = ""
                 return
             if cmd == "clear":
-                self._dev_console_history.clear()
+                self._clear_dev_history()
                 self._dev_console_cmd = ""
                 return
-            if self._dev_shell_busy:
-                self._append_dev_history("> Command still running.")
-                return
-            if cmd:
-                self._remember_dev_command(cmd)
-                self._append_dev_history(f"$ {cmd}")
-                threading.Thread(target=self._run_dev_cmd, args=(cmd,), daemon=True).start()
+            if self._dev_console_cmd:
+                self._remember_dev_command(self._dev_console_cmd)
+            self._write_dev_shell_line(self._dev_console_cmd)
             self._dev_console_cmd = ""
 
     def _append_dev_history(self, line: str):
-        self._dev_console_history.append(str(line)[:128])
-        while len(self._dev_console_history) > 160:
+        text = str(line).replace("\r\n", "\n").replace("\r", "\n")
+        parts = text.split("\n") if text else [""]
+        with self._dev_console_lock:
+            for part in parts:
+                self._dev_console_history.append(part[:180])
+            self._trim_dev_history_locked()
+
+    def _clear_dev_history(self):
+        with self._dev_console_lock:
+            self._dev_console_history.clear()
+            self._dev_terminal_line = ""
+            self._dev_console_scroll = 0
+
+    def _trim_dev_history_locked(self):
+        while len(self._dev_console_history) > 420:
             self._dev_console_history.pop(0)
         self._dev_console_scroll = max(0, len(self._dev_console_history) - 10)
+
+    def _append_dev_output(self, text: str):
+        if not text:
+            return
+        text = text.replace("\r\n", "\n").replace("\r", "\n")
+        with self._dev_console_lock:
+            for ch in text:
+                if ch == "\n":
+                    self._dev_console_history.append(self._dev_terminal_line[:180])
+                    self._dev_terminal_line = ""
+                    self._trim_dev_history_locked()
+                elif ch == "\b":
+                    self._dev_terminal_line = self._dev_terminal_line[:-1]
+                elif ch == "\t":
+                    self._dev_terminal_line += "    "
+                elif ord(ch) >= 32:
+                    self._dev_terminal_line += ch
+                    if len(self._dev_terminal_line) >= 180:
+                        self._dev_console_history.append(self._dev_terminal_line[:180])
+                        self._dev_terminal_line = self._dev_terminal_line[180:]
+                        self._trim_dev_history_locked()
 
     def _remember_dev_command(self, cmd: str):
         if not self._dev_command_history or self._dev_command_history[-1] != cmd:
@@ -2746,73 +2780,112 @@ class OkamaShell:
 
     def _ensure_dev_shell(self):
         proc = self._dev_shell_proc
-        if proc is not None and proc.poll() is None:
+        if proc is not None and proc.poll() is None and self._dev_shell_fd is not None:
             return proc
         env = os.environ.copy()
-        env.setdefault("TERM", "vt100")
+        env["TERM"] = "vt100"
         env.setdefault("HOME", "/root")
+        env["SHELL"] = "/bin/sh"
+        env["PS1"] = "okama$ "
+        master_fd = None
+        slave_fd = None
         try:
+            master_fd, slave_fd = pty.openpty()
             self._dev_shell_proc = subprocess.Popen(
-                ["/bin/sh"],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
+                [env["SHELL"], "-i"],
+                stdin=slave_fd,
+                stdout=slave_fd,
+                stderr=slave_fd,
+                close_fds=True,
                 cwd=env.get("HOME", "/"),
                 env=env,
             )
-            self._append_dev_history("> Persistent shell ready.")
+            os.close(slave_fd)
+            slave_fd = None
+            self._dev_shell_fd = master_fd
+            self._dev_shell_reader = threading.Thread(
+                target=self._read_dev_shell,
+                args=(self._dev_shell_proc, master_fd),
+                daemon=True)
+            self._dev_shell_reader.start()
+            self._append_dev_history("> Persistent terminal session ready.")
             return self._dev_shell_proc
         except Exception as e:
+            for fd in (master_fd, slave_fd):
+                if fd is not None:
+                    try:
+                        os.close(fd)
+                    except OSError:
+                        pass
             self._append_dev_history(f"Error: failed to start shell: {e}")
             self._dev_shell_proc = None
+            self._dev_shell_fd = None
             return None
 
     def _close_dev_shell(self):
         proc = self._dev_shell_proc
+        fd = self._dev_shell_fd
         self._dev_shell_proc = None
-        self._dev_shell_busy = False
+        self._dev_shell_fd = None
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
         if proc is None or proc.poll() is not None:
             return
         try:
-            if proc.stdin:
-                proc.stdin.write("exit\n")
-                proc.stdin.flush()
+            proc.terminate()
         except Exception:
             pass
-
-    def _run_dev_cmd(self, cmd: str):
-        proc = self._ensure_dev_shell()
-        if proc is None or proc.stdin is None or proc.stdout is None:
-            return
-        marker = f"__OKAMA_DONE_{int(time.time() * 1000)}__"
-        self._dev_shell_busy = True
         try:
-            proc.stdin.write(cmd + "\n")
-            proc.stdin.write(f"printf '\\n{marker}:%s\\n' \"$?\"\n")
-            proc.stdin.flush()
-            while True:
-                line = proc.stdout.readline()
-                if line == "" and proc.poll() is not None:
-                    self._append_dev_history(f"[shell exited {proc.returncode}]")
-                    self._dev_shell_proc = None
-                    break
-                line = line.rstrip("\n")
-                if marker in line:
-                    before, _sep, after = line.partition(marker)
-                    if before.strip():
-                        self._append_dev_history(before.rstrip())
-                    status = after.lstrip(":").strip()
-                    if status and status != "0":
-                        self._append_dev_history(f"[exit {status}]")
-                    break
-                if line:
-                    self._append_dev_history(line)
-        except Exception as e:
+            proc.wait(timeout=0.2)
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+
+    def _read_dev_shell(self, proc, fd: int):
+        while True:
+            try:
+                data = os.read(fd, 4096)
+            except OSError:
+                break
+            if not data:
+                break
+            self._append_dev_output(data.decode(errors="replace"))
+        if self._dev_shell_proc is proc:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            status = proc.poll()
+            if status is None:
+                try:
+                    status = proc.wait(timeout=0.1)
+                except Exception:
+                    status = "closed"
+            self._dev_shell_proc = None
+            self._dev_shell_fd = None
+            self._append_dev_history(f"[shell exited {status}]")
+
+    def _write_dev_shell_line(self, line: str):
+        proc = self._ensure_dev_shell()
+        fd = self._dev_shell_fd
+        if proc is None or fd is None:
+            return
+        try:
+            os.write(fd, (line + "\n").encode())
+        except OSError as e:
             self._append_dev_history(f"Error: {e}")
-        finally:
-            self._dev_shell_busy = False
+
+    def _dev_history_snapshot(self):
+        with self._dev_console_lock:
+            lines = list(self._dev_console_history)
+            if self._dev_terminal_line:
+                lines.append(self._dev_terminal_line)
+            return lines
 
     def _draw_dev_console(self):
         self._draw_section_header("$ Dev Console", COL_DEV)
@@ -2822,7 +2895,8 @@ class OkamaShell:
         start_y = 74
         line_h = 20
         max_lines = (HEIGHT - 180) // line_h
-        hist = self._dev_console_history[-max_lines:] if self._dev_console_history else []
+        lines = self._dev_history_snapshot()
+        hist = lines[-max_lines:] if lines else []
         for i, line in enumerate(hist):
             col = COL_DEV if line.startswith(">") else COL_TEXT
             s = self.font_sm.render(line, True, col)
@@ -2836,9 +2910,10 @@ class OkamaShell:
             cmd_txt += "_"
         cmd_surf = self.font_sm.render(cmd_txt, True, COL_TEXT)
         self.screen.blit(cmd_surf, (50 + prompt.get_width(), input_y))
-        status = "running" if self._dev_shell_busy else "ready"
+        proc = self._dev_shell_proc
+        status = "connected" if proc is not None and proc.poll() is None else "closed"
         hint = self.font_hint.render(
-            f"[Enter] Run   [Up/Down] History   [Esc/B] Back   shell: {status}",
+            f"[Enter] Send   [Up/Down] History   [Esc/B] Back   shell: {status}",
             True, COL_DIM)
         self.screen.blit(hint, (50, HEIGHT - 70))
 

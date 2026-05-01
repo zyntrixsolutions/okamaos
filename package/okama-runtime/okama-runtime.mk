@@ -6,7 +6,7 @@
 # tree under usr/bin and usr/lib/okamaos.
 ################################################################################
 
-OKAMA_RUNTIME_VERSION = 1.0.0
+OKAMA_RUNTIME_VERSION = 1.1.0
 OKAMA_RUNTIME_SOURCE =
 # No SITE/SITE_METHOD — this is an install-only meta-package that copies files directly
 OKAMA_RUNTIME_LICENSE = Proprietary
@@ -23,6 +23,7 @@ define OKAMA_RUNTIME_INSTALL_TARGET_CMDS
 	mkdir -p $(TARGET_DIR)/var/okamaos/logs
 	mkdir -p $(TARGET_DIR)/var/okamaos/cache
 	mkdir -p $(TARGET_DIR)/var/okamaos/controllers
+	mkdir -p $(TARGET_DIR)/var/okamaos/downloads
 	mkdir -p $(TARGET_DIR)/var/okamaos/updates
 	mkdir -p $(TARGET_DIR)/var/okamaos/updates/backups
 	mkdir -p $(TARGET_DIR)/var/okamaos/updates/downloads

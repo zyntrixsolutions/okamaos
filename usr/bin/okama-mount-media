@@ -1,0 +1,76 @@
+#!/bin/sh
+# Mount removable/local media under /media so games and updates can be found.
+set -u
+
+MEDIA_ROOT="${OKAMA_MEDIA_ROOT:-/media}"
+PERSIST_LABEL="${OKAMA_PERSISTENCE_LABEL:-OKAMA_DATA}"
+
+mkdir -p "$MEDIA_ROOT" /mnt /var/okamaos/downloads 2>/dev/null || true
+
+is_mounted_dev() {
+    grep -q "^$1 " /proc/mounts 2>/dev/null
+}
+
+is_mounted_path() {
+    grep -q " $1 " /proc/mounts 2>/dev/null
+}
+
+sanitize() {
+    printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '_'
+}
+
+mount_one() {
+    dev="$1"
+    name="$(basename "$dev")"
+
+    [ -b "$dev" ] || return 0
+    is_mounted_dev "$dev" && return 0
+
+    fstype="$(blkid -s TYPE -o value "$dev" 2>/dev/null || true)"
+    [ -n "$fstype" ] || return 0
+
+    label="$(blkid -s LABEL -o value "$dev" 2>/dev/null || true)"
+    [ "$label" = "$PERSIST_LABEL" ] && return 0
+
+    if [ -n "$label" ]; then
+        target="${MEDIA_ROOT}/$(sanitize "$label")"
+    else
+        target="${MEDIA_ROOT}/${name}"
+    fi
+
+    mkdir -p "$target" 2>/dev/null || return 0
+    is_mounted_path "$target" && return 0
+
+    case "$fstype" in
+        vfat|msdos|exfat|ntfs)
+            mount -o rw,noatime,umask=000 "$dev" "$target" 2>/dev/null ||
+                mount -o ro,noatime "$dev" "$target" 2>/dev/null || true
+            ;;
+        *)
+            mount -o rw,noatime "$dev" "$target" 2>/dev/null ||
+                mount -o ro,noatime "$dev" "$target" 2>/dev/null || true
+            ;;
+    esac
+}
+
+for sysdev in /sys/class/block/*; do
+    [ -e "$sysdev" ] || continue
+    name="$(basename "$sysdev")"
+    case "$name" in
+        loop*|ram*|dm-*|md*|fd*)
+            continue
+            ;;
+    esac
+
+    # Prefer partitions. Whole disks are only mounted if they carry a filesystem.
+    case "$name" in
+        sd[a-z][0-9]*|vd[a-z][0-9]*|xvd[a-z][0-9]*|hd[a-z][0-9]*|mmcblk[0-9]p[0-9]*|nvme[0-9]n[0-9]p[0-9]*|sr[0-9]*)
+            mount_one "/dev/$name"
+            ;;
+        sd[a-z]|vd[a-z]|xvd[a-z]|hd[a-z]|mmcblk[0-9]|nvme[0-9]n[0-9])
+            mount_one "/dev/$name"
+            ;;
+    esac
+done
+
+exit 0

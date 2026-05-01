@@ -42,6 +42,9 @@ import threading
 import queue
 import glob
 import shutil
+import datetime
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -106,7 +109,8 @@ _EVDEV_SHIFT_CHAR_MAP = {
 }
 
 _EVDEV_SHIFT_KEYS = {42, 54}
-_EVDEV_TEXT_CONTROL_KEYS = {1, 14, 28, 68}  # Esc, Backspace, Enter, F10
+_EVDEV_CAPS_LOCK = 58
+_EVDEV_TEXT_CONTROL_KEYS = {1, 14, 28, 68, 103, 108}  # Esc, Backspace, Enter, F10, Up, Down
 _EVIOCGNAME = 0x80ff4506
 
 
@@ -132,6 +136,7 @@ class _EvdevKeyboardReader:
         self._stop = threading.Event()
         self._threads = []
         self._shift_down = False
+        self._caps_lock = False
         self._held_codes: set = set()
         self._started = False
 
@@ -163,21 +168,35 @@ class _EvdevKeyboardReader:
                     if etype != _EV_KEY:
                         continue
                     if code in _EVDEV_SHIFT_KEYS:
-                        self._shift_down = value == _KEY_PRESS
+                        if value == _KEY_PRESS:
+                            self._shift_down = True
+                        elif value == _KEY_RELEASE:
+                            self._shift_down = False
+                        continue
+                    if code == _EVDEV_CAPS_LOCK:
+                        if value == _KEY_PRESS:
+                            self._caps_lock = not self._caps_lock
                         continue
                     if value == _KEY_PRESS:
                         if code in self._held_codes:
                             continue
                         self._held_codes.add(code)
                         self._q.put(code)
-                        char_map = _EVDEV_SHIFT_CHAR_MAP if self._shift_down else _EVDEV_CHAR_MAP
-                        char = char_map.get(code)
+                        char = self._char_for(code)
                         if char:
                             self._char_q.put(char)
                     elif value == _KEY_RELEASE:
                         self._held_codes.discard(code)
         except OSError:
             pass
+
+    def _char_for(self, code: int) -> str | None:
+        base = _EVDEV_CHAR_MAP.get(code)
+        if base and len(base) == 1 and base.isalpha():
+            return base.upper() if (self._shift_down ^ self._caps_lock) else base
+        if self._shift_down:
+            return _EVDEV_SHIFT_CHAR_MAP.get(code) or base
+        return base
 
     def drain(self) -> list:
         codes = []
@@ -271,7 +290,13 @@ SETTINGS_OPTIONS = [
     "Support",
 ]
 
-_UPDATE_ACTIONS = ["Check for Updates", "Apply Local Update (.okupdate)", "Rollback Last Update"]
+_UPDATE_ACTIONS = [
+    "Check for Updates",
+    "Download OS Update",
+    "Apply Downloaded Update",
+    "Download Game Updates",
+    "Rollback Last Update",
+]
 
 HINT_KB   = "[<>] Navigate   [Enter] Select   [Esc] Back   [Tab] Section"
 HINT_CTRL = "[^v] Navigate   [A] Select   [B] Back   [START] Home"
@@ -306,6 +331,26 @@ def _alpha_surf(w, h, color, alpha):
     s = pygame.Surface((w, h), pygame.SRCALPHA)
     s.fill((*color, alpha))
     return s
+
+
+SAST_TZ = datetime.timezone(datetime.timedelta(hours=2), "SAST")
+
+
+def _sast_now() -> datetime.datetime:
+    return datetime.datetime.now(datetime.timezone.utc).astimezone(SAST_TZ)
+
+
+def _okama_update_path() -> str:
+    sibling = os.path.join(os.path.dirname(os.path.realpath(__file__)), "okama-update")
+    if os.path.exists(sibling):
+        return sibling
+    return "/usr/bin/okama-update"
+
+
+def _safe_download_name(raw: str, fallback: str) -> str:
+    name = os.path.basename(urllib.parse.urlparse(raw or "").path) or fallback
+    safe = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in name)
+    return safe or fallback
 
 
 # ---------------------------------------------------------------------------
@@ -440,6 +485,8 @@ class OkamaShell:
         self._last_update_check = 0.0
         self._next_update_check = time.monotonic() + 5.0
         self._update_thread = None
+        self._update_download_progress: tuple = (0, 0)
+        self._bt_label_cache: tuple = (0.0, "Off")
 
         # Install / persistence state
         self.install_system_idx = 0
@@ -461,6 +508,11 @@ class OkamaShell:
         self._dev_console_history: list = []
         self._dev_console_cmd = ""
         self._dev_console_scroll = 0
+        self._dev_shell_proc = None
+        self._dev_shell_busy = False
+        self._dev_command_history: list = []
+        self._dev_history_idx = None
+        self._dev_history_draft = ""
         # WiFi scan/connect
         self.wifi_scan_iface = ""
         self.wifi_networks: list = []
@@ -533,6 +585,100 @@ class OkamaShell:
     def _refresh_games(self):
         self.games = games_mod.list_installed()
 
+    def _os_version(self) -> str:
+        if updates_mod:
+            try:
+                version = updates_mod.current_version()
+                if version and version != "unknown":
+                    return version
+            except Exception:
+                pass
+        return self.conf.get("VERSION", "unknown")
+
+    def _sast_time(self, fmt: str = "%H:%M") -> str:
+        try:
+            return _sast_now().strftime(fmt).lstrip("0") or "0"
+        except Exception:
+            return "--:--"
+
+    def _downloads_dir(self) -> str:
+        base = self.conf.get("UPDATES_DIR", "/var/okamaos/updates")
+        path = os.path.join(base, "downloads")
+        try:
+            os.makedirs(path, exist_ok=True)
+            return path
+        except OSError:
+            fallback = "/tmp/okamaos-downloads"
+            os.makedirs(fallback, exist_ok=True)
+            return fallback
+
+    def _rescan_media(self) -> None:
+        candidates = [
+            shutil.which("okama-mount-media"),
+            os.path.join(os.path.dirname(os.path.realpath(__file__)), "okama-mount-media"),
+            "/usr/bin/okama-mount-media",
+        ]
+        script = next((p for p in candidates if p and os.path.exists(p)), "")
+        if not script:
+            return
+        try:
+            subprocess.run([script], capture_output=True, timeout=8)
+        except Exception:
+            pass
+
+    def _file_search_roots(self) -> list:
+        roots = [
+            self._downloads_dir(),
+            "/var/okamaos/downloads",
+            "/var/okamaos/updates",
+            "/media",
+            "/mnt",
+            "/run/media",
+            "/tmp",
+        ]
+        pseudo = {"proc", "sysfs", "devtmpfs", "devpts", "tmpfs", "overlay", "squashfs"}
+        try:
+            with open("/proc/mounts", encoding="utf-8") as f:
+                for line in f:
+                    parts = line.split()
+                    if len(parts) < 3 or parts[2] in pseudo:
+                        continue
+                    mountpoint = parts[1].replace("\\040", " ")
+                    if mountpoint == "/":
+                        continue
+                    if mountpoint.startswith(("/media", "/mnt", "/run/media", "/var/okamaos")):
+                        roots.append(mountpoint)
+        except OSError:
+            pass
+        deduped = []
+        seen = set()
+        for root in roots:
+            if root and root not in seen and os.path.isdir(root):
+                deduped.append(root)
+                seen.add(root)
+        return deduped
+
+    def _find_files(self, suffixes: tuple, max_results: int = 200) -> list:
+        self._rescan_media()
+        results = []
+        seen = set()
+        for base in self._file_search_roots():
+            try:
+                for root, _dirs, files in os.walk(base):
+                    for fname in sorted(files):
+                        if not fname.endswith(suffixes):
+                            continue
+                        path = os.path.join(root, fname)
+                        if path in seen:
+                            continue
+                        results.append(path)
+                        seen.add(path)
+                        if len(results) >= max_results:
+                            return sorted(results)
+            except Exception:
+                pass
+        return sorted(results)
+
     def _show_message(self, msg: str, duration: float = 2.5):
         self.message = msg
         self.message_timer = int(duration * FPS)
@@ -546,7 +692,7 @@ class OkamaShell:
 
     def _update_label(self) -> str:
         if self.update_loading:
-            return "Checking"
+            return "Working"
         count = self._update_count()
         if count:
             return f"{count} update{'s' if count != 1 else ''}"
@@ -663,6 +809,8 @@ class OkamaShell:
                     pygame.K_KP_ENTER: "ENTER",
                     pygame.K_BACKSPACE: "BACKSPACE",
                     pygame.K_ESCAPE: "B",
+                    pygame.K_UP: "DPAD_UP",
+                    pygame.K_DOWN: "DPAD_DOWN",
                     pygame.K_F10: "DEV_CONSOLE",
                 }
                 nav_mapping = {
@@ -762,6 +910,7 @@ class OkamaShell:
         # F10 unlocks dev console from any state
         if action == "DEV_CONSOLE":
             self._dev_console_cmd = ""
+            self._ensure_dev_shell()
             self._dev_console_history.append(">>> Dev mode unlocked (F10). Type 'help' for commands.")
             self.state = "dev_console"
             return
@@ -862,13 +1011,15 @@ class OkamaShell:
         return None
 
     def _home_section_rects(self):
-        pill_w = max(260, min(900, WIDTH - 160 if WIDTH < 1000 else WIDTH - 280))
-        pill_h = 88 if HEIGHT >= 680 else 72
+        pill_w = max(300, min(860, WIDTH - 150 if WIDTH < 1000 else WIDTH - 300))
+        status_h = 66 if HEIGHT >= 680 else 56
+        top = 246 if HEIGHT >= 680 else 188
+        bottom = HEIGHT - 44 - status_h - (24 if HEIGHT >= 680 else 16)
         gap = 14 if HEIGHT >= 680 else 10
+        pill_h = max(60, min(82, (bottom - top - gap * (len(SECTIONS) - 1)) // len(SECTIONS)))
         start_x = WIDTH // 2 - pill_w // 2
-        y = 250 if HEIGHT >= 680 else 205
         return [
-            pygame.Rect(start_x, y + i * (pill_h + gap), pill_w, pill_h)
+            pygame.Rect(start_x, top + i * (pill_h + gap), pill_w, pill_h)
             for i in range(len(SECTIONS))
         ]
 
@@ -964,19 +1115,28 @@ class OkamaShell:
             self.state = "settings_support"
 
     def _settings_rects(self):
+        n = len(SETTINGS_OPTIONS)
+        top = 86 if HEIGHT < 680 else 108
+        bottom = HEIGHT - 58
+        gap = 10 if HEIGHT < 680 else 12
+        card_h = max(38, min(56, (bottom - top - gap * (n - 1)) // max(n, 1)))
         return [
-            pygame.Rect(40, 120 + i * 64, WIDTH - 80, 52)
-            for i in range(len(SETTINGS_OPTIONS))
+            pygame.Rect(40, top + i * (card_h + gap), WIDTH - 80, card_h)
+            for i in range(n)
         ]
 
     # -----------------------------------------------------------------------
     # Shared sub-screen helpers
     # -----------------------------------------------------------------------
     def _subscreen_rects(self, n: int) -> list:
+        top = 112 if HEIGHT >= 680 else 92
+        bottom = HEIGHT - 60
+        gap = 8 if HEIGHT < 680 else 10
+        card_h = max(38, min(56, (bottom - top - gap * (max(n, 1) - 1)) // max(n, 1)))
         return [
-            pygame.Rect(40, 120 + i * 64, WIDTH - 80, 52)
+            pygame.Rect(40, top + i * (card_h + gap), WIDTH - 80, card_h)
             for i in range(n)
-            if 120 + i * 64 + 52 <= HEIGHT - 60
+            if top + i * (card_h + gap) + card_h <= bottom
         ]
 
     def _draw_subscreen_list(self, items: list, sel_idx: int, key_fn) -> None:
@@ -1993,17 +2153,7 @@ class OkamaShell:
         self.state = "install_browse"
 
     def _find_ok_files(self) -> list:
-        results = []
-        search_paths = ["/mnt", "/media", "/var/okamaos/updates", "/tmp"]
-        for base in search_paths:
-            try:
-                for root, _dirs, files in os.walk(base):
-                    for fname in sorted(files):
-                        if fname.endswith(".ok"):
-                            results.append(os.path.join(root, fname))
-            except Exception:
-                pass
-        return results
+        return self._find_files((".ok",))
 
     def _install_browse_input(self, action: str, ev: dict = None):
         n = len(self.install_files)
@@ -2085,25 +2235,28 @@ class OkamaShell:
         self.store_status = f"Downloading {name}\u2026"
 
         def _work():
-            tmp = f"/tmp/{entry.get('id','game')}.ok"
+            safe_name = _safe_download_name(
+                entry.get("download_url", ""),
+                f"{entry.get('id','game')}-{entry.get('version','latest')}.ok",
+            )
+            dest = os.path.join(self._downloads_dir(), safe_name)
             try:
                 def _progress(recv, total):
                     self._store_dl_progress = (recv, total)
                     pct = int(recv * 100 / total) if total else 0
                     self.store_status = f"Downloading {name}\u2026 {pct}%"
 
-                store_mod.download_game(entry, tmp, progress_cb=_progress)
-                manifest = games_mod.install_package(tmp, dev_mode=self.dev_mode)
+                store_mod.download_game(entry, dest, progress_cb=_progress)
+                manifest = games_mod.install_package(dest, dev_mode=self.dev_mode)
                 self._refresh_games()
-                self.store_status = f"Installed: {name} v{manifest['version']}"
+                self.store_status = (
+                    f"Downloaded to updates/downloads and installed: "
+                    f"{name} v{manifest['version']}"
+                )
             except Exception as e:
                 self.store_status = f"Failed: {str(e)[:60]}"
             finally:
                 self.store_loading = False
-                try:
-                    os.remove(tmp)
-                except OSError:
-                    pass
 
         threading.Thread(target=_work, daemon=True).start()
 
@@ -2236,7 +2389,12 @@ class OkamaShell:
         self.update_status = self.update_status or self._update_label()
         self.update_info = (self.update_summary or {}).get("os_update") or {}
         self.update_loading = bool(self._update_thread and self._update_thread.is_alive())
-        self._update_local_files = []
+        self._rescan_media()
+        if updates_mod:
+            self._update_local_files = updates_mod.find_local_updates(
+                search_paths=self._file_search_roots())
+        else:
+            self._update_local_files = self._find_files((".okupdate", ".ok-update"))
         self.state = "settings_updates"
 
     def _settings_updates_input(self, action: str, ev: dict = None):
@@ -2261,8 +2419,12 @@ class OkamaShell:
         opt = _UPDATE_ACTIONS[self.update_idx]
         if "Check" in opt:
             self._check_os_update()
-        elif "Local" in opt:
-            self._apply_local_update()
+        elif opt.startswith("Download OS"):
+            self._download_os_update()
+        elif opt.startswith("Apply"):
+            self._apply_downloaded_update()
+        elif opt.startswith("Download Game"):
+            self._download_game_updates()
         elif "Rollback" in opt:
             self._rollback_update()
 
@@ -2274,22 +2436,160 @@ class OkamaShell:
         self._next_update_check = 0.0
         self._maybe_check_updates(force=True)
 
-    def _apply_local_update(self):
-        if updates_mod is None:
-            self.update_status = "Updates module unavailable."
+    def _download_url_to(self, url: str, dest: str, expected_sha256: str = "") -> str:
+        req = urllib.request.Request(url, headers={"User-Agent": "OkamaOS/1.0"})
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            total = int(resp.headers.get("Content-Length") or 0)
+            received = 0
+            os.makedirs(os.path.dirname(os.path.abspath(dest)), exist_ok=True)
+            with open(dest, "wb") as f:
+                while True:
+                    chunk = resp.read(65536)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    received += len(chunk)
+                    self._update_download_progress = (received, total)
+                    if total:
+                        pct = int(received * 100 / total)
+                        self.update_status = f"Downloading OS update... {pct}%"
+        if expected_sha256 and updates_mod:
+            actual = updates_mod.sha256_file(dest)
+            if actual.lower() != expected_sha256.lower():
+                try:
+                    os.remove(dest)
+                except OSError:
+                    pass
+                raise ValueError("SHA-256 mismatch for downloaded update")
+        return dest
+
+    def _download_os_update(self):
+        if self.update_loading:
             return
-        files = updates_mod.find_local_updates()
-        if files:
-            self._update_local_files = files
-            self.update_status = (
-                f"Found {len(files)} update bundle(s). "
-                "Use okama-update apply <file> to install safely."
-            )
+        info = self.update_info or (self.update_summary or {}).get("os_update") or {}
+        url = info.get("download_url", "")
+        if not url:
+            self.update_status = "No downloadable OS update. Check first."
+            return
+        name = _safe_download_name(url, f"okamaos-v{info.get('version','latest')}.okupdate")
+        dest = os.path.join(self._downloads_dir(), name)
+        expected = info.get("sha256", "")
+        self.update_loading = True
+        self._update_download_progress = (0, int(info.get("size_bytes", 0) or 0))
+        self.update_status = "Downloading OS update..."
+
+        def _work():
+            try:
+                self._download_url_to(url, dest, expected_sha256=expected)
+                self._update_local_files = sorted(set(self._update_local_files + [dest]))
+                self.update_status = f"Downloaded OS update: {os.path.basename(dest)}"
+            except Exception as e:
+                self.update_status = f"Download failed: {str(e)[:72]}"
+            finally:
+                self.update_loading = False
+
+        threading.Thread(target=_work, daemon=True).start()
+
+    def _apply_downloaded_update(self):
+        if self.update_loading:
+            return
+        if updates_mod:
+            files = updates_mod.find_local_updates(search_paths=self._file_search_roots())
         else:
-            self.update_status = "No .okupdate files found on USB/media/tmp."
+            files = self._find_files((".okupdate", ".ok-update"))
+        if not files:
+            self.update_status = "No downloaded .okupdate bundles found."
+            return
+        path = max(files, key=lambda p: os.path.getmtime(p) if os.path.exists(p) else 0)
+        self._update_local_files = files
+        self.update_loading = True
+        self.update_status = f"Applying {os.path.basename(path)}..."
+
+        def _work():
+            try:
+                res = subprocess.run(
+                    [_okama_update_path(), "apply", path],
+                    capture_output=True, text=True, timeout=300)
+                out = (res.stdout or res.stderr or "").strip().splitlines()
+                tail = out[-1] if out else "okama-update finished"
+                if res.returncode == 0:
+                    self.update_status = f"Applied update. Reboot recommended. {tail[:54]}"
+                else:
+                    self.update_status = f"Update failed: {tail[:72]}"
+            except Exception as e:
+                self.update_status = f"Update failed: {str(e)[:72]}"
+            finally:
+                self.update_loading = False
+
+        threading.Thread(target=_work, daemon=True).start()
 
     def _rollback_update(self):
-        self.update_status = "Use okama-update rollback from Dev Console."
+        if self.update_loading:
+            return
+        self.update_loading = True
+        self.update_status = "Rolling back last update..."
+
+        def _work():
+            try:
+                res = subprocess.run(
+                    [_okama_update_path(), "rollback"],
+                    capture_output=True, text=True, timeout=240)
+                out = (res.stdout or res.stderr or "").strip().splitlines()
+                tail = out[-1] if out else "rollback finished"
+                if res.returncode == 0:
+                    self.update_status = f"Rollback complete. Reboot recommended. {tail[:50]}"
+                else:
+                    self.update_status = f"Rollback failed: {tail[:72]}"
+            except Exception as e:
+                self.update_status = f"Rollback failed: {str(e)[:72]}"
+            finally:
+                self.update_loading = False
+
+        threading.Thread(target=_work, daemon=True).start()
+
+    def _download_game_updates(self):
+        if self.update_loading:
+            return
+        if store_mod is None:
+            self.update_status = "Store module unavailable."
+            return
+        game_updates = (self.update_summary or {}).get("game_updates", [])
+        downloadable = [g for g in game_updates if g.get("download_url")]
+        if not downloadable:
+            self.update_status = "No downloadable game updates. Check first."
+            return
+        self.update_loading = True
+        self.update_status = f"Downloading {len(downloadable)} game update(s)..."
+
+        def _work():
+            installed = []
+            failures = []
+            try:
+                for entry in downloadable:
+                    name = entry.get("name", entry.get("id", "game"))
+                    safe_name = _safe_download_name(
+                        entry.get("download_url", ""),
+                        f"{entry.get('id','game')}-{entry.get('version','latest')}.ok",
+                    )
+                    dest = os.path.join(self._downloads_dir(), safe_name)
+                    self.update_status = f"Downloading {name}..."
+                    try:
+                        store_mod.download_game(entry, dest)
+                        manifest = games_mod.install_package(dest, dev_mode=self.dev_mode)
+                        installed.append(f"{name} v{manifest.get('version', entry.get('version', '?'))}")
+                    except Exception as e:
+                        failures.append(f"{name}: {str(e)[:32]}")
+                self._refresh_games()
+                if installed and not failures:
+                    self.update_status = f"Downloaded and installed {len(installed)} game update(s)."
+                elif installed:
+                    self.update_status = f"Installed {len(installed)}; failed {len(failures)}."
+                else:
+                    self.update_status = f"Game update failed: {failures[0] if failures else 'unknown'}"
+            finally:
+                self.update_loading = False
+
+        threading.Thread(target=_work, daemon=True).start()
 
     def _draw_settings_updates(self):
         self._draw_section_header("* Updates", COL_UPDATE)
@@ -2303,8 +2603,10 @@ class OkamaShell:
 
         # Status text
         if self.update_status:
-            is_good = any(x in self.update_status for x in ("up to date", "Installed"))
-            is_err = any(x in self.update_status for x in ("failed", "Error", "unavailable"))
+            is_good = any(x in self.update_status for x in (
+                "up to date", "Installed", "Downloaded", "Applied", "Rollback complete"))
+            is_err = any(x in self.update_status for x in (
+                "failed", "Error", "unavailable", "mismatch"))
             col = COL_OK if is_good else (COL_ERROR if is_err else COL_DIM)
             st_s = self.font_sm.render(self.update_status, True, col)
             self.screen.blit(st_s, (48, HEIGHT - 90))
@@ -2315,6 +2617,10 @@ class OkamaShell:
                 (self.update_info.get("summary") or self.update_info.get("notes", ""))[:80],
                 True, COL_DIM)
             self.screen.blit(notes_s, (48, HEIGHT - 110))
+        if self._update_local_files:
+            local = self.font_hint.render(
+                f"Downloaded bundles: {len(self._update_local_files)}", True, COL_DIM)
+            self.screen.blit(local, (48, HEIGHT - 132))
         game_updates = (self.update_summary or {}).get("game_updates", [])
         if game_updates:
             y = HEIGHT - 150
@@ -2370,70 +2676,143 @@ class OkamaShell:
     # Dev Console (secret mode)
     # -----------------------------------------------------------------------
     def _dev_console_input(self, action: str, ev: dict = None):
+        if action == "DPAD_UP":
+            self._dev_history_prev()
+            return
+        if action == "DPAD_DOWN":
+            self._dev_history_next()
+            return
         if action in ("B", "START"):
             self.state = "settings"
             return
         if action == "ENTER" or action == "A":
-            cmd = self._dev_console_cmd.strip()
+            cmd = self._dev_console_cmd.rstrip()
             if cmd == "exit":
+                self._close_dev_shell()
                 self.state = "settings"
                 self._dev_console_cmd = ""
                 return
             if cmd == "help":
-                self._dev_console_history.append("> Commands: exit, clear, help, shell, reboot, poweroff, ip, ps, df, ls, cat <file>")
-                self._dev_console_history.append("> 'shell' exits to interactive /bin/sh (type 'exit' to return)")
+                self._append_dev_history("> Persistent /bin/sh session. Commands keep cwd and env.")
+                self._append_dev_history("> Commands: exit, clear, help, reboot, poweroff, ip, ps, df, ls, cat <file>")
+                self._append_dev_history("> Use Up/Down to recall previous commands.")
                 self._dev_console_cmd = ""
                 return
             if cmd == "clear":
                 self._dev_console_history.clear()
                 self._dev_console_cmd = ""
                 return
+            if self._dev_shell_busy:
+                self._append_dev_history("> Command still running.")
+                return
             if cmd:
-                self._dev_console_history.append(f"> {cmd}")
+                self._remember_dev_command(cmd)
+                self._append_dev_history(f"$ {cmd}")
                 threading.Thread(target=self._run_dev_cmd, args=(cmd,), daemon=True).start()
             self._dev_console_cmd = ""
 
-    def _run_dev_cmd(self, cmd: str):
+    def _append_dev_history(self, line: str):
+        self._dev_console_history.append(str(line)[:128])
+        while len(self._dev_console_history) > 160:
+            self._dev_console_history.pop(0)
+        self._dev_console_scroll = max(0, len(self._dev_console_history) - 10)
+
+    def _remember_dev_command(self, cmd: str):
+        if not self._dev_command_history or self._dev_command_history[-1] != cmd:
+            self._dev_command_history.append(cmd)
+        self._dev_command_history = self._dev_command_history[-80:]
+        self._dev_history_idx = None
+        self._dev_history_draft = ""
+
+    def _dev_history_prev(self):
+        if not self._dev_command_history:
+            return
+        if self._dev_history_idx is None:
+            self._dev_history_draft = self._dev_console_cmd
+            self._dev_history_idx = len(self._dev_command_history) - 1
+        else:
+            self._dev_history_idx = max(0, self._dev_history_idx - 1)
+        self._dev_console_cmd = self._dev_command_history[self._dev_history_idx]
+
+    def _dev_history_next(self):
+        if self._dev_history_idx is None:
+            return
+        self._dev_history_idx += 1
+        if self._dev_history_idx >= len(self._dev_command_history):
+            self._dev_history_idx = None
+            self._dev_console_cmd = self._dev_history_draft
+        else:
+            self._dev_console_cmd = self._dev_command_history[self._dev_history_idx]
+
+    def _ensure_dev_shell(self):
+        proc = self._dev_shell_proc
+        if proc is not None and proc.poll() is None:
+            return proc
+        env = os.environ.copy()
+        env.setdefault("TERM", "vt100")
+        env.setdefault("HOME", "/root")
         try:
-            if cmd == "shell":
-                self._dev_console_history.append("> Exiting to interactive shell...")
-                self._dev_console_history.append("> Type 'exit' to return to OkamaOS")
-                pygame.quit()
-                subprocess.call(["/bin/sh"])
-                os.execv("/usr/bin/okama-shell", ["okama-shell"])
-            elif cmd.startswith("cat "):
-                path = cmd[4:].strip()
-                try:
-                    with open(path) as f:
-                        out = f.read()[:1000]
-                    for line in out.splitlines()[:20]:
-                        self._dev_console_history.append(line[:100])
-                except Exception as e:
-                    self._dev_console_history.append(f"Error: {e}")
-            elif cmd in ["ip", "ps", "df", "ls", "lsusb", "lsmod", "dmesg", "free"]:
-                try:
-                    res = subprocess.run(cmd.split(), capture_output=True, text=True, timeout=5)
-                    out = res.stdout if res.stdout else res.stderr
-                    for line in out.splitlines()[:30]:
-                        self._dev_console_history.append(line[:100])
-                except Exception as e:
-                    self._dev_console_history.append(f"Error: {e}")
-            elif cmd in ["reboot", "poweroff"]:
-                self._dev_console_history.append("> Executing...")
-                time.sleep(0.5)
-                subprocess.Popen([cmd])
-            else:
-                try:
-                    res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=10)
-                    out = res.stdout if res.stdout else res.stderr
-                    for line in out.splitlines()[:30]:
-                        self._dev_console_history.append(line[:100])
-                except Exception as e:
-                    self._dev_console_history.append(f"Error: {e}")
+            self._dev_shell_proc = subprocess.Popen(
+                ["/bin/sh"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                cwd=env.get("HOME", "/"),
+                env=env,
+            )
+            self._append_dev_history("> Persistent shell ready.")
+            return self._dev_shell_proc
+        except Exception as e:
+            self._append_dev_history(f"Error: failed to start shell: {e}")
+            self._dev_shell_proc = None
+            return None
+
+    def _close_dev_shell(self):
+        proc = self._dev_shell_proc
+        self._dev_shell_proc = None
+        self._dev_shell_busy = False
+        if proc is None or proc.poll() is not None:
+            return
+        try:
+            if proc.stdin:
+                proc.stdin.write("exit\n")
+                proc.stdin.flush()
+        except Exception:
+            pass
+
+    def _run_dev_cmd(self, cmd: str):
+        proc = self._ensure_dev_shell()
+        if proc is None or proc.stdin is None or proc.stdout is None:
+            return
+        marker = f"__OKAMA_DONE_{int(time.time() * 1000)}__"
+        self._dev_shell_busy = True
+        try:
+            proc.stdin.write(cmd + "\n")
+            proc.stdin.write(f"printf '\\n{marker}:%s\\n' \"$?\"\n")
+            proc.stdin.flush()
+            while True:
+                line = proc.stdout.readline()
+                if line == "" and proc.poll() is not None:
+                    self._append_dev_history(f"[shell exited {proc.returncode}]")
+                    self._dev_shell_proc = None
+                    break
+                line = line.rstrip("\n")
+                if marker in line:
+                    before, _sep, after = line.partition(marker)
+                    if before.strip():
+                        self._append_dev_history(before.rstrip())
+                    status = after.lstrip(":").strip()
+                    if status and status != "0":
+                        self._append_dev_history(f"[exit {status}]")
+                    break
+                if line:
+                    self._append_dev_history(line)
+        except Exception as e:
+            self._append_dev_history(f"Error: {e}")
         finally:
-            while len(self._dev_console_history) > 100:
-                self._dev_console_history.pop(0)
-            self._dev_console_scroll = max(0, len(self._dev_console_history) - 10)
+            self._dev_shell_busy = False
 
     def _draw_dev_console(self):
         self._draw_section_header("$ Dev Console", COL_DEV)
@@ -2457,7 +2836,10 @@ class OkamaShell:
             cmd_txt += "_"
         cmd_surf = self.font_sm.render(cmd_txt, True, COL_TEXT)
         self.screen.blit(cmd_surf, (50 + prompt.get_width(), input_y))
-        hint = self.font_hint.render("[Enter] Run   [Esc/B] Exit   [clear/exit/help]", True, COL_DIM)
+        status = "running" if self._dev_shell_busy else "ready"
+        hint = self.font_hint.render(
+            f"[Enter] Run   [Up/Down] History   [Esc/B] Back   shell: {status}",
+            True, COL_DIM)
         self.screen.blit(hint, (50, HEIGHT - 70))
 
     # -----------------------------------------------------------------------
@@ -2592,17 +2974,22 @@ class OkamaShell:
         self._draw_home_top_bar()
 
         # Center brand lockup
-        mark_x = WIDTH // 2 - 160
-        mark_y = 142 if HEIGHT >= 680 else 112
-        self._draw_okamalabs_mark(mark_x, mark_y + 20, 38, COL_TEXT)
+        mark_x = WIDTH // 2 - 170
+        mark_y = 126 if HEIGHT >= 680 else 104
+        self._draw_okamalabs_mark(mark_x, mark_y + 26, 38, COL_TEXT)
+        title_shadow = self.font_xl.render("OkamaOS", True, (18, 28, 45))
         title = self.font_xl.render("OkamaOS", True, COL_TEXT)
+        self.screen.blit(title_shadow, (mark_x + 88, mark_y + 3))
         self.screen.blit(title, (mark_x + 86, mark_y))
         wave = self.font_mdb.render("FIRST WAVE", True, COL_ACCENT2)
-        self.screen.blit(wave, (mark_x + 90, mark_y + title.get_height() - 8))
+        version = self.font_hint.render(f"v{self._os_version()}", True, COL_DIM)
+        wave_y = mark_y + title.get_height() - 6
+        self.screen.blit(wave, (mark_x + 90, wave_y))
+        self.screen.blit(version, (mark_x + 92 + wave.get_width(), wave_y + 5))
 
         subtitles = {
-            "Play": "Installed games and local packages",
-            "Settings": "Network, Bluetooth, Input, Updates, Install",
+            "Play": f"{len(self.games)} installed games and downloaded packages",
+            "Settings": "Network, BT, input, storage, updates, install",
             "Power": "Restart, shut down, or return safely",
         }
         rects = self._home_section_rects()
@@ -2611,19 +2998,21 @@ class OkamaShell:
             col = SECTION_COLORS[i]
             is_sel = i == self.section_idx
             is_hov = r.collidepoint(mx, my)
-            fill = _lerp_color(COL_CARD, col, 0.14 if is_sel else (0.08 if is_hov else 0.0))
+            shadow = pygame.Rect(r.x + 3, r.y + 4, r.w, r.h)
+            pygame.draw.rect(self.screen, (0, 0, 0), shadow, border_radius=8)
+            fill = _lerp_color(COL_CARD, col, 0.18 if is_sel else (0.08 if is_hov else 0.03))
             pygame.draw.rect(self.screen, fill, r, border_radius=8)
             border = col if is_sel else (COL_BORDER if is_hov else (10, 42, 66))
             pygame.draw.rect(self.screen, border, r, 2 if is_sel else 1, border_radius=8)
             if is_sel:
-                pygame.draw.rect(self.screen, COL_ACCENT_HOT,
+                pygame.draw.rect(self.screen, col,
                                  pygame.Rect(r.x, r.y, 5, r.h), border_radius=3)
             label = self.font_lg.render(section, True, COL_TEXT if is_sel else COL_TEXT2)
-            self.screen.blit(label, (r.x + 40, r.y + 18))
+            self.screen.blit(label, (r.x + 38, r.y + max(10, (r.h - 48) // 2)))
             sub = self.font_sm.render(subtitles[section], True, COL_DIM)
-            self.screen.blit(sub, (r.x + 40, r.y + 55))
+            self.screen.blit(sub, (r.x + 40, r.y + r.h - 28))
             if is_sel:
-                arrow = self.font_lg.render(">", True, COL_ACCENT_HOT)
+                arrow = self.font_lg.render(">", True, col)
                 self.screen.blit(arrow, (r.right - 44, r.y + (r.h - arrow.get_height()) // 2))
 
         # Bottom status tiles
@@ -2638,22 +3027,22 @@ class OkamaShell:
         tile_w = max(150, min(220, (rects[0].w - gap * (len(stats) - 1)) // len(stats)))
         total_w = tile_w * len(stats) + gap * (len(stats) - 1)
         x = WIDTH // 2 - total_w // 2
-        tile_h = 72 if HEIGHT >= 680 else 58
+        tile_h = 66 if HEIGHT >= 680 else 56
         y = rects[-1].bottom + (22 if HEIGHT >= 680 else 12)
         for label, value in stats:
             tile = pygame.Rect(x, y, tile_w, tile_h)
-            pygame.draw.rect(self.screen, COL_CARD, tile, border_radius=8)
-            pygame.draw.rect(self.screen, (10, 58, 86), tile, 1, border_radius=8)
+            pygame.draw.rect(self.screen, (2, 9, 20), tile, border_radius=8)
+            pygame.draw.rect(self.screen, (18, 70, 92), tile, 1, border_radius=8)
             lsurf = self.font_hint.render(label, True, COL_DIM)
             vsurf = self.font_sm.render(value[:22], True, COL_TEXT)
             self.screen.blit(lsurf, (tile.x + 16, tile.y + 10))
-            self.screen.blit(vsurf, (tile.x + 16, tile.y + (36 if tile_h > 60 else 30)))
+            self.screen.blit(vsurf, (tile.x + 16, tile.y + (34 if tile_h > 60 else 28)))
             x += tile_w + gap
 
     def _draw_home_top_bar(self):
         bar = pygame.Rect(24, 22, WIDTH - 48, 72)
         pygame.draw.rect(self.screen, (0, 8, 20), bar, border_radius=8)
-        pygame.draw.rect(self.screen, (6, 72, 112), bar, 1, border_radius=8)
+        pygame.draw.rect(self.screen, (16, 86, 126), bar, 1, border_radius=8)
         self._draw_okamalabs_mark(bar.x + 36, bar.y + 36, 25, COL_TEXT)
         brand = self.font_mdb.render("OkamaLabs", True, COL_TEXT)
         self.screen.blit(brand, (bar.x + 76, bar.y + 14))
@@ -2661,25 +3050,29 @@ class OkamaShell:
         self.screen.blit(tag, (bar.x + 78, bar.y + 43))
         sep_x = bar.x + 230
         pygame.draw.line(self.screen, COL_DIM, (sep_x, bar.y + 18), (sep_x, bar.bottom - 18), 1)
-        wave = self.font_sm.render("FIRST WAVE", True, COL_ACCENT2)
-        self.screen.blit(wave, (sep_x + 26, bar.y + 25))
+        version = self.font_hint.render(f"v{self._os_version()}", True, COL_DIM)
+        if WIDTH >= 960:
+            wave = self.font_sm.render("FIRST WAVE", True, COL_ACCENT2)
+            self.screen.blit(wave, (sep_x + 26, bar.y + 25))
+            self.screen.blit(version, (sep_x + 32 + wave.get_width(), bar.y + 29))
+        else:
+            self.screen.blit(version, (bar.x + 78 + tag.get_width() + 10, bar.y + 43))
 
+        update_label = self._update_label().replace(" updates", " upd").replace(" update", " upd")
         right_items = [
-            self._network_status_label(),
-            self._update_label(),
-            self._bluetooth_status_label(),
+            f"NET: {self._network_status_label()}",
+            f"UPD: {update_label}",
+            f"BT: {self._bluetooth_status_label()}",
         ]
-        try:
-            import datetime
-            right_items.append(datetime.datetime.now().strftime("%I:%M %p").lstrip("0"))
-        except Exception:
-            pass
+        right_items.append(f"{self._sast_time('%I:%M %p')} SAST")
         x = bar.right - 48
-        gear = self.font_md.render("*", True, COL_TEXT)
+        gear = self.font_md.render("*", True, COL_DIM)
         self.screen.blit(gear, (x - gear.get_width(), bar.y + 23))
         x -= gear.get_width() + 28
+        stat_font = self.font_hint if WIDTH < 960 else self.font_sm
         for text in reversed(right_items):
-            surf = self.font_sm.render(text, True, COL_TEXT if text != "Offline" else COL_TEXT2)
+            muted = text.endswith("Offline") or text.endswith("Off")
+            surf = stat_font.render(text, True, COL_TEXT2 if muted else COL_TEXT)
             self.screen.blit(surf, (x - surf.get_width(), bar.y + 26))
             x -= surf.get_width() + 28
             pygame.draw.line(self.screen, COL_DIM, (x + 12, bar.y + 18), (x + 12, bar.bottom - 18), 1)
@@ -2703,7 +3096,32 @@ class OkamaShell:
         return "Offline"
 
     def _bluetooth_status_label(self) -> str:
-        return "On" if self.conf.get("BLUETOOTH_ENABLED", "yes").lower() == "yes" else "Off"
+        now = time.monotonic()
+        ts, label = self._bt_label_cache
+        if now - ts < 4.0:
+            return label
+        label = self._read_bluetooth_status_label()
+        self._bt_label_cache = (now, label)
+        return label
+
+    def _read_bluetooth_status_label(self) -> str:
+        if self.conf.get("BLUETOOTH_ENABLED", "yes").lower() != "yes":
+            return "Off"
+        try:
+            status = bt_mod.status(timeout=1)
+            raw = status.get("raw", "").lower()
+            if status.get("powered") == "yes":
+                return "On"
+            if "no default controller" in raw or "not available" in raw:
+                return "Off"
+        except Exception:
+            pass
+        try:
+            if glob.glob("/sys/class/bluetooth/hci*"):
+                return "Ready"
+        except Exception:
+            pass
+        return "Off"
 
     def _input_status_label(self) -> str:
         pads = len(glob.glob("/dev/input/js*"))
@@ -2881,12 +3299,13 @@ class OkamaShell:
         surf = self.font_lg.render(title, True, color)
         title_y = (hdr_h - surf.get_height()) // 2
         self.screen.blit(surf, (18, title_y))
+        ver_surf = self.font_hint.render(f"v{self._os_version()}", True, COL_DIM)
+        self.screen.blit(ver_surf, (26 + surf.get_width(), (hdr_h - ver_surf.get_height()) // 2 + 2))
 
         # Clock (embedded in header, far right)
         clock_surf = None
         try:
-            import datetime
-            now = datetime.datetime.now().strftime("%H:%M")
+            now = self._sast_time("%H:%M")
             clock_surf = self.font_hint.render(now, True, COL_DIM)
         except Exception:
             pass

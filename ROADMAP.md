@@ -191,6 +191,17 @@
 - [x] Live USB persistence through an `OKAMA_DATA` partition mounted at `/var/okamaos`
 - [x] Version metadata bumped to `1.0.0`
 
+### v1.1.0 — UX, Updates, Media, and Dev Console Polish ✅
+- [x] Premium First Wave home polish with cleaner header/status metadata
+- [x] Live Bluetooth status on Home and `BT:` header labeling
+- [x] South African time defaults and subtle OS version labels in shell headers
+- [x] Responsive Settings layout so all main options stay visible
+- [x] Downloads-first OS update flow with in-shell apply and rollback
+- [x] Game Store and game-update downloads staged in the downloads folder before install
+- [x] USB/media automount with recursive `.ok` and `.okupdate` discovery
+- [x] Persistent Dev Console shell with Up/Down command history and fixed Shift/Caps text input
+- [x] Version metadata bumped to `1.1.0`
+
 ### v1.x — Console Polish
 - [x] Silent boot (`quiet loglevel=0`, boot log redirect) — completed in v0.3
 - [ ] Boot time < 8 seconds

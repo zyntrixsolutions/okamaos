@@ -5,10 +5,9 @@ partnership with **OkamaLabs**. OkamaOS boots straight into a fullscreen
 controller-driven shell, runs one game at a time, and is designed to feel like
 a dedicated console — not a PC.
 
-> Status: **MVP foundation**. Buildable rootfs overlay, working CLI tooling,
-> `.ok` package format, demo game, controller daemon stub, and a Pygame-based
-> shell. Buildroot integration is wired via `configs/okamaos_x86_64_defconfig`
-> and `board/okamaos/`.
+> Status: **v1.0.0 beta release**. Buildable ISO, branded First Wave shell,
+> safe update checks, rollback-capable OTA bundle apply, live USB persistence,
+> hard-drive migration tooling, `.ok` package format, and Pygame-based games.
 
 ## Highlights
 
@@ -16,6 +15,10 @@ a dedicated console — not a PC.
 - No desktop, no window manager, no terminal in normal mode
 - Controller-first input via `okama-inputd` (USB + Bluetooth via BlueZ)
 - `.ok` package format with manifest validation
+- GitHub Pages game/system update feeds with periodic shell notifications
+- Safe game replacement with local backups and save-data preservation
+- Safe `.okupdate` system apply with backup/rollback guardrails
+- `okama-install` hard-drive migration and live USB persistence setup
 - One-active-game lifecycle via `okama-run`
 - Idle RAM target: **<250MB**
 - Parent mode (PIN-gated risky actions) and Developer mode (off by default)
@@ -28,6 +31,8 @@ make naming-check        # verify no "akama" misspellings
 make package-demo        # build games/demo into a .ok file
 ./usr/bin/okama-cli status
 ./usr/bin/okama-cli verify build/demo.ok
+./usr/bin/okama-update check
+./usr/bin/okama-install --list-disks
 ```
 
 To run the shell on a host with Pygame:
@@ -47,6 +52,31 @@ make buildroot
 make okamaos-build
 make okamaos-run-qemu
 ```
+
+## Updates and install
+
+The beta update channels are hosted from:
+
+- Game catalog: `https://zyntrixsolutions.github.io/okamaos/catalog/apps.json`
+- OS updates: `https://zyntrixsolutions.github.io/okamaos/updates/feed.json`
+
+Runtime update checks are available from Settings > Updates and from
+`okama-update check`. Local `.okupdate` bundles are applied with
+`okama-update apply <bundle>`; the tool verifies optional SHA-256 input,
+backs up touched files, refuses to overwrite user data paths, and supports
+`okama-update rollback`.
+
+Disk and USB persistence setup is handled by `okama-install`:
+
+```bash
+okama-install --list-disks
+okama-install --target /dev/sdX --dry-run
+okama-install --target /dev/sdX --yes
+okama-install --make-persistence /dev/sdXN --yes
+```
+
+Live USB persistence uses a partition labelled `OKAMA_DATA` and mounts it at
+`/var/okamaos` during boot.
 
 ## Repo layout
 
@@ -71,8 +101,8 @@ OkamaOS is developed in partnership with **Zyntrix Solutions**.
 
 - **Email:** team@zyntrix.solutions  
 - **Website:** https://okamaos.zyntrix.solutions
-- **Game catalog:** https://zyntrixsolutions.github.io/okamaos-store/catalog.json
-- **OS updates:** https://zyntrixsolutions.github.io/okamaos-store/updates/latest.json
+- **Game catalog:** https://zyntrixsolutions.github.io/okamaos/catalog/apps.json
+- **OS updates:** https://zyntrixsolutions.github.io/okamaos/updates/feed.json
 
 ## License
 

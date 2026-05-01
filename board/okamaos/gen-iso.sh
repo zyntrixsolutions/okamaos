@@ -50,6 +50,11 @@ tar -C "$ROOTFS_WORK" -xf "$IMAGES_DIR/rootfs.tar" 2>/dev/null || \
     tar -C "$ROOTFS_WORK" --warning=no-unknown-keyword -xf "$IMAGES_DIR/rootfs.tar" 2>/dev/null || true
 # /init is the initramfs entry point the kernel looks for first
 [ ! -e "$ROOTFS_WORK/init" ] && ln -s /sbin/init "$ROOTFS_WORK/init"
+
+# Make the live initramfs self-sufficient for install-to-disk migrations.
+mkdir -p "$ROOTFS_WORK/boot/okamaos"
+cp "$IMAGES_DIR/bzImage" "$ROOTFS_WORK/boot/okamaos/vmlinuz"
+
 (cd "$ROOTFS_WORK" && find . | cpio -o -H newc 2>/dev/null | gzip -9) \
     > "$ISO_WORK/boot/rootfs.cpio.gz"
 INITRD_SIZE=$(du -sh "$ISO_WORK/boot/rootfs.cpio.gz" | cut -f1)

@@ -1,0 +1,583 @@
+#!/bin/sh
+# Install the running OkamaOS live system to disk or prepare live USB persistence.
+set -eu
+
+VERSION="1.0.0"
+MOUNTPOINT="${OKAMA_INSTALL_MOUNT:-/mnt/okama-install}"
+BOOT_ASSET_DIR="${OKAMA_INSTALL_BOOT_ASSETS:-/usr/share/okamaos/boot}"
+KERNEL_SRC="${OKAMA_INSTALL_KERNEL:-/boot/okamaos/vmlinuz}"
+EXTLINUX_BIN="${OKAMA_INSTALL_EXTLINUX:-/usr/sbin/extlinux}"
+PERSIST_LABEL="${OKAMA_PERSISTENCE_LABEL:-OKAMA_DATA}"
+MIN_SIZE_BYTES=$((1024 * 1024 * 1024))
+
+TARGET_DISK=""
+PERSIST_PART=""
+ASSUME_YES="no"
+DRY_RUN="no"
+LIST_ONLY="no"
+PERSIST_ONLY="no"
+PERSIST_STATUS="no"
+MOUNTED="no"
+FS_TYPE="ext2"
+
+usage() {
+    cat <<EOF
+OkamaOS installer v${VERSION}
+
+Usage:
+  okama-install --list-disks
+  okama-install --target /dev/sdX --dry-run
+  okama-install --target /dev/sdX --yes
+  okama-install --make-persistence /dev/sdXN --yes
+  okama-install --persistence-status
+
+Disk install erases the selected whole disk, creates one Linux partition,
+copies the running OkamaOS root filesystem, and installs a legacy BIOS
+Extlinux bootloader.
+
+Persistence formats the selected partition with label ${PERSIST_LABEL}. On
+future live boots OkamaOS mounts that partition at /var/okamaos so games,
+saves, controllers, Wi-Fi profiles, and update state survive reboots.
+EOF
+}
+
+log() {
+    printf '%s\n' "$*"
+}
+
+die() {
+    printf 'ERROR: %s\n' "$*" >&2
+    exit 1
+}
+
+have_cmd() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+require_cmd() {
+    have_cmd "$1" || die "missing required command: $1"
+}
+
+disk_name() {
+    basename "$1"
+}
+
+disk_size_bytes() {
+    local name="$1"
+    local sectors
+    sectors="$(cat "/sys/block/${name}/size" 2>/dev/null || echo 0)"
+    awk -v sectors="$sectors" 'BEGIN { printf "%.0f", sectors * 512 }'
+}
+
+human_size() {
+    awk -v bytes="$1" 'BEGIN {
+        split("B KiB MiB GiB TiB", unit, " ");
+        size = bytes + 0;
+        idx = 1;
+        while (size >= 1024 && idx < 5) {
+            size = size / 1024;
+            idx++;
+        }
+        if (idx == 1) printf "%d %s", size, unit[idx];
+        else printf "%.1f %s", size, unit[idx];
+    }'
+}
+
+disk_model() {
+    local name="$1"
+    local model vendor
+    vendor="$(cat "/sys/block/${name}/device/vendor" 2>/dev/null || true)"
+    model="$(cat "/sys/block/${name}/device/model" 2>/dev/null || true)"
+    printf '%s %s' "$vendor" "$model" | sed 's/[[:space:]][[:space:]]*/ /g; s/^ //; s/ $//'
+}
+
+is_candidate_disk() {
+    local name="$1"
+    case "$name" in
+        loop*|ram*|sr*|fd*|dm-*|md*|zram*)
+            return 1
+            ;;
+    esac
+    [ -b "/dev/${name}" ]
+}
+
+block_disk_for() {
+    local dev="$1"
+    local base real parent
+    base="$(basename "$dev")"
+    real="$(readlink -f "/sys/class/block/${base}" 2>/dev/null || true)"
+    if [ -z "$real" ]; then
+        printf '%s\n' "$dev"
+        return
+    fi
+    if [ -f "${real}/partition" ]; then
+        parent="$(basename "$(dirname "$real")")"
+        printf '/dev/%s\n' "$parent"
+    else
+        printf '%s\n' "$dev"
+    fi
+}
+
+kernel_root_device() {
+    local token value
+    for token in $(cat /proc/cmdline 2>/dev/null || true); do
+        case "$token" in
+            root=*)
+                value="${token#root=}"
+                case "$value" in
+                    /dev/*)
+                        printf '%s\n' "$value"
+                        return
+                        ;;
+                esac
+                ;;
+        esac
+    done
+    printf '\n'
+}
+
+current_root_disk() {
+    local src
+    src="$(awk '$2 == "/" { print $1; exit }' /proc/mounts 2>/dev/null || true)"
+    if [ "$src" = "/dev/root" ]; then
+        src="$(kernel_root_device)"
+    fi
+    case "$src" in
+        /dev/*)
+            block_disk_for "$src"
+            ;;
+        *)
+            printf '\n'
+            ;;
+    esac
+}
+
+list_disks() {
+    local root_disk name size removable model marker
+    root_disk="$(current_root_disk)"
+    printf '%-14s %-10s %-10s %s\n' "Device" "Size" "Removable" "Model"
+    for sysdev in /sys/block/*; do
+        name="$(basename "$sysdev")"
+        is_candidate_disk "$name" || continue
+        size="$(disk_size_bytes "$name")"
+        removable="$(cat "/sys/block/${name}/removable" 2>/dev/null || echo 0)"
+        model="$(disk_model "$name")"
+        marker=""
+        if [ "/dev/${name}" = "$root_disk" ]; then
+            marker=" current-root"
+        fi
+        printf '%-14s %-10s %-10s %s%s\n' "/dev/${name}" "$(human_size "$size")" "$removable" "${model:-disk}" "$marker"
+    done
+}
+
+partition_path() {
+    local disk="$1"
+    case "$disk" in
+        *[0-9])
+            printf '%sp1\n' "$disk"
+            ;;
+        *)
+            printf '%s1\n' "$disk"
+            ;;
+    esac
+}
+
+mounted_from_disk() {
+    local disk="$1"
+    awk -v disk="$disk" '$1 == disk || index($1, disk) == 1 { print $1 " on " $2 }' /proc/mounts
+}
+
+mounted_device() {
+    local dev="$1"
+    awk -v dev="$dev" '$1 == dev { print $1 " on " $2 }' /proc/mounts
+}
+
+validate_target_disk() {
+    local name size root_disk mounts
+    [ -n "$TARGET_DISK" ] || die "no target disk selected"
+    [ -b "$TARGET_DISK" ] || die "not a block device: $TARGET_DISK"
+
+    name="$(disk_name "$TARGET_DISK")"
+    [ -d "/sys/block/${name}" ] || die "target must be a whole disk, not a partition: $TARGET_DISK"
+    is_candidate_disk "$name" || die "refusing unsupported target disk type: $TARGET_DISK"
+
+    size="$(disk_size_bytes "$name")"
+    [ "$size" -ge "$MIN_SIZE_BYTES" ] || die "target disk is too small: $(human_size "$size")"
+
+    root_disk="$(current_root_disk)"
+    if [ -n "$root_disk" ] && [ "$TARGET_DISK" = "$root_disk" ]; then
+        die "refusing to install over the currently running root disk: $TARGET_DISK"
+    fi
+
+    mounts="$(mounted_from_disk "$TARGET_DISK" || true)"
+    if [ -n "$mounts" ]; then
+        printf '%s\n' "$mounts" >&2
+        die "target disk has mounted filesystems; unmount them first"
+    fi
+}
+
+validate_persistence_partition() {
+    local parent root_disk mounts
+    [ -n "$PERSIST_PART" ] || die "no persistence partition selected"
+    [ -b "$PERSIST_PART" ] || die "not a block device: $PERSIST_PART"
+    parent="$(block_disk_for "$PERSIST_PART")"
+    root_disk="$(current_root_disk)"
+    if [ -n "$root_disk" ] && [ "$parent" = "$root_disk" ]; then
+        die "refusing to format a partition on the currently running root disk: $PERSIST_PART"
+    fi
+    mounts="$(mounted_device "$PERSIST_PART" || true)"
+    if [ -n "$mounts" ]; then
+        printf '%s\n' "$mounts" >&2
+        die "persistence target is mounted; unmount it first"
+    fi
+}
+
+require_installer_tools() {
+    require_cmd awk
+    require_cmd cp
+    require_cmd dd
+    require_cmd fdisk
+    require_cmd mount
+    require_cmd od
+    require_cmd sed
+    require_cmd sync
+    require_cmd tar
+    require_cmd umount
+
+    if ! have_cmd mkfs.ext4 && ! have_cmd mke2fs && ! have_cmd mkfs.ext2; then
+        die "missing ext filesystem formatter: mkfs.ext4, mke2fs, or mkfs.ext2"
+    fi
+}
+
+require_boot_assets() {
+    [ -f "$KERNEL_SRC" ] || die "missing kernel asset: $KERNEL_SRC"
+    [ -x "$EXTLINUX_BIN" ] || die "missing Extlinux installer: $EXTLINUX_BIN"
+    [ -f "${BOOT_ASSET_DIR}/mbr.bin" ] || die "missing Syslinux MBR asset: ${BOOT_ASSET_DIR}/mbr.bin"
+    [ -f "${BOOT_ASSET_DIR}/ldlinux.c32" ] || die "missing Syslinux module: ${BOOT_ASSET_DIR}/ldlinux.c32"
+}
+
+confirm_phrase() {
+    local expected="$1"
+    local answer
+    [ "$ASSUME_YES" = "yes" ] && return
+    printf 'Type "%s" to continue: ' "$expected"
+    read -r answer
+    [ "$answer" = "$expected" ] || die "aborted"
+}
+
+confirm_target() {
+    local size model
+    size="$(disk_size_bytes "$(disk_name "$TARGET_DISK")")"
+    model="$(disk_model "$(disk_name "$TARGET_DISK")")"
+
+    log "Target disk : $TARGET_DISK"
+    log "Size        : $(human_size "$size")"
+    log "Model       : ${model:-disk}"
+    log ""
+    log "WARNING: this will erase every partition and file on $TARGET_DISK."
+    confirm_phrase "ERASE ${TARGET_DISK}"
+}
+
+reread_partition_table() {
+    local disk="$1"
+    sync
+    if have_cmd partprobe; then
+        partprobe "$disk" >/dev/null 2>&1 || true
+    fi
+    if have_cmd blockdev; then
+        blockdev --rereadpt "$disk" >/dev/null 2>&1 || true
+    fi
+    sleep 1
+}
+
+wait_for_partition() {
+    local part="$1"
+    local i
+    i=0
+    while [ "$i" -lt 10 ]; do
+        [ -b "$part" ] && return
+        sleep 1
+        i=$((i + 1))
+    done
+    die "partition did not appear: $part"
+}
+
+partition_disk() {
+    local disk="$1"
+    log "Creating one bootable Linux partition on $disk..."
+    dd if=/dev/zero of="$disk" bs=1M count=4 conv=notrunc,fsync >/dev/null 2>&1
+    fdisk "$disk" >/dev/null <<EOF
+o
+n
+p
+1
+2048
+
+
+a
+1
+w
+EOF
+    write_mbr_signature "$disk"
+    reread_partition_table "$disk"
+}
+
+write_mbr_signature() {
+    local disk="$1"
+    local b1 b2 b3 b4
+    set -- $(od -An -N4 -tx1 /dev/urandom)
+    b1="${1:-}"; b2="${2:-}"; b3="${3:-}"; b4="${4:-}"
+    if [ -z "${b1:-}" ] || [ "$b1$b2$b3$b4" = "00000000" ]; then
+        b1="4f"; b2="4b"; b3="4d"; b4="41"
+    fi
+    printf '%b' "\\x${b1}\\x${b2}\\x${b3}\\x${b4}" \
+        | dd of="$disk" bs=1 seek=440 count=4 conv=notrunc >/dev/null 2>&1
+}
+
+format_ext_partition() {
+    local part="$1"
+    local label="$2"
+    if have_cmd mkfs.ext4; then
+        mkfs.ext4 -F -L "$label" "$part"
+        FS_TYPE="ext4"
+        return
+    fi
+    if have_cmd mke2fs && mke2fs -t ext4 -F -L "$label" "$part" >/dev/null 2>&1; then
+        FS_TYPE="ext4"
+        return
+    fi
+    if have_cmd mke2fs; then
+        mke2fs -F -L "$label" "$part"
+        FS_TYPE="ext2"
+        return
+    fi
+    mkfs.ext2 -F -L "$label" "$part"
+    FS_TYPE="ext2"
+}
+
+format_partition() {
+    local part="$1"
+    log "Formatting $part..."
+    format_ext_partition "$part" "OKAMAOS"
+}
+
+mount_target() {
+    local part="$1"
+    mkdir -p "$MOUNTPOINT"
+    mount "$part" "$MOUNTPOINT"
+    MOUNTED="yes"
+}
+
+cleanup() {
+    if [ "$MOUNTED" = "yes" ]; then
+        umount "$MOUNTPOINT" >/dev/null 2>&1 || true
+    fi
+}
+trap cleanup EXIT INT TERM
+
+copy_rootfs() {
+    log "Copying OkamaOS root filesystem..."
+    tar -C / --numeric-owner -cpf - \
+        --exclude='./dev/*' \
+        --exclude='./proc/*' \
+        --exclude='./sys/*' \
+        --exclude='./run/*' \
+        --exclude='./tmp/*' \
+        --exclude='./mnt/*' \
+        --exclude='./media/*' \
+        --exclude='./lost+found' \
+        --exclude='./var/okamaos/logs/*' \
+        --exclude='./var/okamaos/cache/*' \
+        . | tar -C "$MOUNTPOINT" --numeric-owner -xpf -
+
+    mkdir -p "$MOUNTPOINT"/dev \
+             "$MOUNTPOINT"/proc \
+             "$MOUNTPOINT"/sys \
+             "$MOUNTPOINT"/run \
+             "$MOUNTPOINT"/tmp \
+             "$MOUNTPOINT"/mnt \
+             "$MOUNTPOINT"/media \
+             "$MOUNTPOINT"/var/okamaos/logs \
+             "$MOUNTPOINT"/var/okamaos/cache \
+             "$MOUNTPOINT"/var/okamaos/updates/backups \
+             "$MOUNTPOINT"/var/okamaos/updates/game-backups \
+             "$MOUNTPOINT"/var/okamaos/updates/history
+    chmod 1777 "$MOUNTPOINT"/tmp
+}
+
+partuuid_for_disk() {
+    local disk="$1"
+    local b1 b2 b3 b4
+    set -- $(dd if="$disk" bs=1 skip=440 count=4 2>/dev/null | od -An -tx1)
+    b1="${1:-}"; b2="${2:-}"; b3="${3:-}"; b4="${4:-}"
+    [ -n "${b1:-}" ] || return 1
+    [ "$b1$b2$b3$b4" != "00000000" ] || return 1
+    printf '%s%s%s%s-01\n' "$b4" "$b3" "$b2" "$b1"
+}
+
+write_fstab() {
+    mkdir -p "$MOUNTPOINT/etc"
+    cat > "$MOUNTPOINT/etc/fstab" <<EOF
+# <file system>  <mount pt>  <type>  <options>          <dump>  <pass>
+/dev/root        /           ${FS_TYPE} rw,noatime       0       1
+proc             /proc       proc    defaults          0       0
+devpts           /dev/pts    devpts  defaults,gid=5,mode=620,ptmxmode=0666 0 0
+tmpfs            /dev/shm    tmpfs   mode=1777         0       0
+tmpfs            /tmp        tmpfs   mode=1777         0       0
+tmpfs            /run        tmpfs   mode=0755,nosuid,nodev 0   0
+sysfs            /sys        sysfs   defaults          0       0
+EOF
+}
+
+install_bootloader() {
+    local disk="$1"
+    local part="$2"
+    local partuuid root_arg
+    partuuid="$(partuuid_for_disk "$disk")"
+    [ -n "$partuuid" ] || die "could not read MBR PARTUUID for $part"
+    root_arg="PARTUUID=${partuuid}"
+
+    log "Installing Extlinux bootloader..."
+    mkdir -p "$MOUNTPOINT/boot/okamaos" "$MOUNTPOINT/boot/extlinux"
+    cp "$KERNEL_SRC" "$MOUNTPOINT/boot/okamaos/vmlinuz"
+    cp "${BOOT_ASSET_DIR}/ldlinux.c32" "$MOUNTPOINT/boot/extlinux/ldlinux.c32"
+
+    cat > "$MOUNTPOINT/boot/extlinux/extlinux.conf" <<EOF
+DEFAULT okamaos
+PROMPT 0
+TIMEOUT 10
+
+LABEL okamaos
+  LINUX /boot/okamaos/vmlinuz
+  APPEND root=${root_arg} rw rootwait quiet loglevel=0 console=tty1
+EOF
+
+    "$EXTLINUX_BIN" --install "$MOUNTPOINT/boot/extlinux"
+    dd if="${BOOT_ASSET_DIR}/mbr.bin" of="$disk" bs=440 count=1 conv=notrunc >/dev/null 2>&1
+    write_fstab
+}
+
+run_install() {
+    local part
+    validate_target_disk
+    require_installer_tools
+    require_boot_assets
+
+    part="$(partition_path "$TARGET_DISK")"
+
+    log "OkamaOS hard drive install plan:"
+    log "  Erase disk      : $TARGET_DISK"
+    log "  Root partition  : $part"
+    log "  Mount point     : $MOUNTPOINT"
+    log "  Kernel source   : $KERNEL_SRC"
+    log "  Boot assets     : $BOOT_ASSET_DIR"
+    log ""
+
+    if [ "$DRY_RUN" = "yes" ]; then
+        log "Dry run complete. No disk changes were made."
+        return
+    fi
+
+    confirm_target
+    partition_disk "$TARGET_DISK"
+    wait_for_partition "$part"
+    format_partition "$part"
+    mount_target "$part"
+    copy_rootfs
+    install_bootloader "$TARGET_DISK" "$part"
+    sync
+
+    log ""
+    log "Install complete."
+    log "Remove the live media, set the disk as the boot device, and reboot."
+}
+
+run_persistence_format() {
+    validate_persistence_partition
+    require_installer_tools
+
+    log "OkamaOS live USB persistence plan:"
+    log "  Format partition : $PERSIST_PART"
+    log "  Filesystem label : $PERSIST_LABEL"
+    log "  Mounts at boot   : /var/okamaos"
+    log ""
+
+    if [ "$DRY_RUN" = "yes" ]; then
+        log "Dry run complete. No partition changes were made."
+        return
+    fi
+
+    log "WARNING: this will erase every file on $PERSIST_PART."
+    confirm_phrase "FORMAT ${PERSIST_PART}"
+    format_ext_partition "$PERSIST_PART" "$PERSIST_LABEL"
+    sync
+    log "Persistence partition ready. Reboot the live USB to use persistent /var/okamaos."
+}
+
+persistence_status() {
+    local mount_line label_dev
+    mount_line="$(awk '$2 == "/var/okamaos" { print $1 " " $3 " " $4; exit }' /proc/mounts 2>/dev/null || true)"
+    label_dev=""
+    if [ -e "/dev/disk/by-label/${PERSIST_LABEL}" ]; then
+        label_dev="$(readlink -f "/dev/disk/by-label/${PERSIST_LABEL}")"
+    elif have_cmd blkid; then
+        label_dev="$(blkid -L "$PERSIST_LABEL" 2>/dev/null || true)"
+    fi
+    log "Persistence label : $PERSIST_LABEL"
+    log "Persistence device: ${label_dev:-not found}"
+    log "Mounted /var/okamaos: ${mount_line:-no}"
+}
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --target)
+            shift
+            TARGET_DISK="${1:-}"
+            ;;
+        --make-persistence)
+            shift
+            PERSIST_PART="${1:-}"
+            PERSIST_ONLY="yes"
+            ;;
+        --persistence-status)
+            PERSIST_STATUS="yes"
+            ;;
+        --list-disks)
+            LIST_ONLY="yes"
+            ;;
+        --yes)
+            ASSUME_YES="yes"
+            ;;
+        --dry-run)
+            DRY_RUN="yes"
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            die "unknown option: $1"
+            ;;
+    esac
+    shift
+done
+
+if [ "$LIST_ONLY" = "yes" ]; then
+    list_disks
+    exit 0
+fi
+
+if [ "$PERSIST_STATUS" = "yes" ]; then
+    persistence_status
+    exit 0
+fi
+
+if [ "$(id -u)" -ne 0 ] && [ "$DRY_RUN" != "yes" ]; then
+    die "installer must run as root"
+fi
+
+if [ "$PERSIST_ONLY" = "yes" ]; then
+    run_persistence_format
+else
+    run_install
+fi

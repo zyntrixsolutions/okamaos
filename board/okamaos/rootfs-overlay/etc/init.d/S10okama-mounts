@@ -20,13 +20,33 @@ case "$1" in
     mount -t tmpfs -o size=32m tmpfs /run 2>/dev/null || true
     mkdir -p /run/lock /run/lock/subsys /run/dbus /run/network
 
-    # /var/okamaos lives on the data partition; ensure dirs exist
+    # Live USB persistence: if a partition labelled OKAMA_DATA exists, mount it
+    # over /var/okamaos before services create games/saves/update state.
+    mkdir -p /var/okamaos
+    PERSIST_LABEL="${OKAMA_PERSISTENCE_LABEL:-OKAMA_DATA}"
+    PERSIST_DEV=""
+    if [ -e "/dev/disk/by-label/${PERSIST_LABEL}" ]; then
+        PERSIST_DEV="$(readlink -f "/dev/disk/by-label/${PERSIST_LABEL}" 2>/dev/null || true)"
+    fi
+    if [ -z "$PERSIST_DEV" ] && command -v blkid >/dev/null 2>&1; then
+        PERSIST_DEV="$(blkid -L "$PERSIST_LABEL" 2>/dev/null || true)"
+    fi
+    if [ -n "$PERSIST_DEV" ] && ! grep -q ' /var/okamaos ' /proc/mounts; then
+        mount -o rw,noatime "$PERSIST_DEV" /var/okamaos 2>/dev/null || true
+    fi
+
+    # /var/okamaos is persistent when a data partition is present; otherwise it
+    # remains in the live rootfs. Ensure all runtime dirs exist either way.
     mkdir -p /var/okamaos/games \
              /var/okamaos/saves \
              /var/okamaos/logs  \
              /var/okamaos/cache \
              /var/okamaos/controllers \
-             /var/okamaos/updates
+             /var/okamaos/updates \
+             /var/okamaos/updates/backups \
+             /var/okamaos/updates/downloads \
+             /var/okamaos/updates/history \
+             /var/okamaos/updates/game-backups
     ;;
   stop)
     ;;

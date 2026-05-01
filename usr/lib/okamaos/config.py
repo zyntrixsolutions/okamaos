@@ -4,7 +4,7 @@ import os
 import re
 
 _DEFAULTS = {
-    "VERSION": "0.9.10",
+    "VERSION": "1.0.0",
     "DISPLAY_MODE": "framebuffer",
     "FRAMEBUFFER_DEVICE": "/dev/fb0",
     "TARGET_FPS": "30",
@@ -17,8 +17,15 @@ _DEFAULTS = {
     "BT_AUTO_RECONNECT": "yes",
     "NETWORK_ENABLED": "yes",
     "WIFI_ENABLED": "yes",
-    "STORE_URL": "https://zyntrixsolutions.github.io/okamaos-store/catalog.json",
-    "UPDATE_URL": "https://zyntrixsolutions.github.io/okamaos-store/updates/latest.json",
+    "STORE_URL": "https://zyntrixsolutions.github.io/okamaos/catalog/apps.json",
+    "UPDATE_URL": "https://zyntrixsolutions.github.io/okamaos/updates/feed.json",
+    "UPDATE_NOTIFICATIONS": "yes",
+    "UPDATE_CHECK_INTERVAL_SEC": "21600",
+    "UPDATE_CHECK_TIMEOUT_SEC": "6",
+    "UPDATE_STATE_FILE": "/var/okamaos/updates/update-state.json",
+    "UPDATE_BACKUP_DIR": "/var/okamaos/updates/backups",
+    "UPDATE_HISTORY_DIR": "/var/okamaos/updates/history",
+    "PERSISTENCE_LABEL": "OKAMA_DATA",
     "SUPPORT_EMAIL": "team@zyntrix.solutions",
     "SUPPORT_WEBSITE": "https://okamaos.zyntrix.solutions",
     "GAMES_DIR": "/var/okamaos/games",

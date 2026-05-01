@@ -91,13 +91,10 @@ def cmd_install(args):
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)
 
-    dest = games_mod.game_dir(manifest["id"])
-    if os.path.exists(dest):
-        print(f"Replacing existing install of {manifest['id']}…")
-        shutil.rmtree(dest)
-
     try:
-        pkg_mod.extract(ok_path, dest)
+        if os.path.exists(games_mod.game_dir(manifest["id"])):
+            print(f"Replacing existing install of {manifest['id']} with backup…")
+        manifest = games_mod.install_package(ok_path, dev_mode=dev)
         print(f"Installed: {manifest['id']} v{manifest['version']}")
     except Exception as e:
         print(f"ERROR during install: {e}", file=sys.stderr)

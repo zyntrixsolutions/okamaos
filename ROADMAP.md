@@ -169,7 +169,7 @@
 - [x] Add refresh, DHCP connect/renew, Wi-Fi scan/connect, and disconnect actions to network settings
 - [x] Persist Wi-Fi profiles per interface and reconnect saved Wi-Fi during boot networking
 - [x] Add Bluetooth connect/disconnect and forget actions for known and scanned devices
-- [x] Route game catalog and OS update checks through `zyntrixsolutions.github.io/okamaos-store`
+- [x] Route game catalog and OS update checks through GitHub Pages
 - [x] Add in-shell support screen with Zyntrix Solutions technical partner contacts
 - [x] Harden laptop framebuffer output by honoring framebuffer offsets and using a safer default ISO graphics mode
 - [x] Bump version metadata to `0.9.9`
@@ -181,10 +181,20 @@
 - [x] Show an OkamaOS splash on tty1 before the shell UI starts
 - [x] Bump version metadata to `0.9.10`
 
-### v1.0 — Console Polish
+### v1.0.0 — First Wave Beta Release ✅
+- [x] OkamaLabs First Wave branded home shell, top bar, status tiles, and pre-UI splash
+- [x] Route game catalog and OS update checks through `https://zyntrixsolutions.github.io/okamaos/`
+- [x] Periodic shell update notifications for system and installed game updates
+- [x] Safe `.okupdate` apply with whitelisted targets, backups, user-data preservation, and rollback
+- [x] Safe game package replacement with game backups and common save-data preservation
+- [x] `okama-install` hard-drive migration with packaged kernel and Extlinux boot assets
+- [x] Live USB persistence through an `OKAMA_DATA` partition mounted at `/var/okamaos`
+- [x] Version metadata bumped to `1.0.0`
+
+### v1.x — Console Polish
 - [x] Silent boot (`quiet loglevel=0`, boot log redirect) — completed in v0.3
 - [ ] Boot time < 8 seconds
 - [ ] Controller rumble via evdev FF API
 - [ ] Battery level on HUD
-- [x] OTA update checks from GitHub Pages (`zyntrixsolutions.github.io/okamaos-store`)
-- [ ] OTA package apply via `okama-cli update`
+- [x] OTA update checks from GitHub Pages (`zyntrixsolutions.github.io/okamaos`)
+- [x] OTA package apply via `okama-update apply`

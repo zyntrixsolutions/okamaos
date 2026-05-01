@@ -357,12 +357,14 @@ def _safe_download_name(raw: str, fallback: str) -> str:
 # ---------------------------------------------------------------------------
 # Fallback text renderer (no Pygame)
 # ---------------------------------------------------------------------------
-def _text_shell():
+def _text_shell(reason: str = ""):
     """Minimal text-mode shell for terminals / no-Pygame environments."""
     conf = cfg_mod.get()
     print("\n" + "=" * 48)
-    print("  OkamaOS Shell  (text mode — Pygame not found)")
-    if _PYGAME_ERR:
+    print("  OkamaOS Shell  (text mode)")
+    if reason:
+        print(f"  Reason: {reason[:80]}")
+    elif _PYGAME_ERR:
         print(f"  Reason: {_PYGAME_ERR[:80]}")
     print("=" * 48)
 
@@ -3631,8 +3633,11 @@ def main():
                     global WIDTH, HEIGHT
                     WIDTH, HEIGHT = fb.w, fb.h
                 except Exception as fe:
+                    last_err = f"{drv}: framebuffer {fb_dev}: {fe}"
                     print(f"FbWriter init failed: {fe}", file=sys.stderr)
-                    fb = None
+                    print("Framebuffer unavailable; using text fallback.",
+                          file=sys.stderr)
+                    continue
             shell = OkamaShell(windowed=False, dev_mode=dev)
             shell.run(fb=fb)
             if fb:
@@ -3648,7 +3653,7 @@ def main():
 
     print(f"All SDL drivers failed ({last_err}), falling back to text shell",
           file=sys.stderr)
-    _text_shell()
+    _text_shell(last_err)
 
 
 if __name__ == "__main__":

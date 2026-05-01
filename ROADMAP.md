@@ -222,6 +222,13 @@
 - [x] Stream command output and logs while long-running operations stay open
 - [x] Version metadata bumped to `1.1.3`
 
+### v1.1.4 — Installed Boot Framebuffer Recovery ✅
+- [x] Write safe framebuffer kernel arguments into installed Extlinux entries
+- [x] Keep a debug text Extlinux entry on installed systems
+- [x] Fall back to text shell instead of invisible offscreen graphics when `/dev/fb0` is unavailable
+- [x] Show installed-boot framebuffer diagnostics on tty1
+- [x] Version metadata bumped to `1.1.4`
+
 ### v1.x — Console Polish
 - [x] Silent boot (`quiet loglevel=0`, boot log redirect) — completed in v0.3
 - [ ] Boot time < 8 seconds

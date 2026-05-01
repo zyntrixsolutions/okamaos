@@ -47,7 +47,12 @@ done
 
 if [ ! -e /dev/fb0 ]; then
     echo "[okama-shell-launcher] ERROR: /dev/fb0 not found after 10s" > /dev/ttyS0 2>/dev/null || true
-    # Fall through anyway — okama-shell has its own text fallback
+    printf '\n'
+    printf '        Graphics device /dev/fb0 was not created.\n'
+    printf '        Falling back to text mode if graphics cannot initialize.\n'
+    printf '        Kernel cmdline: '
+    cat /proc/cmdline 2>/dev/null || true
+    printf '\n'
 fi
 
 # Build LD_LIBRARY_PATH: include pygame's bundled .so files if present.

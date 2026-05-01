@@ -5,6 +5,15 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.1.1] - 2026-05-01
+
+### Fixed
+- **Home screen polish**: simplified the 800x600 First Wave home layout by removing duplicate hero branding, compacting menu cards, replacing noisy header separators with status pills, and tightening the bottom status row.
+- **Header clipping**: replaced the long tagline in the home header with concise release/version metadata so text no longer collides with status items.
+
+### Changed
+- **Version metadata**: bumped runtime, root config, shell-visible metadata, package metadata, installer metadata, docs, and roadmap tracking to `1.1.1`.
+
 ## [1.1.0] - 2026-05-01
 
 ### Added

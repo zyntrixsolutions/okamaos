@@ -4,7 +4,7 @@ import os
 import re
 
 _DEFAULTS = {
-    "VERSION": "1.1.0",
+    "VERSION": "1.1.1",
     "TIMEZONE": "SAST-2",
     "DISPLAY_MODE": "framebuffer",
     "FRAMEBUFFER_DEVICE": "/dev/fb0",

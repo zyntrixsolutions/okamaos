@@ -202,6 +202,13 @@
 - [x] Persistent Dev Console shell with Up/Down command history and fixed Shift/Caps text input
 - [x] Version metadata bumped to `1.1.0`
 
+### v1.1.1 — Home UI Tightening ✅
+- [x] Remove duplicate home branding at 800x600
+- [x] Replace crowded header separators with compact status pills
+- [x] Compact menu cards and bottom status tiles for the VirtualBox beta viewport
+- [x] Prevent home header text clipping around version/status metadata
+- [x] Version metadata bumped to `1.1.1`
+
 ### v1.x — Console Polish
 - [x] Silent boot (`quiet loglevel=0`, boot log redirect) — completed in v0.3
 - [ ] Boot time < 8 seconds

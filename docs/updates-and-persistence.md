@@ -1,6 +1,6 @@
 # OkamaOS Updates, Rollback, and Persistence
 
-OkamaOS v1.1.0 uses GitHub Pages as the beta update source:
+OkamaOS v1.1.1 uses GitHub Pages as the beta update source:
 
 - Game catalog: `https://zyntrixsolutions.github.io/okamaos/catalog/apps.json`
 - OS update feed: `https://zyntrixsolutions.github.io/okamaos/updates/feed.json`

@@ -1,4 +1,4 @@
 """okamaos — shared Python library for OkamaOS userland tools."""
 
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 CODENAME = "First Wave"

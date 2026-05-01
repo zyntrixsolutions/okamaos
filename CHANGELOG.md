@@ -5,6 +5,15 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.1.2] - 2026-05-01
+
+### Fixed
+- **Home header cleanup**: removed `FIRST WAVE` and version text from the top header, leaving only the OkamaLabs brand and compact live status pills.
+- **Home UI polish**: reduced header height, softened borders, tightened menu/status spacing, and reduced visual weight for the 800x600 beta viewport.
+
+### Changed
+- **Version metadata**: bumped runtime, root config, shell-visible metadata, package metadata, installer metadata, docs, and roadmap tracking to `1.1.2`.
+
 ## [1.1.1] - 2026-05-01
 
 ### Fixed

@@ -209,6 +209,13 @@
 - [x] Prevent home header text clipping around version/status metadata
 - [x] Version metadata bumped to `1.1.1`
 
+### v1.1.2 — Header Cleanup and Home Polish ✅
+- [x] Remove `FIRST WAVE` and version text from the top header
+- [x] Keep header status as compact live pills only
+- [x] Reduce header/card/status visual weight for the 800x600 home screen
+- [x] Preserve hero version visibility outside the top header
+- [x] Version metadata bumped to `1.1.2`
+
 ### v1.x — Console Polish
 - [x] Silent boot (`quiet loglevel=0`, boot log redirect) — completed in v0.3
 - [ ] Boot time < 8 seconds

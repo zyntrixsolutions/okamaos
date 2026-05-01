@@ -250,7 +250,7 @@ def write_update_state(state: dict, path: Optional[str] = None) -> None:
 def find_local_updates(search_paths: Optional[list] = None) -> list:
     """Scan common mount points for *.okupdate/*.ok-update files."""
     if search_paths is None:
-        search_paths = ["/mnt", "/media", "/var/okamaos/updates", "/tmp"]
+        search_paths = _default_update_search_paths()
     found = []
     for base in search_paths:
         if not os.path.isdir(base):
@@ -263,6 +263,39 @@ def find_local_updates(search_paths: Optional[list] = None) -> list:
         except PermissionError:
             pass
     return sorted(found)
+
+
+def _default_update_search_paths() -> list:
+    roots = [
+        "/var/okamaos/updates/downloads",
+        "/var/okamaos/downloads",
+        "/var/okamaos/updates",
+        "/media",
+        "/mnt",
+        "/run/media",
+        "/tmp",
+    ]
+    pseudo = {"proc", "sysfs", "devtmpfs", "devpts", "tmpfs", "overlay", "squashfs"}
+    try:
+        with open("/proc/mounts", encoding="utf-8") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) < 3 or parts[2] in pseudo:
+                    continue
+                mountpoint = parts[1].replace("\\040", " ")
+                if mountpoint == "/":
+                    continue
+                if mountpoint.startswith(("/media", "/mnt", "/run/media", "/var/okamaos")):
+                    roots.append(mountpoint)
+    except OSError:
+        pass
+    deduped = []
+    seen = set()
+    for root in roots:
+        if root and root not in seen:
+            deduped.append(root)
+            seen.add(root)
+    return deduped
 
 
 def sha256_file(path: str) -> str:

@@ -1,6 +1,6 @@
 # OkamaOS Updates, Rollback, and Persistence
 
-OkamaOS v1.0.0 uses GitHub Pages as the beta update source:
+OkamaOS v1.1.0 uses GitHub Pages as the beta update source:
 
 - Game catalog: `https://zyntrixsolutions.github.io/okamaos/catalog/apps.json`
 - OS update feed: `https://zyntrixsolutions.github.io/okamaos/updates/feed.json`
@@ -15,6 +15,11 @@ Manual checks:
 ```bash
 okama-update check
 ```
+
+The shell Settings > Updates screen can download OS update bundles into
+`/var/okamaos/updates/downloads`, apply the newest downloaded `.okupdate`, and
+run rollback without dropping to the developer console. Game Store downloads and
+available game updates are also staged in the downloads folder before install.
 
 ## Safe system update apply
 
@@ -57,6 +62,10 @@ provide them.
 A live USB can be used long-term by adding an ext partition labelled
 `OKAMA_DATA`. Early boot mounts that partition at `/var/okamaos` before the
 shell and services start.
+
+Other attached storage is mounted under `/media` by `okama-mount-media`.
+Package and update discovery scans `/media`, `/mnt`, `/run/media`,
+`/var/okamaos/updates`, and the downloads folders recursively.
 
 Prepare a partition:
 

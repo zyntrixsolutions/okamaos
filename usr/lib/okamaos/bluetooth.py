@@ -23,8 +23,8 @@ def _btctl(*args, timeout: int = 10) -> str:
         return "ERROR: bluetoothctl timed out"
 
 
-def status() -> dict:
-    out = _btctl("show")
+def status(timeout: int = 3) -> dict:
+    out = _btctl("show", timeout=timeout)
     powered = "yes" if "Powered: yes" in out else "no"
     discovering = "yes" if "Discovering: yes" in out else "no"
     return {"powered": powered, "discovering": discovering, "raw": out.strip()}

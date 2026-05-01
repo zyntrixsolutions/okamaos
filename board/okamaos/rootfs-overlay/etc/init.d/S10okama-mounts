@@ -47,6 +47,13 @@ case "$1" in
              /var/okamaos/updates/downloads \
              /var/okamaos/updates/history \
              /var/okamaos/updates/game-backups
+
+    # Mount available removable/media volumes after persistence is established
+    # so package/update discovery can scan a stable /media tree.
+    mkdir -p /media /var/okamaos/downloads
+    if [ -x /usr/bin/okama-mount-media ]; then
+        /usr/bin/okama-mount-media > /var/okamaos/logs/media-mount.log 2>&1 || true
+    fi
     ;;
   stop)
     ;;

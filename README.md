@@ -5,9 +5,10 @@ partnership with **OkamaLabs**. OkamaOS boots straight into a fullscreen
 controller-driven shell, runs one game at a time, and is designed to feel like
 a dedicated console — not a PC.
 
-> Status: **v1.0.0 beta release**. Buildable ISO, branded First Wave shell,
-> safe update checks, rollback-capable OTA bundle apply, live USB persistence,
-> hard-drive migration tooling, `.ok` package format, and Pygame-based games.
+> Status: **v1.1.0 minor update**. Buildable ISO, polished First Wave shell,
+> live Bluetooth/update status, rollback-capable OTA bundle apply from
+> downloads, USB/media package discovery, live USB persistence, hard-drive
+> migration tooling, `.ok` package format, and Pygame-based games.
 
 ## Highlights
 
@@ -16,6 +17,8 @@ a dedicated console — not a PC.
 - Controller-first input via `okama-inputd` (USB + Bluetooth via BlueZ)
 - `.ok` package format with manifest validation
 - GitHub Pages game/system update feeds with periodic shell notifications
+- Downloads-folder update/game staging with in-shell apply and rollback actions
+- USB/media automount and recursive package/update discovery
 - Safe game replacement with local backups and save-data preservation
 - Safe `.okupdate` system apply with backup/rollback guardrails
 - `okama-install` hard-drive migration and live USB persistence setup

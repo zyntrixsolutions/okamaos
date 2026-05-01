@@ -5,6 +5,24 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.1.0] - 2026-05-01
+
+### Added
+- **Downloads-first updates**: Settings > Updates can download OS bundles into `/var/okamaos/updates/downloads`, apply the newest downloaded `.okupdate`, run rollback, and download/install available game updates from the same UI.
+- **USB/media automount**: added `okama-mount-media` and boot-time `/media` mounting so `.ok` games and `.okupdate` bundles are discovered recursively from attached storage and downloads folders.
+- **Persistent dev shell**: Dev Console now keeps a long-lived `/bin/sh` session with command history recall on Up/Down, preserving working directory and exported environment between commands.
+
+### Changed
+- **Premium home polish**: refined the First Wave home layout, status tiles, header metadata, and responsive sizing for lower framebuffers.
+- **SAST clock and version header**: shell headers now show South African time by default and include a subtle OkamaOS version label.
+- **Game downloads**: Game Store downloads are staged in the persistent downloads folder before install instead of transient `/tmp` cleanup.
+- **Version metadata**: bumped runtime, root config, shell-visible metadata, package metadata, installer metadata, docs, and roadmap tracking to `1.1.0`.
+
+### Fixed
+- **Bluetooth status accuracy**: home status now uses live Bluetooth controller state instead of the saved config toggle, and the header labels it as `BT:`.
+- **Settings layout overlap**: Settings and sub-screen option rows now scale to the framebuffer height so all main Settings options remain visible above the hint bar.
+- **Dev console text input**: evdev fallback now handles Caps Lock plus Shift correctly for uppercase and shifted symbols.
+
 ## [1.0.0] - 2026-05-01
 
 ### Added

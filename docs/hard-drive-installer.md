@@ -33,3 +33,9 @@ The live image packages these boot assets for migration:
 - `/usr/sbin/extlinux`
 - `/usr/share/okamaos/boot/mbr.bin`
 - `/usr/share/okamaos/boot/ldlinux.c32`
+
+Installed systems boot through Extlinux with the same safe framebuffer profile
+used by the live ISO: quiet tty1 output, serial diagnostics, hidden cursor,
+`nomodeset`, VESA mode `vga=788`, and `video=vesafb:mtrr:3`. If graphics still
+cannot create `/dev/fb0`, the shell reports the kernel command line and falls
+back to the text shell instead of running invisibly.

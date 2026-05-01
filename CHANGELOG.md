@@ -5,6 +5,16 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.1.4] - 2026-05-01
+
+### Fixed
+- **Installed boot framebuffer**: `okama-install` now writes safe Extlinux kernel arguments for hard-drive installs, including serial diagnostics, hidden cursor, `nomodeset`, VESA mode `vga=788`, and `video=vesafb:mtrr:3`, so installed boots can create `/dev/fb0` like the live ISO safe path.
+- **Graphics failure fallback**: the shell no longer runs an invisible offscreen UI when framebuffer setup fails; it now reports the graphics failure and falls back to text mode.
+
+### Changed
+- **Boot diagnostics**: the shell launcher prints the kernel command line on tty1 when `/dev/fb0` is not created, making installed-boot failures inspectable without serial access.
+- **Version metadata**: bumped runtime, root config, shell-visible metadata, package metadata, installer metadata, docs, and roadmap tracking to `1.1.4`.
+
 ## [1.1.3] - 2026-05-01
 
 ### Fixed

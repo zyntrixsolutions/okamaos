@@ -7,6 +7,9 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ## [0.9.10] - 2026-04-29
 
+### Fixed
+- **Build failure**: Post-build script now uses relaxed pip platform constraints for pygame installation and continues gracefully if download fails, preventing build failures when pygame wheels are unavailable.
+
 ### Changed
 - **Default safe boot**: generated ISOs now boot directly into the safe graphics entry with `nomodeset` and an 800x600x32 framebuffer payload.
 - **Hidden GRUB menu**: GRUB now uses a hidden zero-second timeout by default; hold Shift or press Esc during boot to show standard and debug entries explicitly.

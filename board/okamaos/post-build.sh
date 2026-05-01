@@ -18,24 +18,28 @@ PYVER=$(ls "$TARGET_DIR/usr/lib/" | grep -E '^python3\.[0-9]+$' | head -1)
 SITE="$TARGET_DIR/usr/lib/$PYVER/site-packages"
 if [ -n "$PYVER" ] && [ ! -d "$SITE/pygame" ]; then
     echo ">> Installing pygame into $SITE..."
-    pip3 download \
+    # Try to download pygame wheel with relaxed platform constraints
+    if pip3 download \
         --only-binary=:all: \
         --python-version "${PYVER#python}" \
-        --platform manylinux_2_17_x86_64 \
-        --abi "cp${PYVER#python}" \
         -d /tmp/pygame-wheel-dl \
-        pygame 2>&1 || true
-    WHL=$(ls /tmp/pygame-wheel-dl/pygame-*.whl 2>/dev/null | head -1)
-    if [ -n "$WHL" ]; then
-        mkdir -p /tmp/pg-whl-extract
-        unzip -q -o "$WHL" -d /tmp/pg-whl-extract
-        cp -r /tmp/pg-whl-extract/pygame "$SITE/" 2>/dev/null || true
-        # Keep pygame.libs (needed by pygame .so RPATH for SDL2, SDL2_image, SDL2_mixer)
-        cp -r /tmp/pg-whl-extract/pygame.libs "$SITE/" 2>/dev/null || true
-        rm -rf /tmp/pg-whl-extract /tmp/pygame-wheel-dl
-        echo ">> pygame installed from $WHL"
+        pygame 2>/dev/null; then
+        WHL=$(ls /tmp/pygame-wheel-dl/pygame-*.whl 2>/dev/null | head -1)
+        if [ -n "$WHL" ]; then
+            mkdir -p /tmp/pg-whl-extract
+            unzip -q -o "$WHL" -d /tmp/pg-whl-extract
+            cp -r /tmp/pg-whl-extract/pygame "$SITE/" 2>/dev/null || true
+            # Keep pygame.libs (needed by pygame .so RPATH for SDL2, SDL2_image, SDL2_mixer)
+            cp -r /tmp/pg-whl-extract/pygame.libs "$SITE/" 2>/dev/null || true
+            rm -rf /tmp/pg-whl-extract /tmp/pygame-wheel-dl
+            echo ">> pygame installed from $WHL"
+        else
+            echo ">> WARNING: pygame wheel download failed, skipping"
+            rm -rf /tmp/pygame-wheel-dl
+        fi
     else
-        echo ">> WARNING: pygame wheel download failed, skipping"
+        echo ">> WARNING: pygame pip download failed, skipping (pygame not required for base build)"
+        rm -rf /tmp/pygame-wheel-dl
     fi
 fi
 if [ -d "$SITE/pygame.libs" ]; then

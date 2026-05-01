@@ -6,7 +6,7 @@ PROJ="$(cd "$(dirname "$0")" && pwd)"
 BR="$PROJ/buildroot"
 OUT="$PROJ/output"
 LOG="$PROJ/build.log"
-JOBS="${BR2_JLEVEL:-4}"
+JOBS="${BR2_JLEVEL:-$(nproc)}"
 
 echo "=== OkamaOS Build ==="
 echo "Project : $PROJ"

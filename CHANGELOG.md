@@ -5,6 +5,20 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.1.5] - 2026-05-01
+
+### Fixed
+- **Installed boot color and performance**: hard-drive Extlinux boot now prefers VESA mode `vga=789` so installed systems use a 24/32-bit framebuffer instead of the 16-bit mode that made colors look wrong and forced slow per-pixel conversion.
+- **Framebuffer pacing**: 15/16-bit framebuffer fallback now uses a Pygame conversion surface instead of a Python pixel loop, keeping the shell usable even if firmware falls back to a packed pixel mode.
+- **Input choppiness**: controller axis, hat, and button events are deduplicated before broadcast, reducing event floods that could make shell input feel laggy or frozen.
+- **Controller event dispatch**: fixed the input daemon controller event handler name collision with Python thread internals so controller events are processed reliably.
+
+### Added
+- **Xbox and PlayStation controller support**: kernel config now enables the joystick and LED-class dependencies needed for Xbox, Sony HID, and PlayStation HID support; installed boots also load those drivers before `okama-inputd`, and the daemon supports button-based d-pads used by common Xbox and PlayStation controllers.
+
+### Changed
+- **Version metadata**: bumped runtime, root config, shell-visible metadata, package metadata, installer metadata, docs, and roadmap tracking to `1.1.5`.
+
 ## [1.1.4] - 2026-05-01
 
 ### Fixed

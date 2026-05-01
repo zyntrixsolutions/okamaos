@@ -36,6 +36,9 @@ CONFIG_HID_PLAYSTATION=y  # DualSense / DualShock 4 (kernel ≥ 5.16)
 CONFIG_HID_SONY=y         # DualShock 3/4 fallback (older kernels)
 CONFIG_HID_MICROSOFT=y    # Xbox One S / Series X Bluetooth
 CONFIG_HID_NINTENDO=y     # Switch Pro Controller (kernel ≥ 5.16)
+CONFIG_NEW_LEDS=y         # Sony/PlayStation lightbar dependency
+CONFIG_LEDS_CLASS=y
+CONFIG_LEDS_CLASS_MULTICOLOR=y
 ```
 
 ## Pairing Flow

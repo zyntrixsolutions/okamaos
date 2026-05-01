@@ -2,14 +2,14 @@
 # Install the running OkamaOS live system to disk or prepare live USB persistence.
 set -eu
 
-VERSION="1.1.4"
+VERSION="1.1.5"
 MOUNTPOINT="${OKAMA_INSTALL_MOUNT:-/mnt/okama-install}"
 BOOT_ASSET_DIR="${OKAMA_INSTALL_BOOT_ASSETS:-/usr/share/okamaos/boot}"
 KERNEL_SRC="${OKAMA_INSTALL_KERNEL:-/boot/okamaos/vmlinuz}"
 EXTLINUX_BIN="${OKAMA_INSTALL_EXTLINUX:-/usr/sbin/extlinux}"
 PERSIST_LABEL="${OKAMA_PERSISTENCE_LABEL:-OKAMA_DATA}"
 MIN_SIZE_BYTES=$((1024 * 1024 * 1024))
-SAFE_BOOT_ARGS="rw rootwait quiet loglevel=0 console=ttyS0,115200 console=tty1 vt.global_cursor_default=0 nomodeset vga=788 video=vesafb:mtrr:3"
+SAFE_BOOT_ARGS="rw rootwait quiet loglevel=0 console=ttyS0,115200 console=tty1 vt.global_cursor_default=0 nomodeset vga=789 video=vesafb:mtrr:3"
 DEBUG_BOOT_ARGS="rw rootwait loglevel=7 console=ttyS0,115200 console=tty1 vt.global_cursor_default=0 vga=normal"
 
 TARGET_DISK=""
@@ -479,7 +479,7 @@ run_install() {
     log "  Mount point     : $MOUNTPOINT"
     log "  Kernel source   : $KERNEL_SRC"
     log "  Boot assets     : $BOOT_ASSET_DIR"
-    log "  Boot profile    : Extlinux safe framebuffer (vga=788, vesafb)"
+    log "  Boot profile    : Extlinux safe framebuffer (vga=789, vesafb)"
     log ""
 
     if [ "$DRY_RUN" = "yes" ]; then

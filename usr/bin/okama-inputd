@@ -58,6 +58,7 @@ EV_ABS  = 3
 EV_MSC  = 4
 
 KEYBOARD_STALE_RELEASE_SEC = 0.30
+AXIS_CHANGE_EPSILON = 0.04
 
 # evdev ABS axis indices
 ABS_X    = 0
@@ -68,6 +69,8 @@ ABS_HAT0X = 16
 ABS_HAT0Y = 17
 ABS_Z    = 2   # L2 trigger
 ABS_RZ   = 5   # R2 trigger
+ABS_GAS   = 9
+ABS_BRAKE = 10
 
 BTN_A      = 0x130  # BTN_SOUTH
 BTN_B      = 0x131  # BTN_EAST
@@ -80,6 +83,10 @@ BTN_TR2    = 0x139
 BTN_SELECT = 0x13a
 BTN_START  = 0x13b
 BTN_MODE   = 0x13c  # HOME / Guide
+BTN_DPAD_UP    = 0x220
+BTN_DPAD_DOWN  = 0x221
+BTN_DPAD_LEFT  = 0x222
+BTN_DPAD_RIGHT = 0x223
 
 BUTTON_MAP = {
     0x130: "A",
@@ -95,6 +102,10 @@ BUTTON_MAP = {
     0x13c: "HOME",
     0x13d: "L3",
     0x13e: "R3",
+    BTN_DPAD_UP: "DPAD_UP",
+    BTN_DPAD_DOWN: "DPAD_DOWN",
+    BTN_DPAD_LEFT: "DPAD_LEFT",
+    BTN_DPAD_RIGHT: "DPAD_RIGHT",
 }
 
 KEYBOARD_BUTTON_MAP = {
@@ -128,6 +139,8 @@ AXIS_MAP = {
     ABS_RY:   ("RSTICK_Y", True),
     ABS_Z:    ("L2_AXIS",  False),
     ABS_RZ:   ("R2_AXIS",  False),
+    ABS_BRAKE: ("L2_AXIS", False),
+    ABS_GAS:   ("R2_AXIS", False),
 }
 
 HAT_MAP = {
@@ -187,6 +200,9 @@ class ControllerThread(threading.Thread):
         self.disconnect_fn = disconnect_fn
         self._stop = threading.Event()
         self._axis_ranges: dict = {}  # axis_code -> (min, max)
+        self._button_state: dict = {}
+        self._axis_state: dict = {}
+        self._hat_state: dict = {}
 
     def run(self):
         try:
@@ -216,7 +232,7 @@ class ControllerThread(threading.Thread):
                 if len(data) < EVSIZE:
                     break
                 _, _, ev_type, code, value = struct.unpack(EVFMT, data)
-                self._handle(ev_type, code, value)
+                self._handle_event(ev_type, code, value)
         except OSError:
             pass
         finally:
@@ -236,38 +252,53 @@ class ControllerThread(threading.Thread):
                 self._axis_ranges[axis_code] = (mn, mx)
                 log.debug("Axis %d range: %d..%d", axis_code, mn, mx)
 
-    def _handle(self, ev_type: int, code: int, value: int):
+    def _handle_event(self, ev_type: int, code: int, value: int):
         if ev_type == EV_KEY:
             btn = BUTTON_MAP.get(code)
             if btn:
+                pressed = bool(value)
+                if self._button_state.get(btn) == pressed:
+                    return
+                self._button_state[btn] = pressed
                 self.broadcast({
                     "type": "button",
                     "button": btn,
-                    "state": "pressed" if value else "released",
+                    "state": "pressed" if pressed else "released",
                     "controller": self.controller_id,
                 })
         elif ev_type == EV_ABS:
             if code in AXIS_MAP:
                 axis_name, inverted = AXIS_MAP[code]
                 mn, mx = self._axis_ranges.get(code, (-32768, 32767))
+                axis_value = normalise_axis(value, mn, mx, inverted)
+                prev = self._axis_state.get(axis_name)
+                if prev is not None and abs(axis_value - prev) < AXIS_CHANGE_EPSILON:
+                    return
+                self._axis_state[axis_name] = axis_value
                 self.broadcast({
                     "type": "axis",
                     "axis": axis_name,
-                    "value": normalise_axis(value, mn, mx, inverted),
+                    "value": axis_value,
                     "controller": self.controller_id,
                 })
             elif code in HAT_MAP:
                 neg_btn, pos_btn = HAT_MAP[code]
+                prev = self._hat_state.get(code, 0)
+                if prev == value:
+                    return
+                self._hat_state[code] = value
+                if prev < 0:
+                    self.broadcast({"type": "button", "button": neg_btn,
+                                    "state": "released", "controller": self.controller_id})
+                elif prev > 0:
+                    self.broadcast({"type": "button", "button": pos_btn,
+                                    "state": "released", "controller": self.controller_id})
                 if value < 0:
                     self.broadcast({"type": "button", "button": neg_btn,
                                     "state": "pressed", "controller": self.controller_id})
                 elif value > 0:
                     self.broadcast({"type": "button", "button": pos_btn,
                                     "state": "pressed", "controller": self.controller_id})
-                else:
-                    for btn in (neg_btn, pos_btn):
-                        self.broadcast({"type": "button", "button": btn,
-                                        "state": "released", "controller": self.controller_id})
 
     def _read_name(self, fd) -> str:
         import fcntl

@@ -5,7 +5,7 @@ partnership with **OkamaLabs**. OkamaOS boots straight into a fullscreen
 controller-driven shell, runs one game at a time, and is designed to feel like
 a dedicated console — not a PC.
 
-> Status: **v1.1.4 patch update**. Buildable ISO, polished First Wave shell,
+> Status: **v1.1.5 patch update**. Buildable ISO, polished First Wave shell,
 > live Bluetooth/update status, rollback-capable OTA bundle apply from
 > downloads, USB/media package discovery, live USB persistence, hard-drive
 > migration tooling with safe installed boot graphics, PTY-backed Dev Console
@@ -23,7 +23,8 @@ a dedicated console — not a PC.
 - Safe game replacement with local backups and save-data preservation
 - Safe `.okupdate` system apply with backup/rollback guardrails
 - `okama-install` hard-drive migration and live USB persistence setup
-- Installed Extlinux boot uses safe framebuffer arguments by default
+- Installed Extlinux boot uses smooth 24/32-bit safe framebuffer arguments by default
+- Xbox and PlayStation controllers are supported through evdev/HID paths
 - PTY-backed Dev Console for persistent commands, prompts, and logs
 - One-active-game lifecycle via `okama-run`
 - Idle RAM target: **<250MB**

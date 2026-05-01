@@ -229,6 +229,16 @@
 - [x] Show installed-boot framebuffer diagnostics on tty1
 - [x] Version metadata bumped to `1.1.4`
 
+### v1.1.5 — Installed Polish and Controller Smoothness ✅
+- [x] Prefer 24/32-bit installed framebuffer mode to fix color quality
+- [x] Remove Python per-pixel framebuffer conversion from packed fallback modes
+- [x] Dedupe controller button, hat, and axis events before shell broadcast
+- [x] Fix input daemon controller event dispatch reliability
+- [x] Preload Xbox, Microsoft HID, Sony HID, and PlayStation controller drivers during boot
+- [x] Enable kernel joystick and LED-class dependencies for Xbox and PlayStation controller drivers
+- [x] Add button-based d-pad support for Xbox and PlayStation controllers
+- [x] Version metadata bumped to `1.1.5`
+
 ### v1.x — Console Polish
 - [x] Silent boot (`quiet loglevel=0`, boot log redirect) — completed in v0.3
 - [ ] Boot time < 8 seconds

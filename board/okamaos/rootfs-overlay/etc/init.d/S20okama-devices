@@ -4,11 +4,19 @@
 
 case "$1" in
   start)
-    # Load DRM/KMS modules early so /dev/dri/card0 exists for SDL kmsdrm driver
-    # kmsdrm is required for keyboard input to work in SDL (offscreen driver has no input)
+    # Preload graphics/input drivers when available so installed boots and
+    # hotplugged controllers enumerate before okama-shell and okama-inputd start.
     modprobe bochs-drm 2>/dev/null || true
     modprobe drm_kms_helper 2>/dev/null || true
     modprobe drm 2>/dev/null || true
+    modprobe usbhid 2>/dev/null || true
+    modprobe hid-generic 2>/dev/null || true
+    modprobe joydev 2>/dev/null || true
+    modprobe evdev 2>/dev/null || true
+    modprobe xpad 2>/dev/null || true
+    modprobe hid-microsoft 2>/dev/null || true
+    modprobe hid-sony 2>/dev/null || true
+    modprobe hid-playstation 2>/dev/null || true
     
     if which udevd >/dev/null 2>&1; then
         echo "Starting eudev..."

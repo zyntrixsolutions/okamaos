@@ -5,6 +5,23 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.0.0] - 2026-05-01
+
+### Added
+- **First Wave branded shell**: home screen now uses the OkamaLabs-inspired top bar, logo mark, horizon grid background, vertical Play/Settings/Power cards, and live status tiles for games, network, Bluetooth, input, and updates.
+- **Update notifications**: shell periodically checks GitHub Pages for OS and installed-game updates, persists update state, shows a home/status badge, and exposes game update notices in Settings > Updates.
+- **Safe system updates**: `okama-update` now checks the live feed, downloads URL bundles, verifies optional SHA-256 hashes, applies whitelisted `.okupdate` overlays with backups, preserves user data paths, and supports rollback.
+- **Safe game updates**: local and store `.ok` installs now back up existing game directories and preserve common save-data files during replacement.
+- **Install and persistence tooling**: `okama-install` can migrate the running system to a hard drive with Extlinux boot assets and can format a live USB persistence partition labelled `OKAMA_DATA`.
+
+### Changed
+- **GitHub Pages update channels**: game catalog and system update defaults now point to `https://zyntrixsolutions.github.io/okamaos/`.
+- **Live boot persistence**: early boot mounts an `OKAMA_DATA` partition at `/var/okamaos` before services create games, saves, controller profiles, logs, and update state.
+- **Version metadata**: bumped runtime, root config, shell-visible metadata, package metadata, library metadata, docs, and roadmap tracking to `1.0.0`.
+
+### Fixed
+- **Installer boot assets**: build packaging now carries the kernel and legacy BIOS Syslinux pieces into the live rootfs so hard-drive migration has the files it needs.
+
 ## [0.9.10] - 2026-04-29
 
 ### Fixed
@@ -30,7 +47,7 @@ Format: [Semantic Versioning](https://semver.org/)
 - **Support screen**: Settings now exposes the Zyntrix Solutions technical partner email, website, game catalog URL, and OS update URL.
 
 ### Changed
-- **GitHub Pages updates**: OS update checks now default to `https://zyntrixsolutions.github.io/okamaos-store/updates/latest.json`, matching the GitHub Pages game catalog.
+- **GitHub Pages updates**: OS update checks defaulted to the then-current GitHub Pages game catalog.
 - **Version metadata**: bumped runtime, shell badge, rootfs profile, config defaults, package metadata, and library metadata to `0.9.9`.
 
 ## [0.9.8] - 2026-04-29
@@ -39,7 +56,7 @@ Format: [Semantic Versioning](https://semver.org/)
 - **Network status detection**: Settings > Network now shows actual connectivity status (Online/Local/Limited/No IP/Offline) instead of just interface state; uses ping and route checks to verify internet connectivity.
 
 ### Changed
-- **Game Store URL**: Default catalog and download URLs now point to GitHub Pages at `zyntrixsolutions.github.io/okamaos-store/` instead of `store.okamaos.io`.
+- **Game Store URL**: Default catalog and download URLs moved from `store.okamaos.io` to GitHub Pages.
 
 ### Added
 - **Technical Partner Info**: Added Zyntrix Solutions contact information (team@zyntrix.solutions, https://okamaos.zyntrix.solutions) to README.md.

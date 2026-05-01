@@ -1,4 +1,4 @@
 """okamaos — shared Python library for OkamaOS userland tools."""
 
-VERSION = "0.9.10"
-CODENAME = "Cyber Red"
+VERSION = "1.0.0"
+CODENAME = "First Wave"

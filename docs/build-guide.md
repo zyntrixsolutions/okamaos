@@ -101,6 +101,9 @@ rootfs.ext4      ← ext4 rootfs
 rootfs.squashfs  ← squashfs rootfs (alternative)
 ```
 
+The canonical bootable ISO is `output/okamaos.iso`. The live rootfs includes
+`okama-install` for hard-drive migration and live USB persistence setup.
+
 ### 5. Run in QEMU
 
 ```bash

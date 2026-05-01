@@ -6,7 +6,7 @@
 # tree under usr/bin and usr/lib/okamaos.
 ################################################################################
 
-OKAMA_RUNTIME_VERSION = 0.9.10
+OKAMA_RUNTIME_VERSION = 1.0.0
 OKAMA_RUNTIME_SOURCE =
 # No SITE/SITE_METHOD — this is an install-only meta-package that copies files directly
 OKAMA_RUNTIME_LICENSE = Proprietary
@@ -24,6 +24,11 @@ define OKAMA_RUNTIME_INSTALL_TARGET_CMDS
 	mkdir -p $(TARGET_DIR)/var/okamaos/cache
 	mkdir -p $(TARGET_DIR)/var/okamaos/controllers
 	mkdir -p $(TARGET_DIR)/var/okamaos/updates
+	mkdir -p $(TARGET_DIR)/var/okamaos/updates/backups
+	mkdir -p $(TARGET_DIR)/var/okamaos/updates/downloads
+	mkdir -p $(TARGET_DIR)/var/okamaos/updates/game-backups
+	mkdir -p $(TARGET_DIR)/var/okamaos/updates/history
+	mkdir -p $(TARGET_DIR)/boot/okamaos
 	cp -a $(BR2_EXTERNAL_OKAMAOS_PATH)/usr/bin/. $(TARGET_DIR)/usr/bin/
 	cp -a $(BR2_EXTERNAL_OKAMAOS_PATH)/usr/lib/okamaos/. $(TARGET_DIR)/usr/lib/okamaos/
 	cp -f $(BR2_EXTERNAL_OKAMAOS_PATH)/VERSION $(TARGET_DIR)/usr/lib/okamaos/VERSION

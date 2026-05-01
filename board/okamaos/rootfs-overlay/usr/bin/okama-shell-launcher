@@ -22,9 +22,10 @@ printf '\033[?25l'
 show_splash() {
     printf '\033[2J\033[H'
     printf '\n\n\n'
-    printf '              OKAMAOS\n'
-    printf '        Console-grade game OS\n\n'
-    printf '        Starting safe graphics...\n'
+    printf '        (((((((  OkamaLabs\n'
+    printf '        (((((((  OPPORTUNITY TO ACHIEVE\n\n'
+    printf '              OkamaOS  FIRST WAVE\n\n'
+    printf '        Starting safe graphics and persistence...\n'
     printf '        Please wait.\n'
 }
 

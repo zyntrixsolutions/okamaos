@@ -14,7 +14,7 @@ Catalog JSON format:
         "version":      "1.0.0",
         "description":  "A short description.",
         "size_bytes":   5242880,
-        "download_url": "https://zyntrixsolutions.github.io/okamaos-store/packages/demo.ok",
+        "download_url": "https://zyntrixsolutions.github.io/okamaos/packages/demo.ok",
         "checksum":     "sha256:<hex>",
         "category":     "demo",
         "age_rating":   "Everyone"
@@ -31,7 +31,7 @@ import urllib.error
 import urllib.request
 from typing import Callable, Optional
 
-CATALOG_URL_DEFAULT = "https://zyntrixsolutions.github.io/okamaos-store/catalog.json"
+CATALOG_URL_DEFAULT = "https://zyntrixsolutions.github.io/okamaos/catalog/apps.json"
 DOWNLOAD_TIMEOUT = 60  # seconds
 FETCH_TIMEOUT = 10     # seconds
 
@@ -62,8 +62,13 @@ def fetch_catalog(url: Optional[str] = None, timeout: int = FETCH_TIMEOUT) -> di
         req = urllib.request.Request(url, headers={"User-Agent": "OkamaOS/1.0"})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.load(resp)
-        if not isinstance(data, dict) or "games" not in data:
-            raise StoreError("Invalid catalog: missing 'games' list.")
+        if not isinstance(data, dict) or ("games" not in data and "apps" not in data):
+            raise StoreError("Invalid catalog: missing 'games' or 'apps' list.")
+        if "games" not in data and "apps" in data:
+            data["games"] = [
+                app for app in data.get("apps", [])
+                if app.get("status", "available") in ("available", "published", "")
+            ]
         return data
     except urllib.error.URLError as e:
         raise StoreError(f"Network error: {e.reason}")
@@ -93,7 +98,7 @@ def download_game(
     if not url:
         raise StoreError("Catalog entry missing 'download_url'.")
 
-    expected = entry.get("checksum", "")  # "sha256:<hex>" or ""
+    expected = entry.get("checksum", entry.get("sha256", ""))  # "sha256:<hex>" or raw hex
 
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "OkamaOS/1.0"})
@@ -123,7 +128,9 @@ def download_game(
 
     if expected:
         algo, _, expected_hex = expected.partition(":")
-        if algo == "sha256" and h.hexdigest() != expected_hex:
+        if (algo == "sha256" and h.hexdigest() != expected_hex) or (
+            not expected_hex and h.hexdigest() != algo
+        ):
             try:
                 os.remove(dest_path)
             except OSError:

@@ -876,7 +876,7 @@ class _StdOut:
         self.buffer = ""
     def write(self, s):
         self.buffer += s
-        lines = self.buffer.split('\n')
+        lines = self.buffer.split("\\n")
         self.buffer = lines.pop()  # Keep incomplete line
         for line in lines:
             if line:

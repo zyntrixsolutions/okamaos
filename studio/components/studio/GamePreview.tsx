@@ -47,60 +47,776 @@ async function getPyodide(): Promise<PyodideInterface> {
   return pyodidePromise;
 }
 
-// Patch the user's pygame code to render to an HTML canvas instead of a window
-function patchCodeForBrowser(code: string, canvasId: string): string {
-  const canvasSetup = `
-import sys, io, base64
+// Setup pygame for browser - creates stubs that work with HTML Canvas
+const PYGAME_SETUP_CODE = `
+import sys
 import js
-from pyodide.ffi import create_proxy
+from pyodide.ffi import create_proxy, to_js
+import math
 
-# --- Browser canvas bridge ---
-_CANVAS_ID = "${canvasId}"
-
-# Minimal pygame surface-to-canvas renderer
+# --- Pygame Browser Stubs ---
 class _CanvasSurface:
-    def __init__(self, w, h):
-        self.width = w
-        self.height = h
-        self._canvas = js.document.getElementById(_CANVAS_ID)
-        self._canvas.width = w
-        self._canvas.height = h
-        self._ctx = self._canvas.getContext("2d")
-
+    """A pygame.Surface replacement that renders to HTML Canvas"""
+    def __init__(self, width, height):
+        self.width = width
+        self.height = height
+        self._canvas = None
+        self._ctx = None
+        self._init_canvas()
+    
+    def _init_canvas(self):
+        # Find the canvas from the parent window
+        try:
+            doc = js.document
+            canvases = doc.getElementsByTagName('canvas')
+            if canvases.length > 0:
+                self._canvas = canvases.item(0)
+                self._canvas.width = self.width
+                self._canvas.height = self.height
+                self._ctx = self._canvas.getContext("2d")
+        except:
+            pass
+    
     def fill(self, color):
-        r, g, b = color[0], color[1], color[2]
-        self._ctx.fillStyle = f"rgb({r},{g},{b})"
-        self._ctx.fillRect(0, 0, self.width, self.height)
-
+        if self._ctx:
+            if len(color) >= 3:
+                r, g, b = color[0], color[1], color[2]
+                self._ctx.fillStyle = f"rgb({r},{g},{b})"
+            self._ctx.fillRect(0, 0, self.width, self.height)
+    
+    def blit(self, source, dest, area=None):
+        # Basic blit - for now just pass through
+        pass
+    
     def get_rect(self):
         return _Rect(0, 0, self.width, self.height)
+    
+    def get_width(self):
+        return self.width
+    
+    def get_height(self):
+        return self.height
+    
+    def convert(self):
+        return self
+    
+    def convert_alpha(self):
+        return self
+    
+    def set_colorkey(self, color):
+        pass
+    
+    def set_alpha(self, alpha):
+        pass
 
 class _Rect:
+    """pygame.Rect replacement"""
     def __init__(self, x, y, w, h):
-        self.x = x; self.y = y; self.width = w; self.height = h
-        self.left = x; self.top = y; self.right = x+w; self.bottom = y+h
-        self.centerx = x + w//2; self.centery = y + h//2
+        self.x = int(x)
+        self.y = int(y)
+        self.width = int(w)
+        self.height = int(h)
+        self.left = self.x
+        self.top = self.y
+        self.right = self.x + self.width
+        self.bottom = self.y + self.height
+        self.centerx = self.x + self.width // 2
+        self.centery = self.y + self.height // 2
+        self.topleft = (self.x, self.y)
+        self.topright = (self.right, self.y)
+        self.bottomleft = (self.x, self.bottom)
+        self.bottomright = (self.right, self.bottom)
+        self.center = (self.centerx, self.centery)
+        self.midleft = (self.x, self.centery)
+        self.midright = (self.right, self.centery)
+        self.midtop = (self.centerx, self.y)
+        self.midbottom = (self.centerx, self.bottom)
+        self.size = (self.width, self.height)
+    
+    def copy(self):
+        return _Rect(self.x, self.y, self.width, self.height)
+    
+    def move(self, x, y):
+        return _Rect(self.x + x, self.y + y, self.width, self.height)
+    
+    def move_ip(self, x, y):
+        self.x += x
+        self.y += y
+        self._update()
+    
+    def _update(self):
+        self.left = self.x
+        self.top = self.y
+        self.right = self.x + self.width
+        self.bottom = self.y + self.height
+        self.centerx = self.x + self.width // 2
+        self.centery = self.y + self.height // 2
+        self.topleft = (self.x, self.y)
+        self.topright = (self.right, self.y)
+        self.bottomleft = (self.x, self.bottom)
+        self.bottomright = (self.right, self.bottom)
+        self.center = (self.centerx, self.centery)
+        self.midleft = (self.x, self.centery)
+        self.midright = (self.right, self.centery)
+        self.midtop = (self.centerx, self.y)
+        self.midbottom = (self.centerx, self.bottom)
+        self.size = (self.width, self.height)
+    
+    def inflate(self, x, y):
+        return _Rect(self.x - x//2, self.y - y//2, self.width + x, self.height + y)
+    
+    def inflate_ip(self, x, y):
+        self.x -= x//2
+        self.y -= y//2
+        self.width += x
+        self.height += y
+        self._update()
+    
+    def clamp(self, rect):
+        return self
+    
+    def clamp_ip(self, rect):
+        pass
+    
+    def clip(self, rect):
+        return _Rect(self.x, self.y, self.width, self.height)
+    
+    def union(self, rect):
+        return _Rect(self.x, self.y, self.width, self.height)
+    
+    def union_ip(self, rect):
+        pass
+    
+    def contains(self, rect):
+        return (self.left <= rect.left and self.right >= rect.right and
+                self.top <= rect.top and self.bottom >= rect.bottom)
+    
+    def collidepoint(self, x, y):
+        return self.left <= x < self.right and self.top <= y < self.bottom
+    
+    def colliderect(self, rect):
+        return (self.left < rect.right and self.right > rect.left and
+                self.top < rect.bottom and self.bottom > rect.top)
 
-print("Pyodide preview: pygame canvas bridge active")
-print("Note: Full pygame rendering requires the OkamaOS runtime.")
-print("For complete preview, export your .ok package and run on OkamaOS.")
+class _Event:
+    def __init__(self, type, **kwargs):
+        self.type = type
+        self.__dict__.update(kwargs)
+
+class _Display:
+    """pygame.display replacement"""
+    def __init__(self):
+        self._surface = None
+        self._w = 800
+        self._h = 500
+        self._init = False
+    
+    def set_mode(self, size, flags=0, depth=0):
+        self._w, self._h = size if size[0] > 0 else (800, 500)
+        self._surface = _CanvasSurface(self._w, self._h)
+        self._surface.fill((16, 18, 15))
+        self._init = True
+        return self._surface
+    
+    def flip(self):
+        pass
+    
+    def update(self, rect=None):
+        pass
+    
+    def set_caption(self, title):
+        pass
+    
+    def get_surface(self):
+        return self._surface
+    
+    def get_width(self):
+        return self._w
+    
+    def get_height(self):
+        return self._h
+
+class _Time:
+    """pygame.time replacement"""
+    def __init__(self):
+        import time as _time
+        self._time = _time
+        self._start = _time.time()
+    
+    def get_ticks(self):
+        return int((self._time.time() - self._start) * 1000)
+    
+    def delay(self, milliseconds):
+        pass
+    
+    def wait(self, milliseconds):
+        pass
+    
+    class Clock:
+        def __init__(self):
+            import time as _time
+            self._time = _time
+            self._last = _time.time()
+            self._fps = 60
+        
+        def tick(self, framerate=0):
+            now = self._time.time()
+            elapsed = now - self._last
+            if framerate > 0:
+                target = 1.0 / framerate
+                if elapsed < target:
+                    self._time.sleep(target - elapsed)
+                    now = self._time.time()
+                    elapsed = now - self._last
+            self._last = now
+            if elapsed > 0:
+                self._fps = 1.0 / elapsed
+            return int(elapsed * 1000)
+        
+        def get_fps(self):
+            return self._fps
+        
+        def tick_busy_loop(self, framerate=0):
+            return self.tick(framerate)
+
+class _Key:
+    """pygame.key replacement"""
+    def get_pressed(self):
+        # Return key states from browser
+        keys = {}
+        try:
+            # Try to get from js window if available
+            pass
+        except:
+            pass
+        return keys
+    
+    def get_mods(self):
+        return 0
+    
+    def set_mods(self, mods):
+        pass
+    
+    def set_repeat(self, delay=0, interval=0):
+        pass
+    
+    def get_repeat(self):
+        return (0, 0)
+    
+    def name(self, key):
+        return str(key)
+
+class _Mouse:
+    """pygame.mouse replacement"""
+    def get_pos(self):
+        return (0, 0)
+    
+    def get_rel(self):
+        return (0, 0)
+    
+    def get_pressed(self):
+        return (0, 0, 0)
+    
+    def set_pos(self, pos):
+        pass
+    
+    def set_visible(self, visible):
+        pass
+    
+    def get_visible(self):
+        return True
+    
+    def get_focused(self):
+        return False
+    
+    def set_cursor(self, *args):
+        pass
+    
+    def get_cursor(self):
+        return None
+
+class _EventModule:
+    """pygame.event replacement"""
+    def __init__(self):
+        self._queue = []
+    
+    def get(self, eventtype=None):
+        events = self._queue[:]
+        self._queue = []
+        return events
+    
+    def poll(self):
+        if self._queue:
+            return self._queue.pop(0)
+        return _Event(0)  # NOEVENT
+    
+    def wait(self):
+        return _Event(0)
+    
+    def peek(self, eventtype=None):
+        return bool(self._queue)
+    
+    def clear(self, eventtype=None):
+        self._queue = []
+    
+    def post(self, event):
+        self._queue.append(event)
+    
+    def set_allowed(self, eventtype):
+        pass
+    
+    def set_blocked(self, eventtype):
+        pass
+    
+    def get_blocked(self, eventtype):
+        return False
+
+class _Font:
+    """pygame.font replacement"""
+    def __init__(self):
+        self._init = False
+    
+    def init(self):
+        self._init = True
+    
+    def quit(self):
+        self._init = False
+    
+    def get_init(self):
+        return self._init
+    
+    def get_default_font(self):
+        return "monospace"
+    
+    def get_fonts(self):
+        return ["monospace"]
+    
+    def match_font(self, name, bold=0, italic=0):
+        return None
+    
+    def SysFont(self, name, size, bold=False, italic=False, constructor=None):
+        return _FontObj(name, size, bold, italic)
+
+class _FontObj:
+    def __init__(self, name, size, bold=False, italic=False):
+        self.name = name
+        self.size = size
+        self.bold = bold
+        self.italic = italic
+    
+    def render(self, text, antialias, color, background=None):
+        # Create a simple surface with text
+        surf = _CanvasSurface(len(text) * self.size // 2, self.size + 4)
+        return surf
+    
+    def size(self, text):
+        return (len(text) * self.size // 2, self.size + 4)
+    
+    def set_underline(self, underline):
+        pass
+    
+    def get_underline(self):
+        return False
+    
+    def set_bold(self, bold):
+        pass
+    
+    def get_bold(self):
+        return self.bold
+    
+    def set_italic(self, italic):
+        pass
+    
+    def get_italic(self):
+        return self.italic
+
+class _Mixer:
+    """pygame.mixer replacement - stub"""
+    def init(self, frequency=44100, size=-16, channels=2, buffer=512):
+        pass
+    
+    def quit(self):
+        pass
+    
+    def get_init(self):
+        return True
+    
+    def stop(self):
+        pass
+    
+    def pause(self):
+        pass
+    
+    def unpause(self):
+        pass
+    
+    def set_num_channels(self, count):
+        pass
+    
+    def get_num_channels(self):
+        return 8
+    
+    def set_reserved(self, num):
+        pass
+    
+    def find_channel(self, force=False):
+        return None
+    
+    def get_busy(self):
+        return False
+
+class _Joystick:
+    """pygame.joystick replacement - stub"""
+    def init(self):
+        pass
+    
+    def quit(self):
+        pass
+    
+    def get_init(self):
+        return False
+    
+    def get_count(self):
+        return 0
+    
+    def Joystick(self, id):
+        return None
+
+class _Draw:
+    """pygame.draw replacement"""
+    def rect(self, surface, color, rect, width=0, border_radius=0):
+        if surface._ctx:
+            r, g, b = color[0], color[1], color[2]
+            if len(color) > 3:
+                a = color[3]
+                surface._ctx.fillStyle = f"rgba({r},{g},{b},{a/255})"
+            else:
+                surface._ctx.fillStyle = f"rgb({r},{g},{b})"
+            
+            if isinstance(rect, _Rect):
+                x, y, w, h = rect.x, rect.y, rect.width, rect.height
+            else:
+                x, y, w, h = rect
+            
+            if width == 0:
+                surface._ctx.fillRect(x, y, w, h)
+            else:
+                surface._ctx.lineWidth = width
+                surface._ctx.strokeRect(x, y, w, h)
+    
+    def circle(self, surface, color, center, radius, width=0):
+        if surface._ctx:
+            r, g, b = color[0], color[1], color[2]
+            surface._ctx.beginPath()
+            surface._ctx.arc(center[0], center[1], radius, 0, 2 * math.pi)
+            if width == 0:
+                surface._ctx.fillStyle = f"rgb({r},{g},{b})"
+                surface._ctx.fill()
+            else:
+                surface._ctx.lineWidth = width
+                surface._ctx.strokeStyle = f"rgb({r},{g},{b})"
+                surface._ctx.stroke()
+    
+    def line(self, surface, color, start_pos, end_pos, width=1):
+        if surface._ctx:
+            r, g, b = color[0], color[1], color[2]
+            surface._ctx.beginPath()
+            surface._ctx.moveTo(start_pos[0], start_pos[1])
+            surface._ctx.lineTo(end_pos[0], end_pos[1])
+            surface._ctx.lineWidth = width
+            surface._ctx.strokeStyle = f"rgb({r},{g},{b})"
+            surface._ctx.stroke()
+    
+    def lines(self, surface, color, closed, pointlist, width=1):
+        if surface._ctx and len(pointlist) > 1:
+            r, g, b = color[0], color[1], color[2]
+            surface._ctx.beginPath()
+            surface._ctx.moveTo(pointlist[0][0], pointlist[0][1])
+            for p in pointlist[1:]:
+                surface._ctx.lineTo(p[0], p[1])
+            if closed:
+                surface._ctx.closePath()
+            surface._ctx.lineWidth = width
+            surface._ctx.strokeStyle = f"rgb({r},{g},{b})"
+            surface._ctx.stroke()
+    
+    def polygon(self, surface, color, pointlist, width=0):
+        if surface._ctx and len(pointlist) > 2:
+            r, g, b = color[0], color[1], color[2]
+            surface._ctx.beginPath()
+            surface._ctx.moveTo(pointlist[0][0], pointlist[0][1])
+            for p in pointlist[1:]:
+                surface._ctx.lineTo(p[0], p[1])
+            surface._ctx.closePath()
+            if width == 0:
+                surface._ctx.fillStyle = f"rgb({r},{g},{b})"
+                surface._ctx.fill()
+            else:
+                surface._ctx.lineWidth = width
+                surface._ctx.strokeStyle = f"rgb({r},{g},{b})"
+                surface._ctx.stroke()
+    
+    def ellipse(self, surface, color, rect, width=0):
+        if surface._ctx:
+            r, g, b = color[0], color[1], color[2]
+            if isinstance(rect, _Rect):
+                x, y, w, h = rect.x, rect.y, rect.width, rect.height
+            else:
+                x, y, w, h = rect
+            surface._ctx.beginPath()
+            surface._ctx.ellipse(x + w//2, y + h//2, w//2, h//2, 0, 0, 2 * math.pi)
+            if width == 0:
+                surface._ctx.fillStyle = f"rgb({r},{g},{b})"
+                surface._ctx.fill()
+            else:
+                surface._ctx.lineWidth = width
+                surface._ctx.strokeStyle = f"rgb({r},{g},{b})"
+                surface._ctx.stroke()
+    
+    def arc(self, surface, color, rect, start_angle, stop_angle, width=1):
+        pass
+
+# Key constants
+class _KeyConst:
+    K_BACKSPACE = 8
+    K_TAB = 9
+    K_CLEAR = 12
+    K_RETURN = 13
+    K_PAUSE = 19
+    K_ESCAPE = 27
+    K_SPACE = 32
+    K_EXCLAIM = 33
+    K_QUOTEDBL = 34
+    K_HASH = 35
+    K_DOLLAR = 36
+    K_AMPERSAND = 38
+    K_QUOTE = 39
+    K_LEFTPAREN = 40
+    K_RIGHTPAREN = 41
+    K_ASTERISK = 42
+    K_PLUS = 43
+    K_COMMA = 44
+    K_MINUS = 45
+    K_PERIOD = 46
+    K_SLASH = 47
+    K_0 = 48
+    K_1 = 49
+    K_2 = 50
+    K_3 = 51
+    K_4 = 52
+    K_5 = 53
+    K_6 = 54
+    K_7 = 55
+    K_8 = 56
+    K_9 = 57
+    K_COLON = 58
+    K_SEMICOLON = 59
+    K_LESS = 60
+    K_EQUALS = 61
+    K_GREATER = 62
+    K_QUESTION = 63
+    K_AT = 64
+    K_LEFTBRACKET = 91
+    K_BACKSLASH = 92
+    K_RIGHTBRACKET = 93
+    K_CARET = 94
+    K_UNDERSCORE = 95
+    K_BACKQUOTE = 96
+    K_a = 97
+    K_b = 98
+    K_c = 99
+    K_d = 100
+    K_e = 101
+    K_f = 102
+    K_g = 103
+    K_h = 104
+    K_i = 105
+    K_j = 106
+    K_k = 107
+    K_l = 108
+    K_m = 109
+    K_n = 110
+    K_o = 111
+    K_p = 112
+    K_q = 113
+    K_r = 114
+    K_s = 115
+    K_t = 116
+    K_u = 117
+    K_v = 118
+    K_w = 119
+    K_x = 120
+    K_y = 121
+    K_z = 122
+    K_DELETE = 127
+    K_KP0 = 256
+    K_KP1 = 257
+    K_KP2 = 258
+    K_KP3 = 259
+    K_KP4 = 260
+    K_KP5 = 261
+    K_KP6 = 262
+    K_KP7 = 263
+    K_KP8 = 264
+    K_KP9 = 265
+    K_KP_PERIOD = 266
+    K_KP_DIVIDE = 267
+    K_KP_MULTIPLY = 268
+    K_KP_MINUS = 269
+    K_KP_PLUS = 270
+    K_KP_ENTER = 271
+    K_KP_EQUALS = 272
+    K_UP = 273
+    K_DOWN = 274
+    K_RIGHT = 275
+    K_LEFT = 276
+    K_INSERT = 277
+    K_HOME = 278
+    K_END = 279
+    K_PAGEUP = 280
+    K_PAGEDOWN = 281
+    K_F1 = 282
+    K_F2 = 283
+    K_F3 = 284
+    K_F4 = 285
+    K_F5 = 286
+    K_F6 = 287
+    K_F7 = 288
+    K_F8 = 289
+    K_F9 = 290
+    K_F10 = 291
+    K_F11 = 292
+    K_F12 = 293
+    K_F13 = 294
+    K_F14 = 295
+    K_F15 = 296
+    K_NUMLOCK = 300
+    K_CAPSLOCK = 301
+    K_SCROLLOCK = 302
+    K_RSHIFT = 303
+    K_LSHIFT = 304
+    K_RCTRL = 305
+    K_LCTRL = 306
+    K_RALT = 307
+    K_LALT = 308
+    K_RMETA = 309
+    K_LMETA = 310
+    K_LSUPER = 311
+    K_RSUPER = 312
+    K_MODE = 313
+    K_HELP = 315
+    K_PRINT = 316
+    K_SYSREQ = 317
+    K_BREAK = 318
+    K_MENU = 319
+    K_POWER = 320
+    K_EURO = 321
+    K_AC_BACK = 322
+
+# Event type constants
+QUIT = 12
+ACTIVEEVENT = 1
+KEYDOWN = 2
+KEYUP = 3
+MOUSEMOTION = 4
+MOUSEBUTTONUP = 5
+MOUSEBUTTONDOWN = 6
+JOYAXISMOTION = 7
+JOYBALLMOTION = 8
+JOYHATMOTION = 9
+JOYBUTTONUP = 10
+JOYBUTTONDOWN = 11
+VIDEORESIZE = 16
+VIDEOEXPOSE = 17
+USEREVENT = 24
+
+# Display mode flags
+FULLSCREEN = 0x80000000
+DOUBLEBUF = 0x40000000
+HWSURFACE = 0x10000000
+OPENGL = 0x00000002
+RESIZABLE = 0x00000010
+NOFRAME = 0x00000020
+SCALED = 0x00004000
+
+# Create pygame module structure
+class PygameModule:
+    """Browser-compatible pygame replacement"""
+    def __init__(self):
+        self.display = _Display()
+        self.time = _Time()
+        self.key = _Key()
+        self.mouse = _Mouse()
+        self.event = _EventModule()
+        self.font = _Font()
+        self.mixer = _Mixer()
+        self.joystick = _Joystick()
+        self.draw = _Draw()
+        self.Rect = _Rect
+        self.Surface = _CanvasSurface
+        self.event.Event = _Event
+        
+        # Copy key constants
+        for attr in dir(_KeyConst):
+            if attr.startswith('K_'):
+                setattr(self, attr, getattr(_KeyConst, attr))
+        
+        # Copy event constants
+        self.QUIT = QUIT
+        self.ACTIVEEVENT = ACTIVEEVENT
+        self.KEYDOWN = KEYDOWN
+        self.KEYUP = KEYUP
+        self.MOUSEMOTION = MOUSEMOTION
+        self.MOUSEBUTTONUP = MOUSEBUTTONUP
+        self.MOUSEBUTTONDOWN = MOUSEBUTTONDOWN
+        self.JOYAXISMOTION = JOYAXISMOTION
+        self.JOYBALLMOTION = JOYBALLMOTION
+        self.JOYHATMOTION = JOYHATMOTION
+        self.JOYBUTTONUP = JOYBUTTONUP
+        self.JOYBUTTONDOWN = JOYBUTTONDOWN
+        self.VIDEORESIZE = VIDEORESIZE
+        self.VIDEOEXPOSE = VIDEOEXPOSE
+        self.USEREVENT = USEREVENT
+        
+        # Display flags
+        self.FULLSCREEN = FULLSCREEN
+        self.DOUBLEBUF = DOUBLEBUF
+        self.HWSURFACE = HWSURFACE
+        self.OPENGL = OPENGL
+        self.RESIZABLE = RESIZABLE
+        self.NOFRAME = NOFRAME
+        self.SCALED = SCALED
+        
+        self._init = False
+    
+    def init(self):
+        if not self._init:
+            self.font.init()
+            self._init = True
+        return (6, 0)  # Version tuple
+    
+    def quit(self):
+        self._init = False
+    
+    def get_init(self):
+        return self._init
+    
+    def set_mode(self, size, flags=0, depth=0):
+        return self.display.set_mode(size, flags, depth)
+    
+    def get_error(self):
+        return ""
+    
+    def get_warn_level(self):
+        return 0
+
+# Install as pygame
+import sys
+sys.modules['pygame'] = PygameModule()
+
+print("[Okama Studio] Pygame browser stubs loaded")
+print("[Okama Studio] Running in preview mode (no real SDL)")
 `;
-
-  // Wrap the user code in a try/except so errors show nicely
-  const wrapped = `
-${canvasSetup}
-
-# --- Your game code ---
-try:
-${code.split("\n").map((l) => "    " + l).join("\n")}
-except SystemExit:
-    print("Game exited cleanly.")
-except Exception as e:
-    print(f"Error: {type(e).__name__}: {e}")
-`;
-
-  return wrapped;
-}
 
 export default function GamePreview({ code, autoRun = false }: GamePreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -127,8 +843,8 @@ export default function GamePreview({ code, autoRun = false }: GamePreviewProps)
       }
       const py = pyRef.current;
 
-      // Redirect stdout
-      setProgress("Setting up environment…");
+      // Set up stdout capture first
+      setProgress("Setting up stdout…");
       py.runPython(`
 import sys
 import io
@@ -142,12 +858,16 @@ sys.stdout = _StdOut()
 sys.stderr = _StdOut()
 `);
 
+      // Install pygame browser stubs
+      setProgress("Loading pygame browser stubs…");
+      py.runPython(PYGAME_SETUP_CODE);
+      
       setProgress("Running your game…");
       setState("running");
       setProgress("");
 
-      const patched = patchCodeForBrowser(code, canvasId);
-      await py.runPythonAsync(patched);
+      // Now run the user code - pygame is already available
+      await py.runPythonAsync(code);
 
       setState("stopped");
     } catch (e) {

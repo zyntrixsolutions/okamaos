@@ -1,0 +1,185 @@
+#!/usr/bin/env python3
+"""okama-wallet — on-device Base wallet for OkamaOS.
+
+Non-custodial wallet stored at /var/okamaos/wallet/keystore.json.
+All private key operations require the wallet PIN (Parent PIN).
+
+Usage:
+  okama-wallet init           Generate a new wallet (prompts for PIN)
+  okama-wallet address        Print the wallet address
+  okama-wallet balance        Show ETH + OKToken balance (requires network)
+  okama-wallet sign <msg>     Sign a text message (prompts for PIN)
+  okama-wallet assets         Show cached NFT assets
+  okama-wallet export         Show keystore file paths
+  okama-wallet log            Show transaction / reward log
+"""
+
+import sys
+import os
+
+_lib = os.environ.get("OKAMA_LIB", "")
+if not _lib:
+    _lib = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../lib")
+sys.path.insert(0, os.path.abspath(_lib))
+
+import argparse
+import getpass
+import json
+
+
+# ---------------------------------------------------------------------------
+# Sub-commands
+# ---------------------------------------------------------------------------
+
+def cmd_init(args):
+    try:
+        import okamaos.wallet as w
+    except ImportError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if w.is_initialized():
+        ans = input("Wallet already exists. Overwrite? [y/N] ").strip().lower()
+        if ans != "y":
+            print("Aborted.")
+            return
+
+    pin     = getpass.getpass("Set wallet PIN: ")
+    confirm = getpass.getpass("Confirm PIN: ")
+    if pin != confirm:
+        print("PINs do not match.", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        result = w.generate(pin)
+    except w.WalletError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"\n  Wallet created: {result['address']}")
+    print("\n  IMPORTANT — write down your recovery mnemonic and keep it safe.")
+    print("  This is the ONLY time it will be shown.\n")
+    print(f"  {result['mnemonic']}\n")
+
+
+def cmd_address(args):
+    try:
+        import okamaos.wallet as w
+        print(w.address())
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_balance(args):
+    try:
+        import okamaos.wallet as w
+        addr = w.address()
+        print(f"Address : {addr}")
+        try:
+            print(f"ETH     : {w.format_eth(w.eth_balance(addr))}")
+        except w.WalletError as e:
+            print(f"ETH     : (network unavailable — {e})")
+        try:
+            print(f"OKToken : {w.format_ok(w.ok_balance(addr))}")
+        except w.WalletError as e:
+            print(f"OKToken : (network unavailable — {e})")
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_sign(args):
+    try:
+        import okamaos.wallet as w
+    except ImportError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    pin = getpass.getpass("Wallet PIN: ")
+    try:
+        sig = w.sign_message(args.message, pin)
+        print(f"Signature: 0x{sig}" if not sig.startswith("0x") else f"Signature: {sig}")
+    except w.WalletError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_assets(args):
+    try:
+        import okamaos.nft as nft
+        assets = nft.load_assets_cache()
+        if not assets:
+            print("No cached assets. Run 'okama-wallet balance' to refresh.")
+            return
+        for a in assets:
+            print(f"  [{a['token_id']}] {a['name']}  (x{a['balance']})  "
+                  f"{a.get('rarity','?')}  game={a.get('game_id','?')}")
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_export(args):
+    try:
+        import okamaos.wallet as w
+        print(f"Keystore : {w.keystore_path()}")
+        print(f"TX log   : {w.tx_log_path()}")
+        print(f"Assets   : {w.assets_path()}")
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_log(args):
+    try:
+        import okamaos.wallet as w
+        entries = w.read_tx_log()
+        if not entries:
+            print("No transactions logged.")
+            return
+        for entry in entries:
+            print(json.dumps(entry, indent=2))
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+def main():
+    p   = argparse.ArgumentParser(prog="okama-wallet",
+                                  description="OkamaOS on-device Base wallet")
+    sub = p.add_subparsers(dest="cmd")
+
+    sub.add_parser("init",    help="Generate a new wallet")
+    sub.add_parser("address", help="Print wallet address")
+    sub.add_parser("balance", help="Show ETH + OKToken balance")
+    sp  = sub.add_parser("sign",    help="Sign a text message")
+    sp.add_argument("message", help="Message to sign")
+    sub.add_parser("assets",  help="Show cached NFT assets")
+    sub.add_parser("export",  help="Show keystore file paths")
+    sub.add_parser("log",     help="Show transaction log")
+
+    args = p.parse_args()
+
+    dispatch = {
+        "init":    cmd_init,
+        "address": cmd_address,
+        "balance": cmd_balance,
+        "sign":    cmd_sign,
+        "assets":  cmd_assets,
+        "export":  cmd_export,
+        "log":     cmd_log,
+    }
+    fn = dispatch.get(args.cmd)
+    if fn:
+        fn(args)
+    else:
+        p.print_help()
+
+
+if __name__ == "__main__":
+    main()

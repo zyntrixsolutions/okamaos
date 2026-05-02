@@ -5,6 +5,41 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [2.0.0] - 2026-05-02 — Blockchain Foundation
+
+### Added — Contracts (`contracts/`)
+- **OKToken.sol** — ERC-20 play-to-earn reward token (symbol: OKT, max 1 B supply, relay-only minting via `MINTER_ROLE`).
+- **OKAssets.sol** — ERC-1155 game asset NFT contract (per-game token ID namespace). Supports `mint` and `mintBatch` by relay.
+- **script/Deploy.s.sol** — Foundry deploy script targeting Base Mainnet and Base Sepolia.
+- **foundry.toml** — Foundry project config with Base / Base Sepolia RPC and Basescan verification.
+
+### Added — OS (`usr/`)
+- **`usr/lib/okamaos/wallet.py`** — BIP-39 key generation, Ethereum JSON keystore v3 encryption (Parent PIN as passphrase), ETH and OKToken balance queries via stdlib `urllib`, sign-message helper, TX log.
+- **`usr/lib/okamaos/nft.py`** — ERC-1155 balance queries and NFT metadata fetch; caches owned assets to `/var/okamaos/wallet/assets.json`.
+- **`usr/lib/okamaos/rewards.py`** — Reads `pending_rewards` from `save_state.json`, builds signed claim payloads, submits to OkamaLabs relay API, clears queue on success.
+- **`usr/bin/okama-wallet`** — CLI with subcommands: `init / address / balance / sign / assets / export / log`.
+- **`usr/lib/okamaos/manifest.py`** — Added `_validate_blockchain()` to validate optional `blockchain:` manifest field (`token_rewards`, `nft_assets`).
+- **`usr/bin/okama-run`** — Injects `OKAMA_ASSETS_PATH` and `OKAMA_WALLET_ADDRESS` env vars before game launch; calls `_submit_game_rewards()` on clean exit.
+- **`usr/bin/okama-shell`** — Settings › Wallet sub-screen: threaded balance load, displays address, ETH, OKT, NFT asset count, TX log entry count.
+
+### Added — Studio (`studio/`)
+- **`lib/web3/client.ts`** — viem `PublicClient` factory; network/RPC resolution from `localStorage`.
+- **`lib/web3/contracts.ts`** — `OKTOKEN_ABI`, `OKASSETS_ABI`, contract address helpers with `localStorage` override.
+- **`lib/web3/wallet.ts`** — Balance query helpers (`getEthBalance`, `getOKTokenBalance`, `getOKAssetsBalance`), format utilities.
+- **`components/SettingsClient.tsx`** — Added Web3 section: network toggle (Base Mainnet / Base Sepolia), RPC URL fields, OKToken + OKAssets address fields.
+- **`package.json`** — Added `viem ^2.21.0`.
+
+### Added — Portal (`pages/`)
+- **`wallet.html`** — MetaMask / manual address connect; ETH and OKT balance display; NFT asset grid; reward TX history.
+- **`marketplace.html`** — OKAssets NFT marketplace (coming-soon state with how-it-works section).
+- **`leaderboard.html`** — OKToken play-to-earn rankings with filter bar and ecosystem stats.
+
+### Added — Docs
+- **`docs/blockchain.md`** — Full blockchain integration reference (contracts, wallet, manifest, play-to-earn flow, env vars, parent controls, Studio config).
+- **`ROADMAP.md`** — v2.0.0 through v2.3.0 milestones added.
+
+---
+
 ## [1.3.2] - 2026-05-02
 
 ### Fixed

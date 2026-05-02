@@ -287,3 +287,44 @@
 - [ ] Battery level on HUD
 - [x] OTA update checks from GitHub Pages (`zyntrixsolutions.github.io/okamaos`)
 - [x] OTA package apply via `okama-update apply`
+
+---
+
+## v2 — Blockchain & On-Chain Economy
+
+### v2.0.0 — Foundation ✅ (feature/v2-blockchain)
+- [x] **OKToken.sol** — ERC-20 reward token (1 B OKT max supply, relay minter)
+- [x] **OKAssets.sol** — ERC-1155 NFT game assets (per-game token ID namespace)
+- [x] **Deploy.s.sol** — Foundry deploy script targeting Base / Base Sepolia
+- [x] **OS: wallet.py** — BIP-39 key gen, JSON keystore v3 encrypted with Parent PIN
+- [x] **OS: nft.py** — ERC-1155 balance query + `/var/okamaos/wallet/assets.json` cache
+- [x] **OS: rewards.py** — Post-game signed reward claim → OkamaLabs relay pipeline
+- [x] **OS: okama-wallet CLI** — `init / address / balance / sign / assets / export / log`
+- [x] **OS: okama-shell** — Settings › Wallet screen (address, ETH, OKT, NFT count)
+- [x] **OS: manifest.py** — `blockchain:` field validation (token_rewards, nft_assets)
+- [x] **OS: okama-run** — `OKAMA_ASSETS_PATH` + `OKAMA_WALLET_ADDRESS` env injection; post-game reward hook
+- [x] **Studio: lib/web3/** — viem client, OKToken/OKAssets ABIs, balance helpers
+- [x] **Studio: Settings** — Web3 section (network, RPC URLs, contract addresses)
+- [x] **Portal: wallet.html** — Connect MetaMask / manual address; ETH + OKT balances
+- [x] **Portal: marketplace.html** — OKAssets NFT marketplace (coming-soon state)
+- [x] **Portal: leaderboard.html** — OKToken play-to-earn rankings
+- [x] **docs/blockchain.md** — Full integration reference
+
+### v2.1.0 — Relay & Minting (pending)
+- [ ] OkamaLabs relay API (`/v1/rewards/claim`) — ECDSA verify + OKT mint
+- [ ] On-chain score proof via oracle (Chainlink / custom)
+- [ ] Parent Controls: `WALLET_ENABLED`, `WALLET_DAILY_LIMIT_OKT` in `parent.conf`
+- [ ] PIN upgrade: Argon2id for wallet passphrase (replacing SHA-256 in `parent.py`)
+- [ ] `okama-shell` PIN prompt for wallet operations
+
+### v2.2.0 — Marketplace & Leaderboard (pending)
+- [ ] Relay leaderboard index API (`/v1/leaderboard`)
+- [ ] Portal marketplace listing + buy flow (OKT spend)
+- [ ] IPFS/Pinata metadata pipeline for OKAssets
+- [ ] Studio: NFT asset attachment to game packages
+- [ ] Studio: Preview `OKAMA_ASSETS_PATH` in Pyodide sandbox
+
+### v2.3.0 — Cross-Game Assets (pending)
+- [ ] Shared asset registry: one NFT works across multiple games
+- [ ] Asset unlock content hooks in `okama-run`
+- [ ] Creator royalties on secondary marketplace sales

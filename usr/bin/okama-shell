@@ -300,6 +300,7 @@ SETTINGS_OPTIONS = [
     "Storage Info",
     "Updates",
     "Install / Persistence",
+    "Wallet",
     "Support",
 ]
 
@@ -509,6 +510,10 @@ class OkamaShell:
         self.install_system_idx = 0
         self.install_system_lines = []
         self.install_system_status = ""
+
+        # Wallet state
+        self._wallet_info: list = []
+        self._wallet_status: str = ""
 
         # Animation / visual state
         self._tick = 0            # frame counter for animations
@@ -978,6 +983,8 @@ class OkamaShell:
             self._settings_updates_input(action, ev)
         elif self.state == "settings_install":
             self._settings_install_input(action, ev)
+        elif self.state == "settings_wallet":
+            self._settings_wallet_input(action, ev)
         elif self.state == "settings_support":
             self._settings_support_input(action, ev)
         elif self.state == "dev_console":
@@ -1146,6 +1153,8 @@ class OkamaShell:
             self._enter_settings_updates()
         elif opt == "Install / Persistence":
             self._enter_settings_install()
+        elif opt == "Wallet":
+            self._enter_settings_wallet()
         elif opt == "Support":
             self.state = "settings_support"
 
@@ -2797,6 +2806,78 @@ class OkamaShell:
             key_fn=lambda x: x["label"])
 
     # -----------------------------------------------------------------------
+    # Settings > Wallet
+    # -----------------------------------------------------------------------
+    def _enter_settings_wallet(self):
+        self._wallet_status = "Loading…"
+        self._wallet_info = []
+        self.state = "settings_wallet"
+        import threading
+        threading.Thread(target=self._load_wallet_info, daemon=True).start()
+
+    def _load_wallet_info(self):
+        rows = []
+        try:
+            import okamaos.wallet as w
+            if not w.is_initialized():
+                rows.append(("Status", "No wallet — run  okama-wallet init"))
+            else:
+                addr = w.address()
+                rows.append(("Address", addr[:20] + "…" + addr[-6:]))
+                try:
+                    rows.append(("ETH", w.format_eth(w.eth_balance(addr))))
+                except w.WalletError:
+                    rows.append(("ETH", "Offline"))
+                try:
+                    rows.append(("OKToken", w.format_ok(w.ok_balance(addr))))
+                except w.WalletError:
+                    rows.append(("OKToken", "Offline"))
+                try:
+                    import okamaos.nft as nft_mod
+                    assets = nft_mod.load_assets_cache()
+                    rows.append(("NFT Assets", str(len(assets)) + " cached"))
+                except Exception:
+                    rows.append(("NFT Assets", "—"))
+                try:
+                    tx_count = len(w.read_tx_log())
+                    rows.append(("TX Log", f"{tx_count} entries"))
+                except Exception:
+                    pass
+            self._wallet_info = rows
+            self._wallet_status = ""
+        except ImportError:
+            self._wallet_info = [("Status", "eth_account not installed")]
+            self._wallet_status = ""
+        except Exception as e:
+            self._wallet_info = [("Status", str(e)[:60])]
+            self._wallet_status = ""
+
+    def _settings_wallet_input(self, action: str, ev: dict = None):
+        if action in ("B", "START", "A"):
+            self.state = "settings"
+
+    def _draw_settings_wallet(self):
+        COL_WALLET = (100, 180, 255)
+        self._draw_section_header("* Wallet  (Base)", COL_WALLET)
+        y = 130
+        if self._wallet_status:
+            s = self.font_md.render(self._wallet_status, True, COL_DIM)
+            self.screen.blit(s, (70, y))
+            return
+        for label, value in self._wallet_info:
+            lbl_s = self.font_sm.render(label, True, COL_DIM)
+            val_font = self.font_sm if len(value) > 40 else self.font_mdb
+            val_s = val_font.render(value, True, COL_TEXT)
+            self.screen.blit(lbl_s, (70, y))
+            self.screen.blit(val_s, (70, y + 22))
+            y += 70
+            if y + 60 > HEIGHT - 60:
+                break
+        hint = self.font_sm.render(
+            "[Esc/B] Back    manage: okama-wallet CLI", True, COL_DIM)
+        self.screen.blit(hint, (70, HEIGHT - 90))
+
+    # -----------------------------------------------------------------------
     # Settings > Support
     # -----------------------------------------------------------------------
     def _settings_support_input(self, action: str, ev: dict = None):
@@ -3187,6 +3268,8 @@ class OkamaShell:
             self._draw_settings_updates()
         elif self.state == "settings_install":
             self._draw_settings_install()
+        elif self.state == "settings_wallet":
+            self._draw_settings_wallet()
         elif self.state == "settings_support":
             self._draw_settings_support()
         elif self.state == "dev_console":

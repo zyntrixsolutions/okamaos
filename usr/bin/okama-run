@@ -213,6 +213,14 @@ def main():
     env["OKAMA_GAME_DIR"] = game_dir
     env.setdefault("OKAMA_SAVES", SAVES_DIR)
 
+    assets_json = os.path.join(SAVES_DIR, "..", "wallet", "assets.json")
+    env["OKAMA_ASSETS_PATH"] = os.path.normpath(assets_json)
+    try:
+        import okamaos.wallet as _w
+        env["OKAMA_WALLET_ADDRESS"] = _w.address()
+    except Exception:
+        pass
+
     # Self-contained package support: prepend bundled deps so games run
     # without any system-wide pip installs.
     python_path_parts = [OKAMA_LIB_PATH]
@@ -305,6 +313,21 @@ def main():
         print("Returning to OkamaOS shell…")
     else:
         print(f"Game finished cleanly. Returning to OkamaOS shell…")
+        _submit_game_rewards(game_id)
+
+
+def _submit_game_rewards(game_id: str) -> None:
+    """Submit any pending play-to-earn reward claims after game exit."""
+    try:
+        import okamaos.rewards as rewards_mod
+        results = rewards_mod.process_game_rewards(
+            game_id, SAVES_DIR,
+            passphrase_cb=None,
+        )
+        if results:
+            print(f"Reward: submitted {len(results)} claim(s) for {game_id}.")
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":

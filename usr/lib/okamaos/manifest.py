@@ -2,7 +2,7 @@
 
 import json
 import re
-from typing import Any
+from typing import Any, Optional
 
 REQUIRED_FIELDS = ["name", "id", "version", "runtime", "entry"]
 SUPPORTED_RUNTIMES = {"okama-lite", "okama-python", "okama-sdl2"}
@@ -76,6 +76,48 @@ def validate(manifest: dict, dev_mode: bool = False) -> None:
     ram = manifest.get("min_ram_mb", 0)
     if not isinstance(ram, (int, float)) or ram < 0:
         raise ManifestError("min_ram_mb must be a non-negative number.")
+
+    bc = manifest.get("blockchain")
+    if bc is not None:
+        _validate_blockchain(bc)
+
+
+def _validate_blockchain(b: Any) -> None:
+    if not isinstance(b, dict):
+        raise ManifestError("blockchain must be an object.")
+
+    tr = b.get("token_rewards")
+    if tr is not None:
+        if not isinstance(tr, dict):
+            raise ManifestError("blockchain.token_rewards must be an object.")
+        threshold = tr.get("score_threshold", 0)
+        if not isinstance(threshold, (int, float)) or threshold < 0:
+            raise ManifestError(
+                "blockchain.token_rewards.score_threshold must be a non-negative number."
+            )
+        amount = tr.get("reward_amount_ok", 0)
+        if not isinstance(amount, (int, float)) or amount < 0:
+            raise ManifestError(
+                "blockchain.token_rewards.reward_amount_ok must be a non-negative number."
+            )
+
+    nft = b.get("nft_assets")
+    if nft is not None:
+        if not isinstance(nft, list):
+            raise ManifestError("blockchain.nft_assets must be a list.")
+        for item in nft:
+            if not isinstance(item, dict):
+                raise ManifestError(
+                    "Each blockchain.nft_assets entry must be an object."
+                )
+            if "token_id" not in item:
+                raise ManifestError(
+                    "Each blockchain.nft_assets entry must have 'token_id'."
+                )
+            if not isinstance(item["token_id"], int) or item["token_id"] < 0:
+                raise ManifestError(
+                    "blockchain.nft_assets[].token_id must be a non-negative integer."
+                )
 
 
 def load_and_validate(path: str, dev_mode: bool = False) -> dict:

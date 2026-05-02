@@ -44,6 +44,7 @@ export default function StudioClient({ projectId }: StudioClientProps) {
   const [rightTab, setRightTab] = useState<RightTab>("chat");
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [errorContext, setErrorContext] = useState<string>();
 
   useEffect(() => {
     const p = getProject(projectId);
@@ -119,6 +120,11 @@ export default function StudioClient({ projectId }: StudioClientProps) {
       return { ...prev, manifest };
     });
     setDirty(true);
+  }, []);
+
+  const handlePreviewError = useCallback((error: string) => {
+    setErrorContext(error);
+    setRightTab("chat"); // Switch to chat tab to show the error
   }, []);
 
   if (!project) {
@@ -238,9 +244,15 @@ export default function StudioClient({ projectId }: StudioClientProps) {
                 geminiKey={geminiKey}
                 qwenKey={qwenKey}
                 onApplyCode={applyAICode}
+                errorContext={errorContext}
               />
             )}
-            {rightTab === "preview" && <GamePreview code={mainCode} />}
+            {rightTab === "preview" && (
+              <GamePreview
+                code={mainCode}
+                onSendToAI={handlePreviewError}
+              />
+            )}
             {rightTab === "assets" && (
               <AssetManager
                 assets={assets}

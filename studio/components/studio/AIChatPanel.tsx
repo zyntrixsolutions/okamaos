@@ -12,6 +12,7 @@ interface AIChatPanelProps {
   qwenKey: string;
   onApplyCode?: (code: string) => void;
   mode?: "game" | "tutor";
+  errorContext?: string;
 }
 
 interface ChatMessage {
@@ -119,6 +120,7 @@ export default function AIChatPanel({
   qwenKey,
   onApplyCode,
   mode = "game",
+  errorContext,
 }: AIChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -138,9 +140,23 @@ export default function AIChatPanel({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const send = useCallback(async () => {
-    const text = input.trim();
-    if (!text || streaming) return;
+  // Handle error context from preview
+  useEffect(() => {
+    if (!errorContext) return;
+    const prompt = `I got this error when running my game. Please fix it:\n\n\`\`\`\n${errorContext}\n\`\`\``;
+    setInput(prompt);
+    // Auto-send if we have keys configured
+    if (geminiKey || qwenKey) {
+      // Give user a moment to see the error before sending
+      const t = setTimeout(() => {
+        sendMessage(prompt);
+      }, 500);
+      return () => clearTimeout(t);
+    }
+  }, [errorContext]);
+
+  const sendMessage = useCallback(async (text: string) => {
+    if (!text.trim() || streaming) return;
 
     setInput("");
     setError("");
@@ -194,7 +210,11 @@ export default function AIChatPanel({
     } finally {
       setStreaming(false);
     }
-  }, [input, streaming, messages, projectCode, projectName, model, geminiKey, qwenKey, mode]);
+  }, [streaming, messages, projectCode, projectName, model, geminiKey, qwenKey, mode]);
+
+  const send = useCallback(() => {
+    sendMessage(input);
+  }, [input, sendMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {

@@ -1,14 +1,20 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Play, Square, RotateCcw, AlertCircle, Loader2, Monitor } from "lucide-react";
+import { Play, Square, RotateCcw, AlertCircle, Loader2, Monitor, Terminal, Wand2, XCircle, AlertTriangle } from "lucide-react";
 
 interface GamePreviewProps {
   code: string;
   autoRun?: boolean;
+  onSendToAI?: (errorText: string) => void;
 }
 
 type RunState = "idle" | "loading" | "running" | "error" | "stopped";
+
+interface LogLine {
+  text: string;
+  isError: boolean;
+}
 
 declare global {
   interface Window {
@@ -818,23 +824,24 @@ print("[Okama Studio] Pygame browser stubs loaded")
 print("[Okama Studio] Running in preview mode (no real SDL)")
 `;
 
-export default function GamePreview({ code, autoRun = false }: GamePreviewProps) {
+export default function GamePreview({ code, autoRun = false, onSendToAI }: GamePreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const canvasId = "okama-preview-canvas";
   const [state, setState] = useState<RunState>("idle");
-  const [output, setOutput] = useState<string[]>([]);
+  const [output, setOutput] = useState<LogLine[]>([]);
   const [error, setError] = useState<string>("");
   const [progress, setProgress] = useState("");
   const pyRef = useRef<PyodideInterface | null>(null);
 
-  const appendOutput = (line: string) =>
-    setOutput((prev) => [...prev.slice(-100), line]);
+  const appendOutput = (line: string, isError = false) =>
+    setOutput((prev) => [...prev.slice(-100), { text: line, isError }]);
 
   const run = useCallback(async () => {
     if (!code.trim()) return;
     setState("loading");
     setOutput([]);
     setError("");
+    const runtimeErrors: string[] = [];
 
     try {
       setProgress("Loading Pyodide runtime…");
@@ -843,19 +850,50 @@ export default function GamePreview({ code, autoRun = false }: GamePreviewProps)
       }
       const py = pyRef.current;
 
-      // Set up stdout capture first
+      // Create a JS callback to capture logs
+      const logCallback = (text: string) => {
+        appendOutput(text, false);
+      };
+      const errCallback = (text: string) => {
+        runtimeErrors.push(text);
+        appendOutput(text, true);
+      };
+      
+      // Expose to Python
+      (window as unknown as Record<string, unknown>).__okama_log = logCallback;
+      (window as unknown as Record<string, unknown>).__okama_err = errCallback;
+
+      // Set up stdout capture with JS callback
       setProgress("Setting up stdout…");
       py.runPython(`
 import sys
-import io
+from pyodide.ffi import create_proxy
+import js
+
 class _StdOut:
+    def __init__(self, is_err=False):
+        self.is_err = is_err
+        self.buffer = ""
     def write(self, s):
-        if s.strip():
-            from js import console
-            console.log(s.rstrip())
-    def flush(self): pass
-sys.stdout = _StdOut()
-sys.stderr = _StdOut()
+        self.buffer += s
+        lines = self.buffer.split('\n')
+        self.buffer = lines.pop()  # Keep incomplete line
+        for line in lines:
+            if line:
+                if self.is_err:
+                    js.__okama_err(line)
+                else:
+                    js.__okama_log(line)
+    def flush(self):
+        if self.buffer:
+            if self.is_err:
+                js.__okama_err(self.buffer)
+            else:
+                js.__okama_log(self.buffer)
+            self.buffer = ""
+
+sys.stdout = _StdOut(False)
+sys.stderr = _StdOut(True)
 `);
 
       // Install pygame browser stubs
@@ -867,13 +905,27 @@ sys.stderr = _StdOut()
       setProgress("");
 
       // Now run the user code - pygame is already available
-      await py.runPythonAsync(code);
+      try {
+        await py.runPythonAsync(code);
+      } catch (runErr) {
+        // Python runtime errors
+        const errMsg = String(runErr);
+        runtimeErrors.push(errMsg);
+        appendOutput(`[Runtime Error] ${errMsg}`, true);
+        throw runErr;
+      }
+
+      // Collect any runtime errors that were printed
+      if (runtimeErrors.length > 0) {
+        setError(runtimeErrors.join("\n"));
+      }
 
       setState("stopped");
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg);
       setState("error");
+      appendOutput(`[Error] ${msg}`, true);
     }
   }, [code]);
 
@@ -992,18 +1044,48 @@ sys.stderr = _StdOut()
         {/* Console output */}
         {output.length > 0 && (
           <div
-            className="border-t shrink-0 overflow-y-auto max-h-32"
+            className="border-t shrink-0 overflow-y-auto max-h-40"
             style={{ borderColor: "rgba(243,239,228,0.08)", background: "#10120f" }}
           >
-            <p
-              className="px-3 py-1 text-xs font-bold uppercase tracking-widest border-b sticky top-0"
-              style={{ color: "#c9c3b3", borderColor: "rgba(243,239,228,0.06)", background: "#10120f" }}
+            <div
+              className="px-3 py-1.5 flex items-center justify-between border-b sticky top-0 z-10"
+              style={{ borderColor: "rgba(243,239,228,0.06)", background: "#181a16" }}
             >
-              Console
-            </p>
+              <div className="flex items-center gap-2">
+                <Terminal size={12} style={{ color: "#c9c3b3" }} />
+                <span className="text-xs font-bold uppercase tracking-widest" style={{ color: "#c9c3b3" }}>
+                  Console
+                </span>
+                {error && (
+                  <span
+                    className="text-xs px-1.5 py-0.5 rounded font-bold"
+                    style={{ background: "rgba(242,109,91,0.15)", color: "#f26d5b" }}
+                  >
+                    <XCircle size={10} className="inline mr-1" />
+                    Error
+                  </span>
+                )}
+              </div>
+              {error && onSendToAI && (
+                <button
+                  onClick={() => onSendToAI(error)}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold transition-colors"
+                  style={{ background: "#8df77f", color: "#10120f" }}
+                >
+                  <Wand2 size={10} /> AI Fix
+                </button>
+              )}
+            </div>
             {output.map((line, i) => (
-              <pre key={i} className="px-3 py-0.5 text-xs font-mono" style={{ color: "#8df77f" }}>
-                {line}
+              <pre
+                key={i}
+                className="px-3 py-0.5 text-xs font-mono"
+                style={{
+                  color: line.isError ? "#f26d5b" : "#8df77f",
+                  background: line.isError ? "rgba(242,109,91,0.05)" : "transparent",
+                }}
+              >
+                {line.text}
               </pre>
             ))}
           </div>

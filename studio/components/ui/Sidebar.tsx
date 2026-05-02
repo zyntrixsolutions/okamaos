@@ -9,7 +9,11 @@ import {
   FolderOpen,
   Settings,
   Zap,
+  Download,
+  ExternalLink,
 } from "lucide-react";
+
+const OKAMAOS_DOWNLOADS_URL = "https://zyntrixsolutions.github.io/okamaos/#downloads";
 
 const NAV = [
   { href: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -84,6 +88,28 @@ export default function Sidebar() {
             </Link>
           );
         })}
+        <a
+          href={OKAMAOS_DOWNLOADS_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-3 px-2 py-2.5 rounded-md transition-colors duration-150 group"
+          style={{
+            color: "#ffcf4a",
+            background: "rgba(255,207,74,0.08)",
+            border: "1px solid rgba(255,207,74,0.14)",
+          }}
+          title="Download OkamaOS"
+        >
+          <Download size={18} strokeWidth={2} className="shrink-0" />
+          <span className="hidden md:block text-sm font-semibold truncate">
+            OS Downloads
+          </span>
+          <ExternalLink
+            size={12}
+            strokeWidth={2}
+            className="hidden md:block ml-auto shrink-0 opacity-75"
+          />
+        </a>
       </nav>
 
       {/* Version pill */}

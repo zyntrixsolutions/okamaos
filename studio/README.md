@@ -1,36 +1,56 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Okama Studio
 
-## Getting Started
+Okama Studio is the creator app for the OkamaOS ecosystem. Build games in the
+browser, preview Python/Pygame projects, export `.ok` packages, and publish
+games to a local dev-store URL that OkamaOS can install from.
 
-First, run the development server:
+## Ecosystem Links
+
+- OkamaOS Pages portal: <https://zyntrixsolutions.github.io/okamaos/>
+- OS downloads: <https://zyntrixsolutions.github.io/okamaos/#downloads>
+- Beginner manual: <https://zyntrixsolutions.github.io/okamaos/docs/manual.md>
+- Package docs: <https://zyntrixsolutions.github.io/okamaos/docs/packages.md>
+- Dev Console docs: <https://zyntrixsolutions.github.io/okamaos/docs/dev-console.md>
+
+Studio includes visible links back to the Pages portal so creators can download
+the OS, read update instructions, and test exported packages on the console.
+
+## Local Development
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```text
+http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Core Workflow
 
-## Learn More
+1. Create or open a project.
+2. Build with the AI agent or edit files directly.
+3. Preview the game in the browser.
+4. Export a `.ok` package.
+5. Install the package on OkamaOS by USB or Studio dev server.
 
-To learn more about Next.js, take a look at the following resources:
+## Dev Server Loop
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Start Studio on a machine connected to the same LAN as OkamaOS.
+2. Open a game project.
+3. Publish the game to the dev server.
+4. Copy the LAN catalog URL shown by Studio.
+5. On OkamaOS, open Game Store.
+6. Press X to enter a custom store URL.
+7. Enter the Studio LAN URL and install the game.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Version Tracking
 
-## Deploy on Vercel
+- Studio version: `VERSION`
+- Package metadata: `package.json` and `package-lock.json`
+- Studio changelog: `CHANGELOG.md`
+- Studio roadmap: `ROADMAP.md`
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Keep all four aligned when the Studio user experience changes.

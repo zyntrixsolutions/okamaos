@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   Code2, BookOpen, FolderOpen, Plus, Zap, ArrowRight,
   Gamepad2, Sword, Car, Globe, Pencil, Star, Clock,
+  Download, ExternalLink,
 } from "lucide-react";
 import Header from "@/components/ui/Header";
 import { loadProjects, createBlankProject, saveProject, ensureDemoProject, DEMO_PROJECT_ID, type Project } from "@/lib/store/projects";
@@ -16,6 +17,9 @@ const GENRES = [
   { id: "rpg", label: "RPG", icon: Globe, desc: "Story & adventure" },
   { id: "blank", label: "Blank", icon: Pencil, desc: "Start from scratch" },
 ];
+
+const OKAMAOS_DOWNLOADS_URL = "https://zyntrixsolutions.github.io/okamaos/#downloads";
+const OKAMAOS_MANUAL_URL = "https://zyntrixsolutions.github.io/okamaos/docs/manual.md";
 
 function timeAgo(ts: number): string {
   const diff = Date.now() - ts;
@@ -116,6 +120,15 @@ export default function Dashboard() {
               >
                 <BookOpen size={16} /> Learn Python
               </Link>
+              <a
+                href={OKAMAOS_DOWNLOADS_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-colors"
+                style={{ background: "rgba(255,207,74,0.10)", color: "#ffcf4a", border: "1px solid rgba(255,207,74,0.2)" }}
+              >
+                <Download size={16} /> Download OkamaOS <ExternalLink size={12} />
+              </a>
             </div>
           </div>
         </div>
@@ -215,7 +228,7 @@ export default function Dashboard() {
           </div>
 
           {/* Quick actions */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             {[
               { href: "/studio", icon: Code2, label: "Open Studio", color: "#8df77f", bg: "rgba(141,247,127,0.08)" },
               { href: "/learn", icon: BookOpen, label: "Lessons", color: "#53d9e6", bg: "rgba(83,217,230,0.08)" },
@@ -232,6 +245,18 @@ export default function Dashboard() {
                 <span className="text-xs font-bold text-center" style={{ color }}>{label}</span>
               </Link>
             ))}
+            <a
+              href={OKAMAOS_MANUAL_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex flex-col items-center gap-2 p-4 rounded-xl border transition-all group hover:scale-105"
+              style={{ background: "rgba(243,239,228,0.06)", borderColor: "rgba(243,239,228,0.14)" }}
+            >
+              <Download size={22} style={{ color: "#c9c3b3" }} />
+              <span className="text-xs font-bold text-center" style={{ color: "#c9c3b3" }}>
+                OS Manual
+              </span>
+            </a>
           </div>
 
           {/* Recent projects */}

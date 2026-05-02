@@ -268,6 +268,18 @@
 - [x] Dev console tail-scroll — long command input shows `…` prefix instead of clipping
 - [x] Custom store URL — Game Store X button opens URL entry for dev-server LAN hosting
 
+### v1.3.2 — UI/UX Stability Update ✅
+- [x] **Backspace root-cause fix**: `_is_text_entry_state()` now includes `store_url_entry`; `_dispatch()` BACKSPACE block handles all three text-entry states before early-returning
+- [x] **Double-header fix**: `_draw_store_url_entry()` no longer calls `_draw_section_header()` — modal carries its own title, eliminating the overlapping "⋆ Game Store / ⋆ Set Store URL" glitch
+- [x] **Debug overlay relocated**: DEV/RAM/FPS bar moved from top-right (clashing with clock and back-hint) to bottom-left above the hint bar
+- [x] **URL input clipping**: long URLs scroll left inside the input box; tail always visible
+- [x] **URL validity dot**: green/amber/dim indicator to the right of the URL input
+- [x] **Header version gap**: 10 px breathing room between section title and `vX.X.X` label
+- [x] **Catalog scroll viewport**: `_store_visible_count()` + updated `_store_catalog_rects()` implement a proper scroll window
+- [x] **DPAD auto-scroll**: selection automatically shifts the viewport edge when navigating past visible bounds; wrap-around snaps scroll correctly
+- [x] **Scroll bar**: thin track+thumb indicator on right edge of game catalog list
+- [x] **Styled empty-catalog card**: centred rounded card with star icon replaces plain text fallback
+
 ### v1.x — Console Polish
 - [x] Silent boot (`quiet loglevel=0`, boot log redirect) — completed in v0.3
 - [ ] Boot time < 8 seconds

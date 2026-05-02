@@ -883,7 +883,7 @@ class OkamaShell:
         return events
 
     def _is_text_entry_state(self) -> bool:
-        return self.state in ("dev_console", "wifi_psk")
+        return self.state in ("dev_console", "wifi_psk", "store_url_entry")
 
     def _handle_axis_to_dpad(self, ev: dict, out: list):
         axis = ev.get("axis", "")
@@ -939,6 +939,8 @@ class OkamaShell:
                 self._dev_console_cmd = self._dev_console_cmd[:-1]
             elif self.state == "wifi_psk" and self.wifi_psk_input:
                 self.wifi_psk_input = self.wifi_psk_input[:-1]
+            elif self.state == "store_url_entry" and self._store_url_input:
+                self._store_url_input = self._store_url_input[:-1]
             return
 
         if self.state == "home":
@@ -2304,8 +2306,18 @@ class OkamaShell:
             self._enter_store_url_entry()
         elif action == "DPAD_UP" and n:
             self.store_idx = (self.store_idx - 1) % n
+            visible = self._store_visible_count()
+            if self.store_idx < self.store_scroll:
+                self.store_scroll = self.store_idx
+            elif self.store_idx == n - 1:
+                self.store_scroll = max(0, n - visible)
         elif action == "DPAD_DOWN" and n:
             self.store_idx = (self.store_idx + 1) % n
+            visible = self._store_visible_count()
+            if self.store_idx >= self.store_scroll + visible:
+                self.store_scroll = self.store_idx - visible + 1
+            elif self.store_idx == 0:
+                self.store_scroll = 0
         elif action == "A" and n:
             self._store_download(self.store_catalog[self.store_idx])
         elif action == "CLICK" and ev:
@@ -2318,13 +2330,15 @@ class OkamaShell:
             if url_r.collidepoint(pos):
                 self._enter_store_url_entry()
                 return
-            rects = self._subscreen_rects(n)
-            for i, r in enumerate(rects):
+            rects = self._store_catalog_rects(n)
+            for j, r in enumerate(rects):
                 if r.collidepoint(pos):
-                    if i == self.store_idx:
-                        self._store_download(self.store_catalog[i])
-                    else:
-                        self.store_idx = i
+                    i = self.store_scroll + j
+                    if i < n:
+                        if i == self.store_idx:
+                            self._store_download(self.store_catalog[i])
+                        else:
+                            self.store_idx = i
             return
 
     def _store_refresh_rect(self):
@@ -2350,39 +2364,67 @@ class OkamaShell:
         self.state = "game_store"
 
     def _draw_store_url_entry(self):
-        self._draw_section_header("⋆ Set Store URL", COL_STORE)
-        overlay = _alpha_surf(WIDTH - 80, 160, (0, 0, 0), 220)
-        box_y = HEIGHT // 2 - 80
+        overlay = _alpha_surf(WIDTH - 80, 186, (0, 0, 0), 220)
+        box_y = HEIGHT // 2 - 93
         self.screen.blit(overlay, (40, box_y))
         pygame.draw.rect(self.screen, COL_STORE,
-                         pygame.Rect(40, box_y, WIDTH - 80, 160), 2, border_radius=10)
+                         pygame.Rect(40, box_y, WIDTH - 80, 186), 2, border_radius=10)
+        # Modal title (replaces duplicate section header)
+        title_s = self.font_sm.render("\u22c6 Set Store URL", True, COL_STORE)
+        self.screen.blit(title_s, (60, box_y + 14))
         lbl = self.font_sm.render("Enter custom store URL (blank = default):", True, COL_DIM)
-        self.screen.blit(lbl, (60, box_y + 16))
+        self.screen.blit(lbl, (60, box_y + 40))
         hint2 = self.font_hint.render(
             "e.g. http://192.168.1.100:3000/api/dev-store/catalog",
             True, COL_DIM)
-        self.screen.blit(hint2, (60, box_y + 36))
-        inp_y = box_y + 70
+        self.screen.blit(hint2, (60, box_y + 60))
+        inp_y = box_y + 88
+        inp_w = WIDTH - 130
         pygame.draw.rect(self.screen, (20, 24, 18),
-                         pygame.Rect(56, inp_y, WIDTH - 112, 36), border_radius=6)
+                         pygame.Rect(56, inp_y, inp_w, 36), border_radius=6)
+        # URL validity indicator dot (right of input box)
+        raw = self._store_url_input.strip()
+        if raw:
+            dot_col = COL_OK if (raw.startswith("http://") or raw.startswith("https://")) \
+                      else (220, 160, 40)
+        else:
+            dot_col = COL_DIM
+        pygame.draw.circle(self.screen, dot_col,
+                           (56 + inp_w + 10, inp_y + 18), 5)
         pygame.draw.rect(self.screen, COL_STORE,
-                         pygame.Rect(56, inp_y, WIDTH - 112, 36), 1, border_radius=6)
+                         pygame.Rect(56, inp_y, inp_w, 36), 1, border_radius=6)
+        # Clip URL text to input box width (show tail when text overflows)
         url_txt = self._store_url_input
         if (self._tick // 30) % 2 == 0:
             url_txt += "_"
         url_surf = self.font_sm.render(url_txt, True, COL_TEXT)
-        self.screen.blit(url_surf, (64, inp_y + 8))
+        max_w = inp_w - 16
+        if url_surf.get_width() > max_w:
+            clipped = pygame.Surface((max_w, url_surf.get_height()), pygame.SRCALPHA)
+            clipped.blit(url_surf, (max_w - url_surf.get_width(), 0))
+            self.screen.blit(clipped, (64, inp_y + 8))
+        else:
+            self.screen.blit(url_surf, (64, inp_y + 8))
         ok_hint = self.font_hint.render(
             "[Enter] Confirm   [B/Esc] Cancel", True, COL_DIM)
-        self.screen.blit(ok_hint, (60, box_y + 118))
+        self.screen.blit(ok_hint, (60, box_y + 148))
+
+    def _store_visible_count(self) -> int:
+        """How many catalog cards fit in the viewport."""
+        card_h, gap = 68, 6
+        start_y = 112
+        return max(1, (HEIGHT - 60 - start_y) // (card_h + gap))
 
     def _store_catalog_rects(self, n: int) -> list:
         card_h, gap = 68, 6
         start_y = 112
+        scroll = self.store_scroll
+        visible = self._store_visible_count()
+        count = min(visible, max(0, n - scroll))
         return [
-            pygame.Rect(40, start_y + i * (card_h + gap), WIDTH - 80, card_h)
-            for i in range(n)
-            if start_y + i * (card_h + gap) + card_h <= HEIGHT - 60
+            pygame.Rect(40, start_y + j * (card_h + gap), WIDTH - 80, card_h)
+            for j in range(count)
+            if start_y + j * (card_h + gap) + card_h <= HEIGHT - 60
         ]
 
     def _draw_game_store(self):
@@ -2422,13 +2464,20 @@ class OkamaShell:
         # Catalog list
         n = len(self.store_catalog)
         if n == 0:
-            info = self.font_sm.render(
-                "No catalog loaded. Press Y or click Refresh to fetch.",
-                True, COL_DIM)
-            self.screen.blit(info, (WIDTH // 2 - info.get_width() // 2, 300))
+            ec_y = HEIGHT // 2 - 36
+            ec_rect = pygame.Rect(WIDTH // 2 - 200, ec_y, 400, 72)
+            pygame.draw.rect(self.screen, COL_CARD, ec_rect, border_radius=12)
+            pygame.draw.rect(self.screen, COL_DIM, ec_rect, 1, border_radius=12)
+            ec1 = self.font_sm.render("\u2606 No catalog loaded", True, COL_DIM)
+            ec2 = self.font_hint.render("Press Y or click Refresh to fetch.", True, COL_DIM)
+            self.screen.blit(ec1, (ec_rect.x + ec_rect.w // 2 - ec1.get_width() // 2, ec_y + 14))
+            self.screen.blit(ec2, (ec_rect.x + ec_rect.w // 2 - ec2.get_width() // 2, ec_y + 42))
         else:
+            scroll = self.store_scroll
             rects = self._store_catalog_rects(n)
-            for i, (entry, r) in enumerate(zip(self.store_catalog, rects)):
+            visible_entries = self.store_catalog[scroll: scroll + len(rects)]
+            for j, (entry, r) in enumerate(zip(visible_entries, rects)):
+                i = scroll + j
                 is_sel = (i == self.store_idx)
                 is_hov = r.collidepoint(mx, my)
                 is_inst = entry.get("id") in installed_ids
@@ -2464,6 +2513,19 @@ class OkamaShell:
                     badge = self.font_hint.render(size_str, True, COL_DIM)
                 self.screen.blit(badge, (r.right - badge.get_width() - 16,
                                          r.y + (r.h - badge.get_height()) // 2))
+
+            # Scroll bar (only when list overflows viewport)
+            visible = self._store_visible_count()
+            if n > visible:
+                sb_x = WIDTH - 14
+                sb_top, sb_bot = 112, HEIGHT - 60
+                sb_h = sb_bot - sb_top
+                thumb_h = max(24, sb_h * visible // n)
+                thumb_y = sb_top + (sb_h - thumb_h) * scroll // max(1, n - visible)
+                pygame.draw.rect(self.screen, COL_CARD,
+                                 pygame.Rect(sb_x, sb_top, 6, sb_h), border_radius=3)
+                pygame.draw.rect(self.screen, COL_STORE,
+                                 pygame.Rect(sb_x, thumb_y, 6, thumb_h), border_radius=3)
 
         # Download progress bar
         recv, total = self._store_dl_progress
@@ -3474,7 +3536,7 @@ class OkamaShell:
         title_y = (hdr_h - surf.get_height()) // 2
         self.screen.blit(surf, (18, title_y))
         ver_surf = self.font_hint.render(f"v{self._os_version()}", True, COL_DIM)
-        self.screen.blit(ver_surf, (26 + surf.get_width(), (hdr_h - ver_surf.get_height()) // 2 + 2))
+        self.screen.blit(ver_surf, (36 + surf.get_width(), (hdr_h - ver_surf.get_height()) // 2 + 2))
 
         # Clock (embedded in header, far right)
         clock_surf = None
@@ -3536,7 +3598,7 @@ class OkamaShell:
             debug = f"DEV | FPS:{self.clock.get_fps():.0f}"
 
         surf = self.font_hint.render(debug, True, COL_WARN)
-        self.screen.blit(surf, (WIDTH - surf.get_width() - 10, 6))
+        self.screen.blit(surf, (10, HEIGHT - 44 - surf.get_height() - 6))
 
 
 # ---------------------------------------------------------------------------

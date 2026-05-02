@@ -5,6 +5,26 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.3.2] - 2026-05-02
+
+### Fixed
+- **Backspace in Set Store URL (root cause)**: `_is_text_entry_state()` now includes `"store_url_entry"` so SDL uses `control_mapping` (which maps `K_BACKSPACE`) instead of `nav_mapping`. The `_dispatch()` BACKSPACE early-return block now also handles `store_url_entry`, eliminating the unreachable state branch.
+- **Double header on Set Store URL screen**: `_draw_store_url_entry()` no longer calls `_draw_section_header()`; the title is drawn inside the modal box, preventing the "⋆ Game Store" and "⋆ Set Store URL" titles from overlapping.
+
+### Improved
+- **Debug overlay position**: DEV/RAM/FPS overlay moved from top-right (conflicting with clock and back-hint) to bottom-left just above the hint bar.
+- **URL input text clipping**: Long URLs are clipped to fit the input box width; the tail of the string is always visible (scrolls left as you type).
+- **URL validity indicator**: A dot to the right of the URL input shows green (valid `http(s)://` URL), amber (non-empty but malformed), or dim (empty/default).
+- **Header version label**: Added a 10 px gap between the section title and the `vX.X.X` version label to prevent crowding on longer titles.
+
+### Added
+- **Game catalog scroll**: `_store_visible_count()` and `_store_catalog_rects()` now respect `store_scroll` offset, showing a scrollable viewport when the catalog has more entries than fit on screen.
+- **Auto-scroll on DPAD**: DPAD_UP/DOWN in the game store automatically shifts the viewport when the selected item moves past the visible edge; wrapping snaps scroll to the correct end.
+- **Scroll bar**: A thin pink track+thumb bar appears on the right edge of the catalog list whenever the list overflows the viewport.
+- **Styled empty-catalog card**: The "no catalog" message is now a centred rounded card with a star icon and two-line text instead of a plain single-line render.
+
+---
+
 ## [1.3.1] - 2026-05-02
 
 ### Fixed

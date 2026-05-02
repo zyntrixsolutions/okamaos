@@ -5,9 +5,11 @@ import { streamQwen, generateQwen, type QwenModel } from "./qwen";
 import { GAME_ENGINE_SYSTEM_PROMPT, TUTOR_SYSTEM_PROMPT } from "./prompts";
 
 export type ModelId =
+  | "gemini-3.1-flash-lite"
+  | "gemini-3.0-flash"
+  | "gemini-2.5-flash"
   | "gemini-1.5-flash"
   | "gemini-1.5-pro"
-  | "gemini-2.0-flash"
   | "qwen-max"
   | "qwen-plus"
   | "qwen-turbo";
@@ -68,7 +70,9 @@ export async function generateAI(
 }
 
 export const MODEL_OPTIONS: Array<{ id: ModelId; label: string; provider: "gemini" | "qwen"; badge?: string }> = [
-  { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash", provider: "gemini", badge: "Default" },
+  { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash Lite", provider: "gemini", badge: "Default" },
+  { id: "gemini-3.0-flash", label: "Gemini 3.0 Flash", provider: "gemini" },
+  { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", provider: "gemini" },
   { id: "gemini-1.5-flash", label: "Gemini 1.5 Flash", provider: "gemini" },
   { id: "gemini-1.5-pro", label: "Gemini 1.5 Pro", provider: "gemini", badge: "Smart" },
   { id: "qwen-max", label: "Qwen Max", provider: "qwen", badge: "Smart" },

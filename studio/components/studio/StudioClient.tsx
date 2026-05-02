@@ -22,13 +22,13 @@ interface StudioClientProps {
 }
 
 function useAIConfig() {
-  const [model, setModel] = useState<ModelId>("gemini-2.0-flash");
+  const [model, setModel] = useState<ModelId>("gemini-3.1-flash-lite");
   const [geminiKey, setGeminiKey] = useState("");
   const [qwenKey, setQwenKey] = useState("");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    setModel((localStorage.getItem("okama-model") as ModelId) || "gemini-2.0-flash");
+    setModel((localStorage.getItem("okama-model") as ModelId) || "gemini-3.1-flash-lite");
     setGeminiKey(localStorage.getItem("okama-gemini-key") || "");
     setQwenKey(localStorage.getItem("okama-qwen-key") || "");
   }, []);

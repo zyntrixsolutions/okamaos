@@ -5,6 +5,15 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [2.1.1] - 2026-05-02 — .ok Package Install Reliability
+
+### Fixed
+- **`usr/lib/okamaos/package.py`** — `_is_zip()` now detects all ZIP magic signatures (`PK\x03\x04`, `PK\x05\x06`, `PK\x07\x08`), preventing empty/spanned ZIPs from being misidentified as tar.gz.
+- **`usr/lib/okamaos/package.py`** — Added `_sniff_content()` diagnostic helper; `inspect()` and `_verify_no_traversal()` now report whether a file is HTML (404 page), JSON, empty, or unknown instead of the cryptic "not a gzip file".
+- **`usr/lib/okamaos/store.py`** — `download_game()` now validates archive magic bytes after download and raises `StoreError` with a clear message when the server returns an HTML error page or JSON instead of a `.ok` package.
+
+---
+
 ## [2.1.0] - 2026-05-02 — Relay Controls & Dev Tooling
 
 ### Added — OS (`usr/`)

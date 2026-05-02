@@ -126,6 +126,37 @@ def download_game(
     except OSError as e:
         raise StoreError(f"Write error: {e}")
 
+    # Validate that downloaded file is actually an archive, not an HTML error page
+    try:
+        with open(dest_path, "rb") as f:
+            header = f.read(4)
+        if not header:
+            raise StoreError("Downloaded file is empty.")
+        if header not in (
+            b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08",  # ZIP
+            b"\x1f\x8b",                                      # gzip
+            b"ustar",                                         # plain tar (unlikely)
+        ):
+            # Peek at first 256 bytes for diagnostics
+            with open(dest_path, "rb") as f:
+                peek = f.read(256)
+            text = peek.decode("utf-8", "replace").lstrip()
+            if text.startswith("<"):
+                raise StoreError(
+                    "Downloaded file is HTML (likely a 404 / redirect page). "
+                    "Check the download URL in the catalog."
+                )
+            if text.startswith(("{", "[")):
+                raise StoreError(
+                    "Downloaded file is JSON (likely an API error). "
+                    "Check the download URL in the catalog."
+                )
+            raise StoreError(
+                f"Downloaded file does not look like a .ok archive (magic: {header!r})."
+            )
+    except OSError:
+        pass  # unreadable file — let checksum / install catch it
+
     if expected:
         algo, _, expected_hex = expected.partition(":")
         if (algo == "sha256" and h.hexdigest() != expected_hex) or (

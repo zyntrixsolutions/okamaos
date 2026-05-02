@@ -28,12 +28,36 @@ def _tar_mode(writing: bool = True) -> str:
 
 
 def _is_zip(ok_path: str) -> bool:
-    """Return True if the file is a ZIP archive (magic bytes PK\x03\x04)."""
+    """Return True if the file is a ZIP archive (magic bytes PK\x03\x04, PK\x05\x06, PK\x07\x08)."""
     try:
         with open(ok_path, "rb") as f:
-            return f.read(4) == b"PK\x03\x04"
+            sig = f.read(4)
+            return sig in (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08")
     except OSError:
         return False
+
+
+def _sniff_content(ok_path: str) -> str:
+    """Return a short description of the file content for diagnostic errors."""
+    try:
+        with open(ok_path, "rb") as f:
+            header = f.read(256)
+    except OSError:
+        return "unreadable file"
+    if not header:
+        return "empty file"
+    if header[:4] in (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"):
+        return "ZIP archive"
+    if header[:2] == b"\x1f\x8b":
+        return "gzip data"
+    if header.startswith(b"ustar") or header.startswith(b"\x00" * 100 + b"ustar"):
+        return "tar archive"
+    text = header.decode("utf-8", "replace")
+    if text.lstrip().startswith("<"):
+        return "HTML document (likely a 404 / redirect page)"
+    if text.lstrip().startswith(("{", "[")):
+        return "JSON document"
+    return f"unknown content ({len(header)} bytes read)"
 
 
 def build(source_dir: str, output_path: str, dev_mode: bool = False) -> str:
@@ -77,7 +101,11 @@ def inspect(ok_path: str) -> dict:
             f = tf.extractfile(member)
             return json.load(f)
     except tarfile.ReadError as exc:
-        raise ManifestError(f"Cannot open package (not a valid tar or zip archive): {exc}") from exc
+        content = _sniff_content(ok_path)
+        raise ManifestError(
+            f"Cannot open package — file appears to be {content}. "
+            f"(tar/zip error: {exc})"
+        ) from exc
 
 
 def _inspect_zip(ok_path: str) -> dict:
@@ -163,4 +191,8 @@ def _verify_no_traversal(ok_path: str) -> None:
                             f"Path traversal detected in package: {member.name}"
                         )
         except tarfile.ReadError as exc:
-            raise ManifestError(f"Cannot read package: {exc}") from exc
+            content = _sniff_content(ok_path)
+            raise ManifestError(
+                f"Cannot read package — file appears to be {content}. "
+                f"(tar error: {exc})"
+            ) from exc

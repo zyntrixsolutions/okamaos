@@ -179,9 +179,10 @@ export default function AIChatPanel({
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
     setStreaming(true);
 
-    // Build history for the AI (exclude the empty assistant placeholder)
+    // Build history for the AI (exclude welcome message and empty assistant placeholder)
+    // Gemini requires first content to be from 'user' role, not 'model'
     const history: HistoryMessage[] = messages
-      .filter((m) => m.content)
+      .filter((m) => m.content && m.id !== "welcome") // Skip welcome message
       .map((m) => ({
         role: m.role === "assistant" ? "model" : "user",
         content: m.content,

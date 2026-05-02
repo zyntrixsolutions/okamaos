@@ -14,10 +14,7 @@ interface HostedGame {
 }
 
 interface ServerInfo {
-  localhost_url: string;
-  lan_ips: string[];
-  catalog_urls: string[];
-  port: string;
+  catalog_url: string;
 }
 
 export default function DevServerPanel() {
@@ -28,13 +25,9 @@ export default function DevServerPanel() {
   const [status, setStatus] = useState("");
 
   const fetchInfo = useCallback(async () => {
-    try {
-      const res = await fetch("/api/dev-store/info");
-      const data = await res.json();
-      setInfo(data);
-    } catch {
-      setStatus("Failed to reach dev server API.");
-    }
+    // Use current deployment URL for catalog
+    const currentUrl = typeof window !== "undefined" ? window.location.origin : "";
+    setInfo({ catalog_url: `${currentUrl}/api/dev-store/catalog` });
   }, []);
 
   const fetchCatalog = useCallback(async () => {
@@ -74,7 +67,6 @@ export default function DevServerPanel() {
     return `${(b / 1024 / 1024).toFixed(1)} MB`;
   };
 
-  const primaryUrl = info?.catalog_urls?.[0] ?? info?.localhost_url ?? "";
 
   return (
     <div className="flex flex-col gap-4 p-4 overflow-y-auto h-full" style={{ background: "#10120f" }}>
@@ -104,67 +96,29 @@ export default function DevServerPanel() {
           1. Package your game with <strong>Publish to Dev Server</strong> below.
         </p>
         <p style={{ color: "#c9c3b3" }}>
-          2. In OkamaOS → Game Store → press <strong>X</strong> → enter your LAN URL.
+          2. In OkamaOS → Game Store → press <strong>X</strong> → enter the Catalog URL.
         </p>
         <p style={{ color: "#c9c3b3" }}>
           3. The console fetches your catalog and can download + install games wirelessly.
         </p>
       </div>
 
-      {/* Server URLs */}
+      {/* Catalog URL */}
       {info && (
-        <div
-          className="rounded-xl border p-3 flex flex-col gap-2"
-          style={{ borderColor: "rgba(243,239,228,0.10)", background: "#181a16" }}
-        >
-          <p className="text-xs font-bold uppercase tracking-widest" style={{ color: "#c9c3b3" }}>
-            Store URLs
-          </p>
-
-          {/* Localhost */}
-          <UrlRow
-            label="Localhost"
-            url={info.localhost_url}
-            copied={copied}
-            onCopy={copyUrl}
-          />
-
-          {/* LAN IPs */}
-          {info.catalog_urls.map((url, i) => (
-            <UrlRow
-              key={url}
-              label={`LAN ${i + 1} — ${info.lan_ips[i] ?? ""}`}
-              url={url}
-              copied={copied}
-              onCopy={copyUrl}
-              highlight={i === 0}
-            />
-          ))}
-
-          {info.lan_ips.length === 0 && (
-            <p className="text-xs" style={{ color: "#6b7464" }}>
-              No LAN interface detected. Use localhost if console is on the same machine.
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Console config hint */}
-      {primaryUrl && (
         <div
           className="p-3 rounded-lg flex flex-col gap-2"
           style={{ background: "rgba(141,247,127,0.04)", border: "1px solid rgba(141,247,127,0.15)" }}
         >
           <p className="text-xs font-bold" style={{ color: "#8df77f" }}>
-            Enter this URL on your OkamaOS console:
+            Catalog URL — Enter this on your OkamaOS console:
           </p>
           <div
             className="flex items-center gap-2 p-2 rounded font-mono text-xs cursor-pointer"
             style={{ background: "#10120f", border: "1px solid rgba(141,247,127,0.2)" }}
-            onClick={() => copyUrl(primaryUrl)}
+            onClick={() => copyUrl(info.catalog_url)}
           >
-            <span style={{ color: "#8df77f", flex: 1, wordBreak: "break-all" }}>{primaryUrl}</span>
-            {copied === primaryUrl
+            <span style={{ color: "#8df77f", flex: 1, wordBreak: "break-all" }}>{info.catalog_url}</span>
+            {copied === info.catalog_url
               ? <CheckCircle size={12} style={{ color: "#8df77f", flexShrink: 0 }} />
               : <Copy size={12} style={{ color: "#6b7464", flexShrink: 0 }} />
             }
@@ -238,38 +192,3 @@ export default function DevServerPanel() {
   );
 }
 
-function UrlRow({
-  label,
-  url,
-  copied,
-  onCopy,
-  highlight = false,
-}: {
-  label: string;
-  url: string;
-  copied: string;
-  onCopy: (url: string) => void;
-  highlight?: boolean;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <p className="text-xs" style={{ color: "#6b7464" }}>{label}</p>
-      <div
-        className="flex items-center gap-2 p-2 rounded font-mono text-xs cursor-pointer transition-colors"
-        style={{
-          background: "#10120f",
-          border: `1px solid ${highlight ? "rgba(83,217,230,0.25)" : "rgba(243,239,228,0.08)"}`,
-        }}
-        onClick={() => onCopy(url)}
-      >
-        <span style={{ color: highlight ? "#53d9e6" : "#c9c3b3", flex: 1, wordBreak: "break-all", fontSize: "0.7rem" }}>
-          {url}
-        </span>
-        {copied === url
-          ? <CheckCircle size={11} style={{ color: "#8df77f", flexShrink: 0 }} />
-          : <Copy size={11} style={{ color: "#6b7464", flexShrink: 0 }} />
-        }
-      </div>
-    </div>
-  );
-}

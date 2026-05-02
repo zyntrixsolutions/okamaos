@@ -5,7 +5,8 @@
 - Migrated dev server storage from local filesystem to Vercel Blob storage.
 - Fixed ENOENT error when publishing games in deployed environments.
 - Dev server now works from any URL including okamaos.zyntrix.solutions.
-- Updated DevServerPanel UI to reflect cloud storage instead of local storage.
+- Updated DevServerPanel to show current deployment URL instead of localhost/LAN IPs.
+- Simplified DevServerPanel UI with single catalog URL for easier console input.
 
 ## 0.3.3 - 2026-05-02
 

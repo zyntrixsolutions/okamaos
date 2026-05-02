@@ -5,6 +5,28 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.3.0 / studio-0.3.0] - 2026-05-02
+
+### Added (Studio — Dev-Server Game Hosting)
+- **Dev-store API routes** (`app/api/dev-store/`): catalog GET, upload POST, remove DELETE, info GET
+- **DevServerPanel**: shows LAN IP/URL, lists hosted games, copy-to-clipboard URL, remove controls
+- **"Publish to Dev Server" button** in PackageBuilder — builds `.ok` in-browser and POSTs to local dev-store API
+- **"Server" tab** in StudioClient right panel with dedicated Server icon
+
+### Added (Studio — Branding)
+- `public/okama-labs-logo.svg` — Okama Labs wordmark with concentric offset-circles mark
+- `public/zyntrix-favicon.svg` — Zyntrix Z-in-circle favicon for the Studio browser tab
+- Updated `app/layout.tsx`: title is now "Okama Studio — OkamaLabs Game Engine Platform"
+
+### Fixed (Console — system update v1.0.3 "devlink")
+- **ZIP package support**: `.ok` files built by Okama Studio now install correctly; auto-detects ZIP vs tar via magic bytes
+- **Key repeat**: `pygame.key.set_repeat(280, 80)` + evdev `_KEY_REPEAT` forwarding for nav/backspace codes
+- **Dev console ANSI**: `TERM=dumb`, `NO_COLOR=1`, `LS_COLORS=` on PTY shell + `_ANSI_RE` regex strip
+- **Dev console tail-scroll**: long command input shows `…` prefix and scrolls left
+- **Game Store custom URL**: X button opens URL entry overlay; URL saved to `okama.conf` STORE_URL
+
+---
+
 ## [studio-0.2.0] - 2026-05-02
 
 ### Added (Okama Agent — Agentic AI Upgrade)

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Package, GitBranch } from "lucide-react";
+import { Package, GitBranch, Server } from "lucide-react";
 import Header from "@/components/ui/Header";
 import FileTree from "@/components/studio/FileTree";
 import CodeEditor from "@/components/studio/CodeEditor";
@@ -11,6 +11,7 @@ import AgentChat from "@/components/studio/AgentChat";
 import AssetManager from "@/components/studio/AssetManager";
 import PackageBuilder from "@/components/studio/PackageBuilder";
 import VersionPanel from "@/components/studio/VersionPanel";
+import DevServerPanel from "@/components/studio/DevServerPanel";
 import {
   getProject, saveProject, type Project, type ProjectFile, type OkManifest,
 } from "@/lib/store/projects";
@@ -19,7 +20,7 @@ import {
 } from "@/lib/store/versionHistory";
 import type { ModelId } from "@/lib/ai/router";
 
-type RightTab = "agent" | "preview" | "assets" | "package" | "history";
+type RightTab = "agent" | "preview" | "assets" | "package" | "history" | "server";
 
 interface StudioClientProps {
   projectId: string;
@@ -170,6 +171,7 @@ export default function StudioClient({ projectId }: StudioClientProps) {
     assets: "Assets",
     package: "Export",
     history: "History",
+    server: "Server",
   };
 
   const tabStyle = (t: RightTab) => ({
@@ -261,9 +263,11 @@ export default function StudioClient({ projectId }: StudioClientProps) {
             className="flex items-center border-b shrink-0 overflow-x-auto"
             style={{ borderColor: "rgba(243,239,228,0.08)", background: "#181a16" }}
           >
-            {(["agent", "preview", "assets", "package", "history"] as RightTab[]).map((t) => (
+            {(["agent", "preview", "assets", "package", "history", "server"] as RightTab[]).map((t) => (
               <button key={t} onClick={() => setRightTab(t)} style={tabStyle(t)}>
-                {t === "history" ? <><GitBranch size={10} className="inline mr-1" />{TAB_LABELS[t]}</> : TAB_LABELS[t]}
+                {t === "history" ? <><GitBranch size={10} className="inline mr-1" />{TAB_LABELS[t]}</>
+                  : t === "server" ? <><Server size={10} className="inline mr-1" />{TAB_LABELS[t]}</>
+                  : TAB_LABELS[t]}
               </button>
             ))}
           </div>
@@ -309,6 +313,9 @@ export default function StudioClient({ projectId }: StudioClientProps) {
                 onRestoreCommit={handleRestoreCommit}
                 refreshKey={vcsRefreshKey}
               />
+            )}
+            {rightTab === "server" && (
+              <DevServerPanel />
             )}
           </div>
         </div>

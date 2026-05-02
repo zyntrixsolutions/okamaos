@@ -33,6 +33,7 @@ if not _lib:
     _lib = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../lib")
 sys.path.insert(0, os.path.abspath(_lib))
 
+import re
 import subprocess
 import time
 import json
@@ -47,6 +48,10 @@ import datetime
 import urllib.parse
 import urllib.request
 from pathlib import Path
+
+_ANSI_RE = re.compile(
+    r'\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|[()][0-9A-Za-z])'
+)
 
 # ---------------------------------------------------------------------------
 # Evdev keyboard reader — used when SDL offscreen driver has no input
@@ -183,6 +188,13 @@ class _EvdevKeyboardReader:
                             continue
                         self._held_codes.add(code)
                         self._q.put(code)
+                        char = self._char_for(code)
+                        if char:
+                            self._char_q.put(char)
+                    elif value == _KEY_REPEAT:
+                        nav_codes = {103, 108, 105, 106, 17, 31, 30, 32, 14}
+                        if code in nav_codes:
+                            self._q.put(code)
                         char = self._char_for(code)
                         if char:
                             self._char_q.put(char)
@@ -424,6 +436,7 @@ class OkamaShell:
             WIDTH, HEIGHT = self.screen.get_size()
         pygame.display.set_caption("OkamaOS")
         pygame.mouse.set_visible(True)
+        pygame.key.set_repeat(280, 80)
 
         self.clock = pygame.time.Clock()
         self._init_fonts()
@@ -472,7 +485,8 @@ class OkamaShell:
 
         # Game store state
         self.store_catalog: list = []
-        self.store_idx = 0
+        self._store_url_input: str = ""
+        self.store_status: str = ""
         self.store_scroll = 0
         self.store_status = ""
         self.store_loading = False
@@ -949,6 +963,12 @@ class OkamaShell:
             self._install_browse_input(action, ev)
         elif self.state == "game_store":
             self._game_store_input(action, ev)
+        elif self.state == "store_url_entry":
+            if action in ("B", "ENTER"):
+                if action == "ENTER":
+                    self._store_url_confirm()
+                else:
+                    self.state = "game_store"
         elif self.state == "settings_updates":
             self._settings_updates_input(action, ev)
         elif self.state == "settings_install":
@@ -964,18 +984,22 @@ class OkamaShell:
 
     def _dispatch_text_entry(self):
         """Process accumulated _char_buf for text-entry states."""
-        if self.state == "dev_console" or self.state == "wifi_psk":
+        if self.state in ("dev_console", "wifi_psk", "store_url_entry"):
             for ch in self._char_buf:
                 if ord(ch) == 8:  # Backspace handling via special
                     if self.state == "dev_console" and self._dev_console_cmd:
                         self._dev_console_cmd = self._dev_console_cmd[:-1]
                     elif self.state == "wifi_psk" and self.wifi_psk_input:
                         self.wifi_psk_input = self.wifi_psk_input[:-1]
+                    elif self.state == "store_url_entry" and self._store_url_input:
+                        self._store_url_input = self._store_url_input[:-1]
                 else:
                     if self.state == "dev_console":
                         self._dev_console_cmd += ch
                     elif self.state == "wifi_psk":
                         self.wifi_psk_input += ch
+                    elif self.state == "store_url_entry":
+                        self._store_url_input += ch
 
     def _home_input(self, action: str, ev: dict = None):
         n = len(SECTIONS)
@@ -2218,7 +2242,8 @@ class OkamaShell:
 
         def _work():
             try:
-                data = store_mod.fetch_catalog()
+                custom_url = self.conf.get("STORE_URL", "") or None
+                data = store_mod.fetch_catalog(url=custom_url)
                 self.store_catalog = data.get("games", [])
                 self.store_status = (
                     f"{len(self.store_catalog)} game"
@@ -2272,6 +2297,8 @@ class OkamaShell:
             self.state = "play"
         elif action == "Y":
             self._fetch_store_catalog()
+        elif action == "X":
+            self._enter_store_url_entry()
         elif action == "DPAD_UP" and n:
             self.store_idx = (self.store_idx - 1) % n
         elif action == "DPAD_DOWN" and n:
@@ -2284,6 +2311,10 @@ class OkamaShell:
             if refresh_r.collidepoint(pos):
                 self._fetch_store_catalog()
                 return
+            url_r = self._store_seturl_rect()
+            if url_r.collidepoint(pos):
+                self._enter_store_url_entry()
+                return
             rects = self._subscreen_rects(n)
             for i, r in enumerate(rects):
                 if r.collidepoint(pos):
@@ -2294,8 +2325,53 @@ class OkamaShell:
             return
 
     def _store_refresh_rect(self):
-        btn_w, btn_h = 180, 36
+        btn_w, btn_h = 140, 36
         return pygame.Rect(WIDTH - btn_w - 24, 63, btn_w, btn_h)
+
+    def _store_seturl_rect(self):
+        btn_w, btn_h = 130, 36
+        return pygame.Rect(WIDTH - 140 - 130 - 32, 63, btn_w, btn_h)
+
+    def _enter_store_url_entry(self):
+        self._store_url_input = self.conf.get("STORE_URL", "") or ""
+        self.state = "store_url_entry"
+
+    def _store_url_confirm(self):
+        url = self._store_url_input.strip()
+        if url:
+            self.conf.set("STORE_URL", url)
+            self.store_status = f"Store URL set. Press Y to refresh."
+        else:
+            self.conf.set("STORE_URL", "")
+            self.store_status = "Store URL cleared; using default."
+        self.state = "game_store"
+
+    def _draw_store_url_entry(self):
+        self._draw_section_header("⋆ Set Store URL", COL_STORE)
+        overlay = _alpha_surf(WIDTH - 80, 160, (0, 0, 0), 220)
+        box_y = HEIGHT // 2 - 80
+        self.screen.blit(overlay, (40, box_y))
+        pygame.draw.rect(self.screen, COL_STORE,
+                         pygame.Rect(40, box_y, WIDTH - 80, 160), 2, border_radius=10)
+        lbl = self.font_sm.render("Enter custom store URL (blank = default):", True, COL_DIM)
+        self.screen.blit(lbl, (60, box_y + 16))
+        hint2 = self.font_hint.render(
+            "e.g. http://192.168.1.100:3000/api/dev-store/catalog",
+            True, COL_DIM)
+        self.screen.blit(hint2, (60, box_y + 36))
+        inp_y = box_y + 70
+        pygame.draw.rect(self.screen, (20, 24, 18),
+                         pygame.Rect(56, inp_y, WIDTH - 112, 36), border_radius=6)
+        pygame.draw.rect(self.screen, COL_STORE,
+                         pygame.Rect(56, inp_y, WIDTH - 112, 36), 1, border_radius=6)
+        url_txt = self._store_url_input
+        if (self._tick // 30) % 2 == 0:
+            url_txt += "_"
+        url_surf = self.font_sm.render(url_txt, True, COL_TEXT)
+        self.screen.blit(url_surf, (64, inp_y + 8))
+        ok_hint = self.font_hint.render(
+            "[Enter] Confirm   [B/Esc] Cancel", True, COL_DIM)
+        self.screen.blit(ok_hint, (60, box_y + 118))
 
     def _store_catalog_rects(self, n: int) -> list:
         card_h, gap = 68, 6
@@ -2317,6 +2393,16 @@ class OkamaShell:
                                        or self.store_status.startswith("Failed")
                                        else COL_DIM)
         self.screen.blit(status_s, (24, 70))
+
+        # Set Server button
+        ur = self._store_seturl_rect()
+        u_hov = ur.collidepoint(mx, my)
+        u_bg = _lerp_color(COL_CARD, (83, 217, 230), 0.3 if u_hov else 0.08)
+        pygame.draw.rect(self.screen, u_bg, ur, border_radius=8)
+        pygame.draw.rect(self.screen, (83, 217, 230), ur, 1, border_radius=8)
+        lbl_u = self.font_hint.render("X Set Server", True, (83, 217, 230))
+        self.screen.blit(lbl_u, (ur.x + ur.w // 2 - lbl_u.get_width() // 2,
+                                  ur.y + ur.h // 2 - lbl_u.get_height() // 2))
 
         # Refresh button
         rr = self._store_refresh_rect()
@@ -2735,6 +2821,7 @@ class OkamaShell:
     def _append_dev_output(self, text: str):
         if not text:
             return
+        text = _ANSI_RE.sub("", text)
         text = text.replace("\r\n", "\n").replace("\r", "\n")
         with self._dev_console_lock:
             for ch in text:
@@ -2785,7 +2872,9 @@ class OkamaShell:
         if proc is not None and proc.poll() is None and self._dev_shell_fd is not None:
             return proc
         env = os.environ.copy()
-        env["TERM"] = "vt100"
+        env["TERM"] = "dumb"
+        env["NO_COLOR"] = "1"
+        env["LS_COLORS"] = ""
         env.setdefault("HOME", "/root")
         env["SHELL"] = "/bin/sh"
         env["PS1"] = "okama$ "
@@ -2910,8 +2999,15 @@ class OkamaShell:
         cmd_txt = self._dev_console_cmd
         if (self._tick // 30) % 2 == 0:
             cmd_txt += "_"
-        cmd_surf = self.font_sm.render(cmd_txt, True, COL_TEXT)
-        self.screen.blit(cmd_surf, (50 + prompt.get_width(), input_y))
+        prompt_w = prompt.get_width()
+        avail_w = WIDTH - 110 - prompt_w
+        cmd_display = cmd_txt
+        while self.font_sm.size(cmd_display)[0] > avail_w and len(cmd_display) > 1:
+            cmd_display = cmd_display[1:]
+        if len(cmd_display) < len(cmd_txt):
+            cmd_display = "\u2026" + cmd_display[1:]
+        cmd_surf = self.font_sm.render(cmd_display, True, COL_TEXT)
+        self.screen.blit(cmd_surf, (50 + prompt_w, input_y))
         proc = self._dev_shell_proc
         status = "connected" if proc is not None and proc.poll() is None else "closed"
         hint = self.font_hint.render(
@@ -3019,6 +3115,9 @@ class OkamaShell:
             self._draw_install_browse()
         elif self.state == "game_store":
             self._draw_game_store()
+        elif self.state == "store_url_entry":
+            self._draw_game_store()
+            self._draw_store_url_entry()
         elif self.state == "settings_updates":
             self._draw_settings_updates()
         elif self.state == "settings_install":

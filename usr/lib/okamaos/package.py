@@ -1,7 +1,14 @@
-"""Build, inspect, and extract .ok packages (tar+zstd or tar+gz)."""
+"""Build, inspect, and extract .ok packages.
+
+Supports:
+  - tar+gz (produced by okama-pack build)
+  - ZIP (produced by Okama Studio JSZip builder)
+Reading always auto-detects the archive format.
+"""
 
 import os
 import tarfile
+import zipfile
 import json
 import hashlib
 import tempfile
@@ -16,8 +23,17 @@ COMPRESSION = "gz"  # 'gz' or 'xz'; zstd requires tarfile streaming workaround
 
 def _tar_mode(writing: bool = True) -> str:
     if COMPRESSION == "gz":
-        return "w:gz" if writing else "r:gz"
-    return "w:xz" if writing else "r:xz"
+        return "w:gz" if writing else "r:*"
+    return "w:xz" if writing else "r:*"
+
+
+def _is_zip(ok_path: str) -> bool:
+    """Return True if the file is a ZIP archive (magic bytes PK\x03\x04)."""
+    try:
+        with open(ok_path, "rb") as f:
+            return f.read(4) == b"PK\x03\x04"
+    except OSError:
+        return False
 
 
 def build(source_dir: str, output_path: str, dev_mode: bool = False) -> str:
@@ -47,16 +63,35 @@ def build(source_dir: str, output_path: str, dev_mode: bool = False) -> str:
 
 def inspect(ok_path: str) -> dict:
     """Return manifest dict from an .ok archive without fully extracting it."""
-    with tarfile.open(ok_path, _tar_mode(writing=False)) as tf:
-        try:
-            member = tf.getmember("./manifest.ok.json")
-        except KeyError:
+    if _is_zip(ok_path):
+        return _inspect_zip(ok_path)
+    try:
+        with tarfile.open(ok_path, _tar_mode(writing=False)) as tf:
             try:
-                member = tf.getmember("manifest.ok.json")
+                member = tf.getmember("./manifest.ok.json")
             except KeyError:
-                raise ManifestError("No manifest.ok.json inside package.")
-        f = tf.extractfile(member)
-        return json.load(f)
+                try:
+                    member = tf.getmember("manifest.ok.json")
+                except KeyError:
+                    raise ManifestError("No manifest.ok.json inside package.")
+            f = tf.extractfile(member)
+            return json.load(f)
+    except tarfile.ReadError as exc:
+        raise ManifestError(f"Cannot open package (not a valid tar or zip archive): {exc}") from exc
+
+
+def _inspect_zip(ok_path: str) -> dict:
+    """Read manifest from a ZIP-format .ok package (built by Okama Studio)."""
+    with zipfile.ZipFile(ok_path, "r") as zf:
+        names = zf.namelist()
+        mf_name = next(
+            (n for n in names if n == "manifest.ok.json" or n.endswith("/manifest.ok.json")),
+            None,
+        )
+        if mf_name is None:
+            raise ManifestError("No manifest.ok.json inside package.")
+        with zf.open(mf_name) as f:
+            return json.load(f)
 
 
 def verify(ok_path: str, dev_mode: bool = False) -> dict:
@@ -73,8 +108,12 @@ def extract(ok_path: str, dest_dir: str) -> str:
     _verify_no_traversal(ok_path)
     dest = Path(dest_dir)
     dest.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(ok_path, _tar_mode(writing=False)) as tf:
-        tf.extractall(path=str(dest))
+    if _is_zip(ok_path):
+        with zipfile.ZipFile(ok_path, "r") as zf:
+            zf.extractall(path=str(dest))
+    else:
+        with tarfile.open(ok_path, _tar_mode(writing=False)) as tf:
+            tf.extractall(path=str(dest))
     return str(dest)
 
 
@@ -108,9 +147,20 @@ def _check_safe_paths(src: Path) -> None:
 
 
 def _verify_no_traversal(ok_path: str) -> None:
-    with tarfile.open(ok_path, _tar_mode(writing=False)) as tf:
-        for member in tf.getmembers():
-            if ".." in member.name or member.name.startswith("/"):
-                raise ManifestError(
-                    f"Path traversal detected in package: {member.name}"
-                )
+    if _is_zip(ok_path):
+        with zipfile.ZipFile(ok_path, "r") as zf:
+            for name in zf.namelist():
+                if ".." in name or name.startswith("/"):
+                    raise ManifestError(
+                        f"Path traversal detected in package: {name}"
+                    )
+    else:
+        try:
+            with tarfile.open(ok_path, _tar_mode(writing=False)) as tf:
+                for member in tf.getmembers():
+                    if ".." in member.name or member.name.startswith("/"):
+                        raise ManifestError(
+                            f"Path traversal detected in package: {member.name}"
+                        )
+        except tarfile.ReadError as exc:
+            raise ManifestError(f"Cannot read package: {exc}") from exc

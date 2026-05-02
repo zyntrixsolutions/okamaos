@@ -257,7 +257,16 @@
 - [ ] studio-v0.2.0 — Remaining 10 curriculum chapters (audio, particles, tilesets, save states, packaging)
 - [ ] studio-v0.2.0 — AI asset generation (sprite sheets from text prompt via image model)
 - [ ] studio-v0.2.0 — Multi-file project export (zip source + .ok in one click)
-- [ ] studio-v0.3.0 — OkamaOS Game Store publish flow (sign + push to catalog)
+- [x] studio-v0.3.0 — Dev-server game hosting (Publish to Dev Server + DevServerPanel + Server tab)
+- [x] studio-v0.3.0 — OkamaLabs branding update (okama-labs-logo.svg, zyntrix-favicon.svg)
+- [ ] studio-v0.3.0 — OkamaOS Game Store signed publish flow (push to catalog)
+
+### v1.3.0 — Dev-Link Update ✅
+- [x] ZIP `.ok` package support — Okama Studio builds (JSZip) now install on console without "ReadError: Not a gzip file"
+- [x] Key-hold repeat for shell navigation — `pygame.key.set_repeat(280, 80)` + evdev `_KEY_REPEAT` for nav/backspace
+- [x] Dev console ANSI strip — `TERM=dumb`, `NO_COLOR=1`, `LS_COLORS=`, `_ANSI_RE` regex
+- [x] Dev console tail-scroll — long command input shows `…` prefix instead of clipping
+- [x] Custom store URL — Game Store X button opens URL entry for dev-server LAN hosting
 
 ### v1.x — Console Polish
 - [x] Silent boot (`quiet loglevel=0`, boot log redirect) — completed in v0.3

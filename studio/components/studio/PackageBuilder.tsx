@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from "react";
-import { Package, Download, CheckCircle, AlertCircle, Loader2, Info } from "lucide-react";
-import { buildAndDownload, validateManifest, type BuildResult } from "@/lib/package/builder";
+import { Package, Download, CheckCircle, AlertCircle, Loader2, Info, Server, Wifi } from "lucide-react";
+import { buildOkPackage, buildAndDownload, validateManifest, type BuildResult } from "@/lib/package/builder";
 import type { Project, OkManifest } from "@/lib/store/projects";
 
 interface PackageBuilderProps {
@@ -12,7 +12,9 @@ interface PackageBuilderProps {
 
 export default function PackageBuilder({ project, onManifestChange }: PackageBuilderProps) {
   const [building, setBuilding] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [result, setResult] = useState<BuildResult | null>(null);
+  const [publishResult, setPublishResult] = useState<{ download_url: string } | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [manifest, setManifest] = useState<OkManifest>({ ...project.manifest });
 
@@ -28,6 +30,7 @@ export default function PackageBuilder({ project, onManifestChange }: PackageBui
     setErrors([]);
     setBuilding(true);
     setResult(null);
+    setPublishResult(null);
     try {
       const built = await buildAndDownload({ ...project, manifest });
       setResult(built);
@@ -35,6 +38,29 @@ export default function PackageBuilder({ project, onManifestChange }: PackageBui
       setErrors([e instanceof Error ? e.message : "Build failed"]);
     } finally {
       setBuilding(false);
+    }
+  };
+
+  const handlePublishToServer = async () => {
+    const errs = validateManifest(manifest);
+    if (errs.length) { setErrors(errs); return; }
+    setErrors([]);
+    setPublishing(true);
+    setPublishResult(null);
+    try {
+      const built = await buildOkPackage({ ...project, manifest });
+      const fd = new FormData();
+      fd.append("package", new File([built.blob], built.filename, { type: "application/octet-stream" }));
+      fd.append("manifest", JSON.stringify(manifest));
+      const res = await fetch("/api/dev-store/upload", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Upload failed");
+      setResult(built);
+      setPublishResult({ download_url: data.download_url });
+    } catch (e) {
+      setErrors([e instanceof Error ? e.message : "Publish failed"]);
+    } finally {
+      setPublishing(false);
     }
   };
 
@@ -182,8 +208,25 @@ export default function PackageBuilder({ project, onManifestChange }: PackageBui
         </div>
       )}
 
-      {/* Success */}
-      {result && (
+      {/* Publish success */}
+      {publishResult && (
+        <div
+          className="p-3 rounded-lg"
+          style={{ background: "rgba(83,217,230,0.06)", border: "1px solid rgba(83,217,230,0.2)" }}
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <Wifi size={14} style={{ color: "#53d9e6" }} />
+            <span className="text-xs font-bold" style={{ color: "#53d9e6" }}>Published to Dev Server!</span>
+          </div>
+          <p className="text-xs font-mono truncate" style={{ color: "#6b7464" }}>{publishResult.download_url}</p>
+          <p className="text-xs mt-1" style={{ color: "#c9c3b3" }}>
+            Go to <strong>Server</strong> tab for the console store URL.
+          </p>
+        </div>
+      )}
+
+      {/* Build success */}
+      {result && !publishResult && (
         <div
           className="p-3 rounded-lg"
           style={{ background: "rgba(141,247,127,0.06)", border: "1px solid rgba(141,247,127,0.2)" }}
@@ -200,23 +243,43 @@ export default function PackageBuilder({ project, onManifestChange }: PackageBui
         </div>
       )}
 
-      {/* Build button */}
-      <button
-        onClick={handleBuild}
-        disabled={building}
-        className="flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm transition-colors"
-        style={{
-          background: building ? "rgba(255,207,74,0.10)" : "#ffcf4a",
-          color: building ? "#ffcf4a" : "#10120f",
-          cursor: building ? "not-allowed" : "pointer",
-        }}
-      >
-        {building ? (
-          <><Loader2 size={16} className="animate-spin" /> Building…</>
-        ) : (
-          <><Download size={16} /> Export .ok Package</>
-        )}
-      </button>
+      {/* Buttons */}
+      <div className="flex flex-col gap-2">
+        <button
+          onClick={handleBuild}
+          disabled={building || publishing}
+          className="flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm transition-colors"
+          style={{
+            background: building ? "rgba(255,207,74,0.10)" : "#ffcf4a",
+            color: building ? "#ffcf4a" : "#10120f",
+            cursor: (building || publishing) ? "not-allowed" : "pointer",
+          }}
+        >
+          {building ? (
+            <><Loader2 size={16} className="animate-spin" /> Building…</>
+          ) : (
+            <><Download size={16} /> Export .ok Package</>
+          )}
+        </button>
+
+        <button
+          onClick={handlePublishToServer}
+          disabled={building || publishing}
+          className="flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-colors"
+          style={{
+            background: publishing ? "rgba(83,217,230,0.08)" : "rgba(83,217,230,0.12)",
+            color: publishing ? "#53d9e6" : "#53d9e6",
+            border: "1px solid rgba(83,217,230,0.25)",
+            cursor: (building || publishing) ? "not-allowed" : "pointer",
+          }}
+        >
+          {publishing ? (
+            <><Loader2 size={15} className="animate-spin" /> Publishing…</>
+          ) : (
+            <><Server size={15} /> Publish to Dev Server</>
+          )}
+        </button>
+      </div>
     </div>
   );
 }

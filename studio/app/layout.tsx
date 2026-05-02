@@ -10,8 +10,13 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Okama Studio — Game Engine Platform",
-  description: "AI-collaborative pygame game creation studio for OkamaOS. Vibe-code cinematic games, learn Python, and export .ok packages.",
+  title: "Okama Studio — OkamaLabs Game Engine Platform",
+  description: "AI-collaborative pygame game creation studio for OkamaOS by OkamaLabs. Vibe-code cinematic games, learn Python, export .ok packages, and host from your dev server.",
+  icons: {
+    icon: "/zyntrix-favicon.svg",
+    shortcut: "/zyntrix-favicon.svg",
+    apple: "/zyntrix-favicon.svg",
+  },
 };
 
 export const viewport: Viewport = {

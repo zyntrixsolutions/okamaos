@@ -6,7 +6,7 @@ import Header from "@/components/ui/Header";
 import { MODEL_OPTIONS, type ModelId } from "@/lib/ai/router";
 
 export default function SettingsClient() {
-  const [model, setModel] = useState<ModelId>("gemini-2.5-flash-lite-preview-06-17");
+  const [model, setModel] = useState<ModelId>("gemini-3.1-flash-lite-preview");
   const [geminiKey, setGeminiKey] = useState("");
   const [qwenKey, setQwenKey] = useState("");
   const [publisherId, setPublisherId] = useState("com.okamalabs");
@@ -17,7 +17,7 @@ export default function SettingsClient() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    setModel((localStorage.getItem("okama-model") as ModelId) ?? "gemini-2.5-flash-lite-preview-06-17");
+    setModel((localStorage.getItem("okama-model") as ModelId) ?? "gemini-3.1-flash-lite-preview");
     setGeminiKey(localStorage.getItem("okama-gemini-key") ?? "");
     setQwenKey(localStorage.getItem("okama-qwen-key") ?? "");
     setPublisherId(localStorage.getItem("okama-publisher-id") ?? "com.okamalabs");
@@ -58,44 +58,68 @@ export default function SettingsClient() {
               <p className="text-xs mb-3" style={{ color: "#c9c3b3" }}>
                 Select the AI model used in the Studio and Learn tutor.
               </p>
-              <div className="space-y-3">
-                {/* Gemini group */}
+              <div className="space-y-4">
+                {/* Gemini — Free tier */}
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: "#8df77f" }}>
-                    Google Gemini
+                  <p className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: "#8df77f" }}>
+                    Google Gemini — Free Tier
                   </p>
+                  <p className="text-xs mb-2" style={{ color: "#6b7464" }}>No billing required · use your API key from AI Studio</p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    {geminiModels.map((m) => (
+                    {geminiModels.filter((m) => m.tier === "free").map((m) => (
                       <button
                         key={m.id}
                         onClick={() => setModel(m.id)}
                         className="flex flex-col gap-0.5 p-3 rounded-lg border text-left transition-all"
                         style={{
-                          borderColor: model === m.id ? "rgba(141,247,127,0.4)" : "rgba(243,239,228,0.08)",
-                          background: model === m.id ? "rgba(141,247,127,0.08)" : "transparent",
+                          borderColor: model === m.id ? "rgba(83,217,230,0.5)" : "rgba(243,239,228,0.08)",
+                          background: model === m.id ? "rgba(83,217,230,0.08)" : "transparent",
                         }}
                       >
                         <div className="flex items-center justify-between gap-1">
-                          <span className="text-xs font-bold" style={{ color: model === m.id ? "#8df77f" : "#f3efe4" }}>
+                          <span className="text-xs font-bold" style={{ color: model === m.id ? "#53d9e6" : "#f3efe4" }}>
                             {m.label}
                           </span>
-                          {m.badge && (
-                            <span
-                              className="text-xs px-1.5 py-0.5 rounded font-bold"
-                              style={{
-                                background: m.badge === "Free" ? "rgba(83,217,230,0.12)" : "rgba(141,247,127,0.12)",
-                                color: m.badge === "Free" ? "#53d9e6" : "#8df77f",
-                              }}
-                            >
-                              {m.badge}
-                            </span>
-                          )}
+                          <span className="text-xs px-1.5 py-0.5 rounded font-bold" style={{ background: "rgba(83,217,230,0.12)", color: "#53d9e6" }}>
+                            Free
+                          </span>
                         </div>
                         {m.note && (
                           <span className="text-xs font-mono" style={{ color: "#6b7464" }}>
                             {m.note}
                           </span>
                         )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Gemini — Paid tier */}
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: "#ffcf4a" }}>
+                    Google Gemini — Paid Tier
+                  </p>
+                  <p className="text-xs mb-2" style={{ color: "#6b7464" }}>Requires billing enabled on your Google Cloud project</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {geminiModels.filter((m) => m.tier === "paid").map((m) => (
+                      <button
+                        key={m.id}
+                        onClick={() => setModel(m.id)}
+                        className="flex flex-col gap-0.5 p-3 rounded-lg border text-left transition-all"
+                        style={{
+                          borderColor: model === m.id ? "rgba(255,207,74,0.4)" : "rgba(243,239,228,0.08)",
+                          background: model === m.id ? "rgba(255,207,74,0.06)" : "transparent",
+                        }}
+                      >
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-xs font-bold" style={{ color: model === m.id ? "#ffcf4a" : "#f3efe4" }}>
+                            {m.label}
+                          </span>
+                          <span className="text-xs px-1.5 py-0.5 rounded font-bold" style={{ background: "rgba(255,207,74,0.10)", color: "#ffcf4a" }}>
+                            Pro
+                          </span>
+                        </div>
+                        <span className="text-xs font-mono" style={{ color: "#6b7464" }}>Requires billing</span>
                       </button>
                     ))}
                   </div>

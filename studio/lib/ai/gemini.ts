@@ -3,11 +3,11 @@
 import { GoogleGenerativeAI, type GenerateContentStreamResult } from "@google/generative-ai";
 
 export type GeminiModel =
-  | "gemini-2.5-flash-lite-preview-06-17"
+  | "gemini-3.1-flash-lite-preview"
+  | "gemini-3-flash-preview"
   | "gemini-2.5-flash"
-  | "gemini-2.0-flash"
-  | "gemini-1.5-flash"
-  | "gemini-1.5-pro";
+  | "gemini-2.5-pro"
+  | "gemini-3.1-pro-preview";
 
 export interface Message {
   role: "user" | "model";

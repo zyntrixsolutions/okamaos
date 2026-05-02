@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { unlink } from "fs/promises";
-import { existsSync } from "fs";
-import path from "path";
+import { del } from "@vercel/blob";
 
-const DEV_GAMES_DIR = path.join(process.cwd(), "public", "dev-games");
+const BLOB_PREFIX = "dev-games";
 
 export async function DELETE(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -13,14 +11,19 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "Invalid name." }, { status: 400 });
   }
 
-  const okPath = path.join(DEV_GAMES_DIR, `${name}.ok`);
-  const mfPath = path.join(DEV_GAMES_DIR, `${name}.manifest.json`);
+  const okPath = `${BLOB_PREFIX}/${name}.ok`;
+  const mfPath = `${BLOB_PREFIX}/${name}.manifest.json`;
 
   let removed = 0;
-  for (const p of [okPath, mfPath]) {
-    if (existsSync(p)) {
-      await unlink(p);
+  const errors: string[] = [];
+  
+  for (const pathname of [okPath, mfPath]) {
+    try {
+      await del(pathname);
       removed++;
+    } catch (err) {
+      // Blob may not exist, which is ok
+      errors.push(String(err instanceof Error ? err.message : err));
     }
   }
 

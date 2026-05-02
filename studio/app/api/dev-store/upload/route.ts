@@ -1,16 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile, mkdir } from "fs/promises";
-import { existsSync } from "fs";
-import path from "path";
+import { put, del } from "@vercel/blob";
 
-const DEV_GAMES_DIR = path.join(process.cwd(), "public", "dev-games");
+const BLOB_PREFIX = "dev-games";
 
 export async function POST(request: NextRequest) {
   try {
-    if (!existsSync(DEV_GAMES_DIR)) {
-      await mkdir(DEV_GAMES_DIR, { recursive: true });
-    }
-
     const formData = await request.formData();
     const packageFile = formData.get("package") as File | null;
     const manifestStr = formData.get("manifest") as string | null;
@@ -34,33 +28,35 @@ export async function POST(request: NextRequest) {
     }
 
     const safeName = `${String(id).replace(/\./g, "-")}-${version}`;
-    const okFilename = `${safeName}.ok`;
-    const manifestFilename = `${safeName}.manifest.json`;
+    const okPathname = `${BLOB_PREFIX}/${safeName}.ok`;
+    const manifestPathname = `${BLOB_PREFIX}/${safeName}.manifest.json`;
 
     const packageBuffer = Buffer.from(await packageFile.arrayBuffer());
-    await writeFile(path.join(DEV_GAMES_DIR, okFilename), packageBuffer);
 
-    const baseUrl = request.headers.get("host") ?? "localhost:3000";
-    const proto = request.headers.get("x-forwarded-proto") ?? "http";
-    const downloadUrl = `${proto}://${baseUrl}/dev-games/${okFilename}`;
+    // Upload package to blob storage
+    const blobResult = await put(okPathname, packageBuffer, {
+      access: "public",
+      contentType: "application/octet-stream",
+    });
 
     const catalogEntry = {
       ...manifest,
-      download_url: downloadUrl,
+      download_url: blobResult.url,
       size_bytes: packageBuffer.length,
       status: "available",
       hosted_at: new Date().toISOString(),
     };
 
-    await writeFile(
-      path.join(DEV_GAMES_DIR, manifestFilename),
-      JSON.stringify(catalogEntry, null, 2)
-    );
+    // Upload manifest to blob storage
+    await put(manifestPathname, JSON.stringify(catalogEntry, null, 2), {
+      access: "public",
+      contentType: "application/json",
+    });
 
     return NextResponse.json({
       ok: true,
-      filename: okFilename,
-      download_url: downloadUrl,
+      filename: `${safeName}.ok`,
+      download_url: blobResult.url,
       size_bytes: packageBuffer.length,
     });
   } catch (err) {

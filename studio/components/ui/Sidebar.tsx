@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import Image from "next/image";
 import {
   LayoutDashboard,
   Code2,
   BookOpen,
   FolderOpen,
   Settings,
-  Zap,
 } from "lucide-react";
 
 const NAV = [
@@ -35,11 +35,14 @@ export default function Sidebar() {
         className="flex items-center gap-3 px-3 py-5 border-b"
         style={{ borderColor: "rgba(243,239,228,0.10)" }}
       >
-        <div
-          className="flex items-center justify-center w-8 h-8 rounded-md shrink-0"
-          style={{ background: "#8df77f", color: "#10120f" }}
-        >
-          <Zap size={16} strokeWidth={2.5} />
+        <div className="flex items-center justify-center w-8 h-8 rounded-md shrink-0">
+          <Image
+            src="/okama-labs-logo.svg"
+            alt="Okamalabs"
+            width={32}
+            height={32}
+            className="w-full h-full object-contain"
+          />
         </div>
         <div className="hidden md:block min-w-0">
           <p className="text-xs font-black tracking-widest uppercase" style={{ color: "#8df77f" }}>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Play, Square, RotateCcw, AlertCircle, Loader2, Monitor, Terminal, Wand2, XCircle, AlertTriangle } from "lucide-react";
+import { Play, Square, RotateCcw, AlertCircle, Loader2, Monitor, Terminal, Wand2, XCircle, Maximize2, Minimize2 } from "lucide-react";
 
 interface GamePreviewProps {
   code: string;
@@ -9,7 +9,7 @@ interface GamePreviewProps {
   onSendToAI?: (errorText: string) => void;
 }
 
-type RunState = "idle" | "loading" | "running" | "error" | "stopped";
+type RunState = "idle" | "loading" | "running" | "stopping" | "error" | "stopped";
 
 interface LogLine {
   text: string;
@@ -30,6 +30,226 @@ interface PyodideInterface {
 }
 
 const PYODIDE_CDN = "https://cdn.jsdelivr.net/pyodide/v0.26.2/full/";
+const PREVIEW_CANVAS_ID = "okama-preview-canvas";
+const PREVIEW_LOG_CALLBACK = "okamaStudioPreviewLog";
+const PREVIEW_ERROR_CALLBACK = "okamaStudioPreviewError";
+const PREVIEW_STOP_CALLBACK = "okamaStudioPreviewShouldStop";
+
+const STDIO_SETUP_CODE = `
+import sys
+import js
+
+if not hasattr(sys, "_okama_original_stdout"):
+    sys._okama_original_stdout = getattr(sys, "__stdout__", sys.stdout)
+if not hasattr(sys, "_okama_original_stderr"):
+    sys._okama_original_stderr = getattr(sys, "__stderr__", sys.stderr)
+
+def _okama_emit(text, is_err=False):
+    callback_name = "${PREVIEW_ERROR_CALLBACK}" if is_err else "${PREVIEW_LOG_CALLBACK}"
+    try:
+        callback = getattr(js, callback_name)
+    except Exception:
+        callback = None
+
+    if callback is not None:
+        try:
+            callback(str(text))
+            return
+        except Exception:
+            pass
+
+    fallback = sys._okama_original_stderr if is_err else sys._okama_original_stdout
+    try:
+        fallback.write(str(text))
+        fallback.flush()
+    except Exception:
+        pass
+
+class _OkamaStudioStdIO:
+    encoding = "utf-8"
+    errors = "replace"
+
+    def __init__(self, is_err=False):
+        self.is_err = is_err
+        self.buffer = ""
+
+    def write(self, value):
+        text = str(value)
+        self.buffer += text
+        lines = self.buffer.split("\\n")
+        self.buffer = lines.pop()
+        for line in lines:
+            if line:
+                _okama_emit(line, self.is_err)
+        return len(text)
+
+    def flush(self):
+        if self.buffer:
+            _okama_emit(self.buffer, self.is_err)
+            self.buffer = ""
+
+    def isatty(self):
+        return False
+
+    def writable(self):
+        return True
+
+sys.stdout = _OkamaStudioStdIO(False)
+sys.stderr = _OkamaStudioStdIO(True)
+`;
+
+const STDIO_TEARDOWN_CODE = `
+import sys
+
+try:
+    sys.stdout.flush()
+except Exception:
+    pass
+try:
+    sys.stderr.flush()
+except Exception:
+    pass
+
+if hasattr(sys, "_okama_original_stdout"):
+    sys.stdout = sys._okama_original_stdout
+if hasattr(sys, "_okama_original_stderr"):
+    sys.stderr = sys._okama_original_stderr
+`;
+
+const CODE_TRANSFORM_CODE = `
+import ast as _ok_ast
+
+def _ok_collect_async_funcs(tree):
+    """Names of top-level defs that contain a while loop (direct or nested)."""
+    result = set()
+    for node in tree.body:
+        if isinstance(node, _ok_ast.FunctionDef):
+            if any(isinstance(n, _ok_ast.While) for n in _ok_ast.walk(node)):
+                result.add(node.name)
+    return result
+
+def _ok_make_stop_check():
+    n = _ok_ast.If(
+        test=_ok_ast.Call(
+            func=_ok_ast.Name(id='_okama_preview_should_stop', ctx=_ok_ast.Load()),
+            args=[], keywords=[]),
+        body=[_ok_ast.Raise(
+            exc=_ok_ast.Call(
+                func=_ok_ast.Name(id='_OkamaPreviewStopped', ctx=_ok_ast.Load()),
+                args=[], keywords=[]),
+            cause=None)],
+        orelse=[])
+    _ok_ast.fix_missing_locations(n)
+    return n
+
+def _ok_make_await_sleep():
+    n = _ok_ast.Expr(value=_ok_ast.Await(
+        value=_ok_ast.Call(
+            func=_ok_ast.Attribute(
+                value=_ok_ast.Name(id='asyncio', ctx=_ok_ast.Load()),
+                attr='sleep', ctx=_ok_ast.Load()),
+            args=[_ok_ast.Constant(value=0)], keywords=[])))
+    _ok_ast.fix_missing_locations(n)
+    return n
+
+def _ok_make_loop_checkpoint():
+    return [_ok_make_stop_check(), _ok_make_await_sleep()]
+
+class _OkamaTransformer(_ok_ast.NodeTransformer):
+    def __init__(self, async_funcs):
+        self._af = set(async_funcs)
+        self._in_sync = 0
+
+    def visit_FunctionDef(self, node):
+        if node.name in self._af:
+            new = _ok_ast.AsyncFunctionDef(
+                name=node.name, args=node.args, body=node.body,
+                decorator_list=node.decorator_list, returns=node.returns,
+                lineno=node.lineno, col_offset=node.col_offset)
+            _ok_ast.copy_location(new, node)
+            _ok_ast.fix_missing_locations(new)
+            self.generic_visit(new)
+            return new
+        self._in_sync += 1
+        result = self.generic_visit(node)
+        self._in_sync -= 1
+        return result
+
+    def visit_AsyncFunctionDef(self, node):
+        return self.generic_visit(node)
+
+    def visit_While(self, node):
+        self.generic_visit(node)
+        if self._in_sync > 0:
+            return node
+        node.body[0:0] = _ok_make_loop_checkpoint()
+        return node
+
+    def visit_Expr(self, node):
+        val = node.value
+        if isinstance(val, _ok_ast.Call):
+            func = val.func
+            name = func.id if isinstance(func, _ok_ast.Name) else None
+            if name and name in self._af:
+                new = _ok_ast.Expr(value=_ok_ast.Await(value=val))
+                _ok_ast.copy_location(new, node)
+                _ok_ast.fix_missing_locations(new)
+                return new
+        return self.generic_visit(node)
+
+    def visit_If(self, node):
+        t = node.test
+        if (isinstance(t, _ok_ast.Compare)
+                and isinstance(t.left, _ok_ast.Name) and t.left.id == '__name__'
+                and len(t.ops) == 1 and isinstance(t.ops[0], _ok_ast.Eq)
+                and len(t.comparators) == 1
+                and isinstance(t.comparators[0], _ok_ast.Constant)
+                and t.comparators[0].value == '__main__'):
+            out = []
+            for s in node.body:
+                v = self.visit(s)
+                if isinstance(v, list):
+                    out.extend(v)
+                elif v is not None:
+                    out.append(v)
+            return out
+        return self.generic_visit(node)
+
+try:
+    _ok_tree = _ok_ast.parse(_okama_raw_src)
+    _ok_af = _ok_collect_async_funcs(_ok_tree)
+    _ok_tree = _OkamaTransformer(_ok_af).visit(_ok_tree)
+    _ok_ast.fix_missing_locations(_ok_tree)
+    _ok_imp = _ok_ast.Import(names=[_ok_ast.alias(name='asyncio')])
+    _ok_ast.fix_missing_locations(_ok_imp)
+    _ok_js_imp = _ok_ast.Import(names=[_ok_ast.alias(name='js', asname='_ok_js')])
+    _ok_ast.fix_missing_locations(_ok_js_imp)
+    _ok_stop_helpers = _ok_ast.parse("""
+class _OkamaPreviewStopped(Exception):
+    pass
+
+def _okama_preview_should_stop():
+    try:
+        callback = getattr(_ok_js, '${PREVIEW_STOP_CALLBACK}')
+    except Exception:
+        return False
+    try:
+        return bool(callback())
+    except Exception:
+        return False
+""").body
+    _ok_wrap = _ok_ast.AsyncFunctionDef(
+        name='_okama_game_main',
+        args=_ok_ast.arguments(posonlyargs=[], args=[], vararg=None,
+                               kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[]),
+        body=_ok_tree.body, decorator_list=[], returns=None, lineno=1, col_offset=0)
+    _ok_ast.fix_missing_locations(_ok_wrap)
+    _ok_final = _ok_ast.Module(body=[_ok_imp, _ok_js_imp, *_ok_stop_helpers, _ok_wrap], type_ignores=[])
+    _ok_ast.fix_missing_locations(_ok_final)
+    _okama_transformed_src = _ok_ast.unparse(_ok_final) + "\\nawait _okama_game_main()"
+except Exception as _ok_err:
+    _okama_transformed_src = _okama_raw_src
+`;
 
 let pyodidePromise: Promise<PyodideInterface> | null = null;
 
@@ -60,43 +280,135 @@ import js
 from pyodide.ffi import create_proxy, to_js
 import math
 
+try:
+    _okama_cleanup_input()
+except Exception:
+    pass
+
+_okama_input_bindings = []
+
+def _okama_cleanup_input():
+    global _okama_input_bindings
+    for target, event_name, proxy in list(_okama_input_bindings):
+        try:
+            target.removeEventListener(event_name, proxy)
+        except Exception:
+            pass
+    _okama_input_bindings = []
+
+def _okama_add_listener(target, event_name, handler):
+    proxy = create_proxy(handler)
+    target.addEventListener(event_name, proxy)
+    _okama_input_bindings.append((target, event_name, proxy))
+
+def _ok_color_style(color):
+    r, g, b = color[0], color[1], color[2]
+    if len(color) > 3:
+        return f"rgba({r},{g},{b},{color[3] / 255})"
+    return f"rgb({r},{g},{b})"
+
+def _ok_preview_canvas():
+    try:
+        canvas = js.document.getElementById("${PREVIEW_CANVAS_ID}")
+        if canvas is not None:
+            return canvas
+    except Exception:
+        pass
+    try:
+        canvases = js.document.getElementsByTagName("canvas")
+        if canvases.length > 0:
+            return canvases.item(0)
+    except Exception:
+        pass
+    return None
+
+def _ok_point_tuple(point):
+    if hasattr(point, "x") and hasattr(point, "y"):
+        return int(point.x), int(point.y)
+    return int(point[0]), int(point[1])
+
+def _ok_rect_tuple(rect):
+    if hasattr(rect, "x") and hasattr(rect, "y"):
+        w = getattr(rect, "width", getattr(rect, "w", None))
+        h = getattr(rect, "height", getattr(rect, "h", None))
+        if w is not None and h is not None:
+            return int(rect.x), int(rect.y), int(w), int(h)
+
+    try:
+        if len(rect) == 2 and len(rect[0]) == 2 and len(rect[1]) == 2:
+            x, y = rect[0]
+            w, h = rect[1]
+            return int(x), int(y), int(w), int(h)
+    except Exception:
+        pass
+
+    try:
+        x, y, w, h = rect
+        return int(x), int(y), int(w), int(h)
+    except Exception as exc:
+        raise TypeError(f"expected a rect-like value, got {type(rect).__name__}") from exc
+
 # --- Pygame Browser Stubs ---
 class _CanvasSurface:
     """A pygame.Surface replacement that renders to HTML Canvas"""
-    def __init__(self, width, height):
-        self.width = width
-        self.height = height
+    def __init__(self, size_or_width, height=None, flags=0, depth=0, masks=None, bind_display=False):
+        if isinstance(size_or_width, (tuple, list)):
+            width, surface_height = size_or_width
+            if isinstance(height, int) and flags == 0:
+                flags = height
+            height = surface_height
+        else:
+            width = size_or_width
+            height = 0 if height is None else height
+
+        self.width = max(1, int(width))
+        self.height = max(1, int(height))
+        self.flags = flags
+        self._bind_display = bind_display
         self._canvas = None
         self._ctx = None
         self._init_canvas()
     
     def _init_canvas(self):
-        # Find the canvas from the parent window
         try:
-            doc = js.document
-            canvases = doc.getElementsByTagName('canvas')
-            if canvases.length > 0:
-                self._canvas = canvases.item(0)
+            if self._bind_display:
+                self._canvas = _ok_preview_canvas()
+            else:
+                self._canvas = js.document.createElement("canvas")
+            if self._canvas is not None:
                 self._canvas.width = self.width
                 self._canvas.height = self.height
                 self._ctx = self._canvas.getContext("2d")
-        except:
+                try:
+                    self._ctx.imageSmoothingEnabled = False
+                except Exception:
+                    pass
+        except Exception:
             pass
     
     def fill(self, color):
         if self._ctx:
-            if len(color) >= 3:
-                r, g, b = color[0], color[1], color[2]
-                self._ctx.fillStyle = f"rgb({r},{g},{b})"
+            self._ctx.fillStyle = _ok_color_style(color)
             self._ctx.fillRect(0, 0, self.width, self.height)
     
     def blit(self, source, dest, area=None):
-        # Basic blit - for now just pass through
-        pass
-    
-    def get_rect(self):
-        return _Rect(0, 0, self.width, self.height)
-    
+        if not self._ctx or not hasattr(source, "_canvas") or source._canvas is None:
+            x, y = _ok_point_tuple(dest.topleft if hasattr(dest, "topleft") else dest)
+            return _Rect(x, y, 0, 0)
+        x, y = _ok_point_tuple(dest.topleft if hasattr(dest, "topleft") else dest)
+        if area is not None:
+            sx, sy, sw, sh = _ok_rect_tuple(area)
+            self._ctx.drawImage(source._canvas, sx, sy, sw, sh, x, y, sw, sh)
+            return _Rect(x, y, sw, sh)
+        self._ctx.drawImage(source._canvas, x, y)
+        return _Rect(x, y, source.get_width(), source.get_height())
+
+    def get_rect(self, **kwargs):
+        rect = _Rect(0, 0, self.width, self.height)
+        for key, value in kwargs.items():
+            setattr(rect, key, value)
+        return rect
+
     def get_width(self):
         return self.width
     
@@ -117,27 +429,192 @@ class _CanvasSurface:
 
 class _Rect:
     """pygame.Rect replacement"""
-    def __init__(self, x, y, w, h):
+    def __init__(self, *args, **kwargs):
+        if len(args) == 1:
+            x, y, w, h = _ok_rect_tuple(args[0])
+        elif len(args) == 2:
+            x, y = _ok_point_tuple(args[0])
+            w, h = _ok_point_tuple(args[1])
+        elif len(args) == 4:
+            x, y, w, h = args
+        else:
+            raise TypeError("Rect expected Rect, (x, y, w, h), ((x, y), (w, h)), or x, y, w, h")
         self.x = int(x)
         self.y = int(y)
         self.width = int(w)
         self.height = int(h)
-        self.left = self.x
-        self.top = self.y
-        self.right = self.x + self.width
-        self.bottom = self.y + self.height
-        self.centerx = self.x + self.width // 2
-        self.centery = self.y + self.height // 2
-        self.topleft = (self.x, self.y)
-        self.topright = (self.right, self.y)
-        self.bottomleft = (self.x, self.bottom)
-        self.bottomright = (self.right, self.bottom)
-        self.center = (self.centerx, self.centery)
-        self.midleft = (self.x, self.centery)
-        self.midright = (self.right, self.centery)
-        self.midtop = (self.centerx, self.y)
-        self.midbottom = (self.centerx, self.bottom)
-        self.size = (self.width, self.height)
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+    def __iter__(self):
+        yield self.x
+        yield self.y
+        yield self.width
+        yield self.height
+
+    def __len__(self):
+        return 4
+
+    def __getitem__(self, index):
+        return (self.x, self.y, self.width, self.height)[index]
+
+    @property
+    def w(self):
+        return self.width
+
+    @w.setter
+    def w(self, value):
+        self.width = int(value)
+
+    @property
+    def h(self):
+        return self.height
+
+    @h.setter
+    def h(self, value):
+        self.height = int(value)
+
+    @property
+    def left(self):
+        return self.x
+
+    @left.setter
+    def left(self, value):
+        self.x = int(value)
+
+    @property
+    def top(self):
+        return self.y
+
+    @top.setter
+    def top(self, value):
+        self.y = int(value)
+
+    @property
+    def right(self):
+        return self.x + self.width
+
+    @right.setter
+    def right(self, value):
+        self.x = int(value) - self.width
+
+    @property
+    def bottom(self):
+        return self.y + self.height
+
+    @bottom.setter
+    def bottom(self, value):
+        self.y = int(value) - self.height
+
+    @property
+    def centerx(self):
+        return self.x + self.width // 2
+
+    @centerx.setter
+    def centerx(self, value):
+        self.x = int(value) - self.width // 2
+
+    @property
+    def centery(self):
+        return self.y + self.height // 2
+
+    @centery.setter
+    def centery(self, value):
+        self.y = int(value) - self.height // 2
+
+    @property
+    def topleft(self):
+        return (self.x, self.y)
+
+    @topleft.setter
+    def topleft(self, value):
+        self.x, self.y = _ok_point_tuple(value)
+
+    @property
+    def topright(self):
+        return (self.right, self.y)
+
+    @topright.setter
+    def topright(self, value):
+        x, y = _ok_point_tuple(value)
+        self.right = x
+        self.y = y
+
+    @property
+    def bottomleft(self):
+        return (self.x, self.bottom)
+
+    @bottomleft.setter
+    def bottomleft(self, value):
+        x, y = _ok_point_tuple(value)
+        self.x = x
+        self.bottom = y
+
+    @property
+    def bottomright(self):
+        return (self.right, self.bottom)
+
+    @bottomright.setter
+    def bottomright(self, value):
+        x, y = _ok_point_tuple(value)
+        self.right = x
+        self.bottom = y
+
+    @property
+    def center(self):
+        return (self.centerx, self.centery)
+
+    @center.setter
+    def center(self, value):
+        self.centerx, self.centery = _ok_point_tuple(value)
+
+    @property
+    def midleft(self):
+        return (self.x, self.centery)
+
+    @midleft.setter
+    def midleft(self, value):
+        x, y = _ok_point_tuple(value)
+        self.x = x
+        self.centery = y
+
+    @property
+    def midright(self):
+        return (self.right, self.centery)
+
+    @midright.setter
+    def midright(self, value):
+        x, y = _ok_point_tuple(value)
+        self.right = x
+        self.centery = y
+
+    @property
+    def midtop(self):
+        return (self.centerx, self.y)
+
+    @midtop.setter
+    def midtop(self, value):
+        x, y = _ok_point_tuple(value)
+        self.centerx = x
+        self.y = y
+
+    @property
+    def midbottom(self):
+        return (self.centerx, self.bottom)
+
+    @midbottom.setter
+    def midbottom(self, value):
+        x, y = _ok_point_tuple(value)
+        self.centerx = x
+        self.bottom = y
+
+    @property
+    def size(self):
+        return (self.width, self.height)
+
+    @size.setter
+    def size(self, value):
+        self.width, self.height = _ok_point_tuple(value)
     
     def copy(self):
         return _Rect(self.x, self.y, self.width, self.height)
@@ -151,22 +628,7 @@ class _Rect:
         self._update()
     
     def _update(self):
-        self.left = self.x
-        self.top = self.y
-        self.right = self.x + self.width
-        self.bottom = self.y + self.height
-        self.centerx = self.x + self.width // 2
-        self.centery = self.y + self.height // 2
-        self.topleft = (self.x, self.y)
-        self.topright = (self.right, self.y)
-        self.bottomleft = (self.x, self.bottom)
-        self.bottomright = (self.right, self.bottom)
-        self.center = (self.centerx, self.centery)
-        self.midleft = (self.x, self.centery)
-        self.midright = (self.right, self.centery)
-        self.midtop = (self.centerx, self.y)
-        self.midbottom = (self.centerx, self.bottom)
-        self.size = (self.width, self.height)
+        pass
     
     def inflate(self, x, y):
         return _Rect(self.x - x//2, self.y - y//2, self.width + x, self.height + y)
@@ -179,34 +641,63 @@ class _Rect:
         self._update()
     
     def clamp(self, rect):
-        return self
+        result = self.copy()
+        result.clamp_ip(rect)
+        return result
     
     def clamp_ip(self, rect):
-        pass
+        x, y, w, h = _ok_rect_tuple(rect)
+        if self.width >= w:
+            self.x = x + (w - self.width) // 2
+        else:
+            self.left = max(x, min(self.left, x + w - self.width))
+        if self.height >= h:
+            self.y = y + (h - self.height) // 2
+        else:
+            self.top = max(y, min(self.top, y + h - self.height))
     
     def clip(self, rect):
-        return _Rect(self.x, self.y, self.width, self.height)
+        x, y, w, h = _ok_rect_tuple(rect)
+        left = max(self.left, x)
+        top = max(self.top, y)
+        right = min(self.right, x + w)
+        bottom = min(self.bottom, y + h)
+        if right <= left or bottom <= top:
+            return _Rect(0, 0, 0, 0)
+        return _Rect(left, top, right - left, bottom - top)
     
     def union(self, rect):
-        return _Rect(self.x, self.y, self.width, self.height)
+        x, y, w, h = _ok_rect_tuple(rect)
+        left = min(self.left, x)
+        top = min(self.top, y)
+        right = max(self.right, x + w)
+        bottom = max(self.bottom, y + h)
+        return _Rect(left, top, right - left, bottom - top)
     
     def union_ip(self, rect):
-        pass
+        merged = self.union(rect)
+        self.x, self.y, self.width, self.height = merged.x, merged.y, merged.width, merged.height
     
     def contains(self, rect):
-        return (self.left <= rect.left and self.right >= rect.right and
-                self.top <= rect.top and self.bottom >= rect.bottom)
+        x, y, w, h = _ok_rect_tuple(rect)
+        return (self.left <= x and self.right >= x + w and
+                self.top <= y and self.bottom >= y + h)
     
-    def collidepoint(self, x, y):
+    def collidepoint(self, x, y=None):
+        if y is None:
+            x, y = _ok_point_tuple(x)
         return self.left <= x < self.right and self.top <= y < self.bottom
     
     def colliderect(self, rect):
-        return (self.left < rect.right and self.right > rect.left and
-                self.top < rect.bottom and self.bottom > rect.top)
+        x, y, w, h = _ok_rect_tuple(rect)
+        return (self.left < x + w and self.right > x and
+                self.top < y + h and self.bottom > y)
 
 class _Event:
-    def __init__(self, type, **kwargs):
+    def __init__(self, type, attributes=None, **kwargs):
         self.type = type
+        if attributes:
+            self.__dict__.update(attributes)
         self.__dict__.update(kwargs)
 
 class _Display:
@@ -218,10 +709,19 @@ class _Display:
         self._init = False
     
     def set_mode(self, size, flags=0, depth=0):
-        self._w, self._h = size if size[0] > 0 else (800, 500)
-        self._surface = _CanvasSurface(self._w, self._h)
+        if not size or size[0] <= 0 or size[1] <= 0:
+            self._w, self._h = 800, 500
+        else:
+            self._w, self._h = int(size[0]), int(size[1])
+        self._surface = _CanvasSurface(self._w, self._h, flags=flags, depth=depth, bind_display=True)
         self._surface.fill((16, 18, 15))
         self._init = True
+        try:
+            pygame_module = sys.modules.get('pygame')
+            if pygame_module is not None:
+                pygame_module._okama_bind_canvas(self._surface._canvas)
+        except Exception:
+            pass
         return self._surface
     
     def flip(self):
@@ -268,12 +768,6 @@ class _Time:
         def tick(self, framerate=0):
             now = self._time.time()
             elapsed = now - self._last
-            if framerate > 0:
-                target = 1.0 / framerate
-                if elapsed < target:
-                    self._time.sleep(target - elapsed)
-                    now = self._time.time()
-                    elapsed = now - self._last
             self._last = now
             if elapsed > 0:
                 self._fps = 1.0 / elapsed
@@ -285,23 +779,29 @@ class _Time:
         def tick_busy_loop(self, framerate=0):
             return self.tick(framerate)
 
+class _PressedKeys:
+    def __init__(self, pressed_keys):
+        self._pressed_keys = set(pressed_keys)
+
+    def __getitem__(self, key):
+        return int(key) in self._pressed_keys
+
+    def __len__(self):
+        return 512
+
 class _Key:
     """pygame.key replacement"""
+    def __init__(self, runtime):
+        self._runtime = runtime
+
     def get_pressed(self):
-        # Return key states from browser
-        keys = {}
-        try:
-            # Try to get from js window if available
-            pass
-        except:
-            pass
-        return keys
+        return _PressedKeys(self._runtime._pressed_keys)
     
     def get_mods(self):
-        return 0
+        return self._runtime._mods
     
     def set_mods(self, mods):
-        pass
+        self._runtime._mods = int(mods)
     
     def set_repeat(self, delay=0, interval=0):
         pass
@@ -314,17 +814,22 @@ class _Key:
 
 class _Mouse:
     """pygame.mouse replacement"""
+    def __init__(self, runtime):
+        self._runtime = runtime
+
     def get_pos(self):
-        return (0, 0)
+        return self._runtime._mouse_pos
     
     def get_rel(self):
-        return (0, 0)
+        rel = self._runtime._mouse_rel
+        self._runtime._mouse_rel = (0, 0)
+        return rel
     
     def get_pressed(self):
-        return (0, 0, 0)
+        return tuple(button in self._runtime._mouse_buttons for button in (1, 2, 3))
     
     def set_pos(self, pos):
-        pass
+        self._runtime._mouse_pos = _ok_point_tuple(pos)
     
     def set_visible(self, visible):
         pass
@@ -333,7 +838,7 @@ class _Mouse:
         return True
     
     def get_focused(self):
-        return False
+        return self._runtime._focused
     
     def set_cursor(self, *args):
         pass
@@ -345,10 +850,17 @@ class _EventModule:
     """pygame.event replacement"""
     def __init__(self):
         self._queue = []
+
+    def _matches(self, event, eventtype):
+        if eventtype is None:
+            return True
+        if isinstance(eventtype, (list, tuple, set)):
+            return event.type in eventtype
+        return event.type == eventtype
     
     def get(self, eventtype=None):
-        events = self._queue[:]
-        self._queue = []
+        events = [event for event in self._queue if self._matches(event, eventtype)]
+        self._queue = [event for event in self._queue if not self._matches(event, eventtype)]
         return events
     
     def poll(self):
@@ -360,10 +872,10 @@ class _EventModule:
         return _Event(0)
     
     def peek(self, eventtype=None):
-        return bool(self._queue)
+        return any(self._matches(event, eventtype) for event in self._queue)
     
     def clear(self, eventtype=None):
-        self._queue = []
+        self._queue = [event for event in self._queue if not self._matches(event, eventtype)]
     
     def post(self, event):
         self._queue.append(event)
@@ -406,32 +918,53 @@ class _Font:
 class _FontObj:
     def __init__(self, name, size, bold=False, italic=False):
         self.name = name
-        self.size = size
+        self.point_size = int(size)
         self.bold = bold
         self.italic = italic
+        self.underline = False
     
     def render(self, text, antialias, color, background=None):
-        # Create a simple surface with text
-        surf = _CanvasSurface(len(text) * self.size // 2, self.size + 4)
+        text = str(text)
+        font_weight = "bold " if self.bold else ""
+        font_style = "italic " if self.italic else ""
+        family = self.name or "monospace"
+        measure = js.document.createElement("canvas").getContext("2d")
+        measure.font = f"{font_style}{font_weight}{self.point_size}px {family}, monospace"
+        try:
+            width = int(measure.measureText(text).width) + 6
+        except Exception:
+            width = len(text) * self.point_size // 2 + 6
+        height = self.point_size + 8
+        surf = _CanvasSurface(max(1, width), max(1, height))
+        if background is not None:
+            surf.fill(background)
+        if surf._ctx:
+            surf._ctx.font = measure.font
+            surf._ctx.textBaseline = "top"
+            surf._ctx.fillStyle = _ok_color_style(color)
+            surf._ctx.fillText(text, 3, 3)
+            if self.underline:
+                surf._ctx.fillRect(3, height - 3, max(1, width - 6), 1)
         return surf
     
     def size(self, text):
-        return (len(text) * self.size // 2, self.size + 4)
+        text = str(text)
+        return (len(text) * self.point_size // 2 + 6, self.point_size + 8)
     
     def set_underline(self, underline):
-        pass
+        self.underline = bool(underline)
     
     def get_underline(self):
-        return False
+        return self.underline
     
     def set_bold(self, bold):
-        pass
+        self.bold = bool(bold)
     
     def get_bold(self):
         return self.bold
     
     def set_italic(self, italic):
-        pass
+        self.italic = bool(italic)
     
     def get_italic(self):
         return self.italic
@@ -492,92 +1025,104 @@ class _Draw:
     """pygame.draw replacement"""
     def rect(self, surface, color, rect, width=0, border_radius=0):
         if surface._ctx:
-            r, g, b = color[0], color[1], color[2]
-            if len(color) > 3:
-                a = color[3]
-                surface._ctx.fillStyle = f"rgba({r},{g},{b},{a/255})"
-            else:
-                surface._ctx.fillStyle = f"rgb({r},{g},{b})"
-            
-            if isinstance(rect, _Rect):
-                x, y, w, h = rect.x, rect.y, rect.width, rect.height
-            else:
-                x, y, w, h = rect
+            style = _ok_color_style(color)
+            surface._ctx.fillStyle = style
+            surface._ctx.strokeStyle = style
+            x, y, w, h = _ok_rect_tuple(rect)
             
             if width == 0:
-                surface._ctx.fillRect(x, y, w, h)
+                if border_radius and hasattr(surface._ctx, "roundRect"):
+                    surface._ctx.beginPath()
+                    surface._ctx.roundRect(x, y, w, h, border_radius)
+                    surface._ctx.fill()
+                else:
+                    surface._ctx.fillRect(x, y, w, h)
             else:
                 surface._ctx.lineWidth = width
-                surface._ctx.strokeRect(x, y, w, h)
+                if border_radius and hasattr(surface._ctx, "roundRect"):
+                    surface._ctx.beginPath()
+                    surface._ctx.roundRect(x, y, w, h, border_radius)
+                    surface._ctx.stroke()
+                else:
+                    surface._ctx.strokeRect(x, y, w, h)
+        return _Rect(*_ok_rect_tuple(rect))
     
     def circle(self, surface, color, center, radius, width=0):
         if surface._ctx:
-            r, g, b = color[0], color[1], color[2]
+            x, y = _ok_point_tuple(center)
+            style = _ok_color_style(color)
             surface._ctx.beginPath()
-            surface._ctx.arc(center[0], center[1], radius, 0, 2 * math.pi)
+            surface._ctx.arc(x, y, radius, 0, 2 * math.pi)
             if width == 0:
-                surface._ctx.fillStyle = f"rgb({r},{g},{b})"
+                surface._ctx.fillStyle = style
                 surface._ctx.fill()
             else:
                 surface._ctx.lineWidth = width
-                surface._ctx.strokeStyle = f"rgb({r},{g},{b})"
+                surface._ctx.strokeStyle = style
                 surface._ctx.stroke()
+        x, y = _ok_point_tuple(center)
+        return _Rect(x - radius, y - radius, radius * 2, radius * 2)
     
     def line(self, surface, color, start_pos, end_pos, width=1):
         if surface._ctx:
-            r, g, b = color[0], color[1], color[2]
+            sx, sy = _ok_point_tuple(start_pos)
+            ex, ey = _ok_point_tuple(end_pos)
             surface._ctx.beginPath()
-            surface._ctx.moveTo(start_pos[0], start_pos[1])
-            surface._ctx.lineTo(end_pos[0], end_pos[1])
+            surface._ctx.moveTo(sx, sy)
+            surface._ctx.lineTo(ex, ey)
             surface._ctx.lineWidth = width
-            surface._ctx.strokeStyle = f"rgb({r},{g},{b})"
+            surface._ctx.strokeStyle = _ok_color_style(color)
             surface._ctx.stroke()
+        sx, sy = _ok_point_tuple(start_pos)
+        ex, ey = _ok_point_tuple(end_pos)
+        return _Rect(min(sx, ex), min(sy, ey), abs(ex - sx) or width, abs(ey - sy) or width)
     
     def lines(self, surface, color, closed, pointlist, width=1):
         if surface._ctx and len(pointlist) > 1:
-            r, g, b = color[0], color[1], color[2]
+            x, y = _ok_point_tuple(pointlist[0])
             surface._ctx.beginPath()
-            surface._ctx.moveTo(pointlist[0][0], pointlist[0][1])
+            surface._ctx.moveTo(x, y)
             for p in pointlist[1:]:
-                surface._ctx.lineTo(p[0], p[1])
+                px, py = _ok_point_tuple(p)
+                surface._ctx.lineTo(px, py)
             if closed:
                 surface._ctx.closePath()
             surface._ctx.lineWidth = width
-            surface._ctx.strokeStyle = f"rgb({r},{g},{b})"
+            surface._ctx.strokeStyle = _ok_color_style(color)
             surface._ctx.stroke()
+        return _Rect(0, 0, 0, 0)
     
     def polygon(self, surface, color, pointlist, width=0):
         if surface._ctx and len(pointlist) > 2:
-            r, g, b = color[0], color[1], color[2]
+            x, y = _ok_point_tuple(pointlist[0])
             surface._ctx.beginPath()
-            surface._ctx.moveTo(pointlist[0][0], pointlist[0][1])
+            surface._ctx.moveTo(x, y)
             for p in pointlist[1:]:
-                surface._ctx.lineTo(p[0], p[1])
+                px, py = _ok_point_tuple(p)
+                surface._ctx.lineTo(px, py)
             surface._ctx.closePath()
             if width == 0:
-                surface._ctx.fillStyle = f"rgb({r},{g},{b})"
+                surface._ctx.fillStyle = _ok_color_style(color)
                 surface._ctx.fill()
             else:
                 surface._ctx.lineWidth = width
-                surface._ctx.strokeStyle = f"rgb({r},{g},{b})"
+                surface._ctx.strokeStyle = _ok_color_style(color)
                 surface._ctx.stroke()
+        return _Rect(0, 0, 0, 0)
     
-    def ellipse(self, surface, color, rect, width=0):
+    def ellipse(self, surface, color, rect, width=0, **kwargs):
         if surface._ctx:
-            r, g, b = color[0], color[1], color[2]
-            if isinstance(rect, _Rect):
-                x, y, w, h = rect.x, rect.y, rect.width, rect.height
-            else:
-                x, y, w, h = rect
+            x, y, w, h = _ok_rect_tuple(rect)
             surface._ctx.beginPath()
             surface._ctx.ellipse(x + w//2, y + h//2, w//2, h//2, 0, 0, 2 * math.pi)
             if width == 0:
-                surface._ctx.fillStyle = f"rgb({r},{g},{b})"
+                surface._ctx.fillStyle = _ok_color_style(color)
                 surface._ctx.fill()
             else:
                 surface._ctx.lineWidth = width
-                surface._ctx.strokeStyle = f"rgb({r},{g},{b})"
+                surface._ctx.strokeStyle = _ok_color_style(color)
                 surface._ctx.stroke()
+        return _Rect(*_ok_rect_tuple(rect))
     
     def arc(self, surface, color, rect, start_angle, stop_angle, width=1):
         pass
@@ -719,7 +1264,22 @@ class _KeyConst:
     K_EURO = 321
     K_AC_BACK = 322
 
+KMOD_NONE = 0
+KMOD_LSHIFT = 1
+KMOD_RSHIFT = 2
+KMOD_SHIFT = KMOD_LSHIFT | KMOD_RSHIFT
+KMOD_LCTRL = 64
+KMOD_RCTRL = 128
+KMOD_CTRL = KMOD_LCTRL | KMOD_RCTRL
+KMOD_LALT = 256
+KMOD_RALT = 512
+KMOD_ALT = KMOD_LALT | KMOD_RALT
+KMOD_LMETA = 1024
+KMOD_RMETA = 2048
+KMOD_META = KMOD_LMETA | KMOD_RMETA
+
 # Event type constants
+NOEVENT = 0
 QUIT = 12
 ACTIVEEVENT = 1
 KEYDOWN = 2
@@ -737,6 +1297,7 @@ VIDEOEXPOSE = 17
 USEREVENT = 24
 
 # Display mode flags
+SRCALPHA = 0x00010000
 FULLSCREEN = 0x80000000
 DOUBLEBUF = 0x40000000
 HWSURFACE = 0x10000000
@@ -745,14 +1306,233 @@ RESIZABLE = 0x00000010
 NOFRAME = 0x00000020
 SCALED = 0x00004000
 
+_KEY_NAME_MAP = {
+    "ArrowUp": _KeyConst.K_UP,
+    "ArrowDown": _KeyConst.K_DOWN,
+    "ArrowLeft": _KeyConst.K_LEFT,
+    "ArrowRight": _KeyConst.K_RIGHT,
+    "Backspace": _KeyConst.K_BACKSPACE,
+    "Tab": _KeyConst.K_TAB,
+    "Enter": _KeyConst.K_RETURN,
+    "Escape": _KeyConst.K_ESCAPE,
+    "Esc": _KeyConst.K_ESCAPE,
+    " ": _KeyConst.K_SPACE,
+    "Spacebar": _KeyConst.K_SPACE,
+    "Delete": _KeyConst.K_DELETE,
+    "Home": _KeyConst.K_HOME,
+    "End": _KeyConst.K_END,
+    "PageUp": _KeyConst.K_PAGEUP,
+    "PageDown": _KeyConst.K_PAGEDOWN,
+    "Shift": _KeyConst.K_LSHIFT,
+    "Control": _KeyConst.K_LCTRL,
+    "Alt": _KeyConst.K_LALT,
+    "Meta": _KeyConst.K_LMETA,
+}
+
+for _ok_i in range(1, 13):
+    _KEY_NAME_MAP[f"F{_ok_i}"] = getattr(_KeyConst, f"K_F{_ok_i}")
+
+_KEY_CODE_MAP = {
+    "Space": _KeyConst.K_SPACE,
+    "Enter": _KeyConst.K_RETURN,
+    "NumpadEnter": _KeyConst.K_KP_ENTER,
+    "Escape": _KeyConst.K_ESCAPE,
+    "ArrowUp": _KeyConst.K_UP,
+    "ArrowDown": _KeyConst.K_DOWN,
+    "ArrowLeft": _KeyConst.K_LEFT,
+    "ArrowRight": _KeyConst.K_RIGHT,
+    "ShiftLeft": _KeyConst.K_LSHIFT,
+    "ShiftRight": _KeyConst.K_RSHIFT,
+    "ControlLeft": _KeyConst.K_LCTRL,
+    "ControlRight": _KeyConst.K_RCTRL,
+    "AltLeft": _KeyConst.K_LALT,
+    "AltRight": _KeyConst.K_RALT,
+}
+
+def _ok_key_from_browser_event(event):
+    key = str(getattr(event, "key", "") or "")
+    code = str(getattr(event, "code", "") or "")
+    if code in _KEY_CODE_MAP:
+        return _KEY_CODE_MAP[code]
+    if key in _KEY_NAME_MAP:
+        return _KEY_NAME_MAP[key]
+    if code.startswith("Key") and len(code) == 4:
+        return ord(code[-1].lower())
+    if code.startswith("Digit") and len(code) == 6:
+        return ord(code[-1])
+    if len(key) == 1:
+        return ord(key.lower() if key.isalpha() else key)
+    return None
+
+def _ok_unicode_from_browser_event(event):
+    key = str(getattr(event, "key", "") or "")
+    if len(key) == 1:
+        return key
+    return ""
+
+def _ok_mods_from_browser_event(event):
+    mods = KMOD_NONE
+    if bool(getattr(event, "shiftKey", False)):
+        mods |= KMOD_SHIFT
+    if bool(getattr(event, "ctrlKey", False)):
+        mods |= KMOD_CTRL
+    if bool(getattr(event, "altKey", False)):
+        mods |= KMOD_ALT
+    if bool(getattr(event, "metaKey", False)):
+        mods |= KMOD_META
+    return mods
+
+def _ok_mouse_pos_from_event(canvas, event):
+    try:
+        rect = canvas.getBoundingClientRect()
+        width = max(1, float(rect.width))
+        height = max(1, float(rect.height))
+        x = int((float(event.clientX) - float(rect.left)) * canvas.width / width)
+        y = int((float(event.clientY) - float(rect.top)) * canvas.height / height)
+        return (
+            max(0, min(int(canvas.width), x)),
+            max(0, min(int(canvas.height), y)),
+        )
+    except Exception:
+        return (0, 0)
+
+def _ok_mouse_button_from_event(event):
+    button = int(getattr(event, "button", 0))
+    if button == 1:
+        return 2
+    if button == 2:
+        return 3
+    return 1
+
+def _ok_stop_browser_event(event):
+    try:
+        event.preventDefault()
+    except Exception:
+        pass
+    try:
+        event.stopPropagation()
+    except Exception:
+        pass
+
+def _ok_bind_input(canvas, runtime):
+    _okama_cleanup_input()
+    if canvas is None:
+        return
+    runtime._canvas = canvas
+    try:
+        canvas.setAttribute("tabindex", "0")
+        canvas.style.outline = "none"
+    except Exception:
+        pass
+
+    def focus_canvas(event=None):
+        runtime._focused = True
+        try:
+            canvas.focus()
+        except Exception:
+            pass
+
+    def key_down(event):
+        key = _ok_key_from_browser_event(event)
+        if key is None:
+            return
+        runtime._focused = True
+        runtime._mods = _ok_mods_from_browser_event(event)
+        runtime._pressed_keys.add(key)
+        runtime.event.post(_Event(
+            KEYDOWN,
+            key=key,
+            mod=runtime._mods,
+            unicode=_ok_unicode_from_browser_event(event),
+            scancode=0,
+            repeat=bool(getattr(event, "repeat", False)),
+        ))
+        _ok_stop_browser_event(event)
+
+    def key_up(event):
+        key = _ok_key_from_browser_event(event)
+        if key is None:
+            return
+        if key not in runtime._pressed_keys and not runtime._focused:
+            return
+        runtime._mods = _ok_mods_from_browser_event(event)
+        runtime._pressed_keys.discard(key)
+        runtime.event.post(_Event(
+            KEYUP,
+            key=key,
+            mod=runtime._mods,
+            unicode="",
+            scancode=0,
+        ))
+        _ok_stop_browser_event(event)
+
+    def mouse_move(event):
+        pos = _ok_mouse_pos_from_event(canvas, event)
+        old = runtime._mouse_pos
+        rel = (pos[0] - old[0], pos[1] - old[1])
+        runtime._mouse_pos = pos
+        runtime._mouse_rel = rel
+        runtime._focused = True
+        runtime.event.post(_Event(
+            MOUSEMOTION,
+            pos=pos,
+            rel=rel,
+            buttons=runtime.mouse.get_pressed(),
+        ))
+
+    def mouse_down(event):
+        focus_canvas(event)
+        pos = _ok_mouse_pos_from_event(canvas, event)
+        button = _ok_mouse_button_from_event(event)
+        runtime._mouse_pos = pos
+        runtime._mouse_buttons.add(button)
+        runtime.event.post(_Event(MOUSEBUTTONDOWN, pos=pos, button=button))
+        _ok_stop_browser_event(event)
+
+    def mouse_up(event):
+        pos = _ok_mouse_pos_from_event(canvas, event)
+        button = _ok_mouse_button_from_event(event)
+        runtime._mouse_pos = pos
+        runtime._mouse_buttons.discard(button)
+        runtime.event.post(_Event(MOUSEBUTTONUP, pos=pos, button=button))
+        _ok_stop_browser_event(event)
+
+    def blur(event=None):
+        runtime._focused = False
+        runtime._pressed_keys.clear()
+        runtime._mouse_buttons.clear()
+        runtime._mouse_rel = (0, 0)
+
+    def context_menu(event):
+        _ok_stop_browser_event(event)
+
+    _okama_add_listener(canvas, "focus", focus_canvas)
+    _okama_add_listener(canvas, "blur", blur)
+    _okama_add_listener(canvas, "mousedown", mouse_down)
+    _okama_add_listener(canvas, "mousemove", mouse_move)
+    _okama_add_listener(canvas, "mouseup", mouse_up)
+    _okama_add_listener(canvas, "mouseleave", mouse_up)
+    _okama_add_listener(canvas, "keydown", key_down)
+    _okama_add_listener(canvas, "keyup", key_up)
+    _okama_add_listener(canvas, "contextmenu", context_menu)
+    _okama_add_listener(js.window, "keyup", key_up)
+    _okama_add_listener(js.window, "blur", blur)
+
 # Create pygame module structure
 class PygameModule:
     """Browser-compatible pygame replacement"""
     def __init__(self):
+        self._pressed_keys = set()
+        self._mods = KMOD_NONE
+        self._mouse_pos = (0, 0)
+        self._mouse_rel = (0, 0)
+        self._mouse_buttons = set()
+        self._focused = False
+        self._canvas = None
         self.display = _Display()
         self.time = _Time()
-        self.key = _Key()
-        self.mouse = _Mouse()
+        self.key = _Key(self)
+        self.mouse = _Mouse(self)
         self.event = _EventModule()
         self.font = _Font()
         self.mixer = _Mixer()
@@ -766,8 +1546,12 @@ class PygameModule:
         for attr in dir(_KeyConst):
             if attr.startswith('K_'):
                 setattr(self, attr, getattr(_KeyConst, attr))
+        for attr, value in list(globals().items()):
+            if attr.startswith('KMOD_'):
+                setattr(self, attr, value)
         
         # Copy event constants
+        self.NOEVENT = NOEVENT
         self.QUIT = QUIT
         self.ACTIVEEVENT = ACTIVEEVENT
         self.KEYDOWN = KEYDOWN
@@ -785,6 +1569,7 @@ class PygameModule:
         self.USEREVENT = USEREVENT
         
         # Display flags
+        self.SRCALPHA = SRCALPHA
         self.FULLSCREEN = FULLSCREEN
         self.DOUBLEBUF = DOUBLEBUF
         self.HWSURFACE = HWSURFACE
@@ -794,6 +1579,17 @@ class PygameModule:
         self.SCALED = SCALED
         
         self._init = False
+
+    def _okama_bind_canvas(self, canvas):
+        _ok_bind_input(canvas, self)
+
+    def _okama_reset_preview(self):
+        self._pressed_keys.clear()
+        self._mods = KMOD_NONE
+        self._mouse_rel = (0, 0)
+        self._mouse_buttons.clear()
+        self.event.clear()
+        _okama_cleanup_input()
     
     def init(self):
         if not self._init:
@@ -824,24 +1620,44 @@ print("[Okama Studio] Pygame browser stubs loaded")
 print("[Okama Studio] Running in preview mode (no real SDL)")
 `;
 
+const PYGAME_TEARDOWN_CODE = `
+import sys
+
+try:
+    pygame_module = sys.modules.get('pygame')
+    if pygame_module is not None and hasattr(pygame_module, '_okama_reset_preview'):
+        pygame_module._okama_reset_preview()
+except Exception:
+    pass
+
+try:
+    _okama_cleanup_input()
+except Exception:
+    pass
+`;
+
 export default function GamePreview({ code, autoRun = false, onSendToAI }: GamePreviewProps) {
+  const previewRootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const canvasId = "okama-preview-canvas";
   const [state, setState] = useState<RunState>("idle");
   const [output, setOutput] = useState<LogLine[]>([]);
   const [error, setError] = useState<string>("");
   const [progress, setProgress] = useState("");
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const pyRef = useRef<PyodideInterface | null>(null);
+  const stopRequestedRef = useRef(false);
 
   const appendOutput = (line: string, isError = false) =>
     setOutput((prev) => [...prev.slice(-100), { text: line, isError }]);
 
   const run = useCallback(async () => {
     if (!code.trim()) return;
+    stopRequestedRef.current = false;
     setState("loading");
     setOutput([]);
     setError("");
     const runtimeErrors: string[] = [];
+    let stoppedByRequest = false;
 
     try {
       setProgress("Loading Pyodide runtime…");
@@ -859,88 +1675,143 @@ export default function GamePreview({ code, autoRun = false, onSendToAI }: GameP
         appendOutput(text, true);
       };
       
-      // Expose to Python via globalThis (required for Pyodide >= 0.21)
+      // Expose to Python via globalThis (required for Pyodide >= 0.21).
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const winAny = window as any;
-      winAny.__okama_log = logCallback;
-      winAny.__okama_err = errCallback;
+      winAny[PREVIEW_LOG_CALLBACK] = logCallback;
+      winAny[PREVIEW_ERROR_CALLBACK] = errCallback;
+      winAny[PREVIEW_STOP_CALLBACK] = () => stopRequestedRef.current;
 
       // Set up stdout capture with JS callback
       setProgress("Setting up stdout…");
-      py.runPython(`
-import sys
-from pyodide.ffi import create_proxy
-import js
+      py.runPython(STDIO_SETUP_CODE);
 
-class _StdOut:
-    def __init__(self, is_err=False):
-        self.is_err = is_err
-        self.buffer = ""
-    def write(self, s):
-        self.buffer += s
-        lines = self.buffer.split("\\n")
-        self.buffer = lines.pop()  # Keep incomplete line
-        for line in lines:
-            if line:
-                if self.is_err:
-                    js.__okama_err(line)
-                else:
-                    js.__okama_log(line)
-    def flush(self):
-        if self.buffer:
-            if self.is_err:
-                js.__okama_err(self.buffer)
-            else:
-                js.__okama_log(self.buffer)
-            self.buffer = ""
-
-sys.stdout = _StdOut(False)
-sys.stderr = _StdOut(True)
-`);
-
-      // Install pygame browser stubs
-      setProgress("Loading pygame browser stubs…");
-      py.runPython(PYGAME_SETUP_CODE);
-      
-      setProgress("Running your game…");
-      setState("running");
-      setProgress("");
-
-      // Now run the user code - pygame is already available
       try {
-        await py.runPythonAsync(code);
-      } catch (runErr) {
-        // Python runtime errors
-        const errMsg = String(runErr);
-        runtimeErrors.push(errMsg);
-        appendOutput(`[Runtime Error] ${errMsg}`, true);
-        throw runErr;
+        // Install pygame browser stubs
+        setProgress("Loading pygame browser stubs…");
+        py.runPython(PYGAME_SETUP_CODE);
+
+        // Transform user code: wrap in async def + inject await asyncio.sleep(0)
+        // in every while-loop body so the JS event loop stays responsive.
+        setProgress("Preparing game loop…");
+        py.runPython(`_okama_raw_src = ${JSON.stringify(code)}`);
+        py.runPython(CODE_TRANSFORM_CODE);
+        const transformedCode = (py.globals.get('_okama_transformed_src') as string) || code;
+
+        setProgress("Running your game…");
+        setState("running");
+        setProgress("");
+        window.setTimeout(() => canvasRef.current?.focus(), 0);
+
+        // Now run the transformed (async-yielding) user code
+        try {
+          await py.runPythonAsync(transformedCode);
+        } catch (runErr) {
+          const errMsg = String(runErr);
+          if (stopRequestedRef.current || errMsg.includes("OkamaPreviewStopped")) {
+            stoppedByRequest = true;
+            appendOutput("[Okama Studio] Preview stopped", false);
+          } else {
+            // Python runtime errors
+            runtimeErrors.push(errMsg);
+            appendOutput(`[Runtime Error] ${errMsg}`, true);
+            throw runErr;
+          }
+        }
+      } finally {
+        try {
+          py.runPython(PYGAME_TEARDOWN_CODE);
+        } catch {
+          // Input cleanup should not mask the actual preview result.
+        }
+        try {
+          py.runPython(STDIO_TEARDOWN_CODE);
+        } catch {
+          // Keep the UI error focused on the preview failure, not teardown.
+        }
+        delete winAny[PREVIEW_LOG_CALLBACK];
+        delete winAny[PREVIEW_ERROR_CALLBACK];
+        delete winAny[PREVIEW_STOP_CALLBACK];
       }
 
       // Collect any runtime errors that were printed
-      if (runtimeErrors.length > 0) {
+      if (!stoppedByRequest && runtimeErrors.length > 0) {
         setError(runtimeErrors.join("\n"));
       }
 
       setState("stopped");
+      stopRequestedRef.current = false;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      setError(msg);
+      if (stopRequestedRef.current || msg.includes("OkamaPreviewStopped")) {
+        setState("stopped");
+        stopRequestedRef.current = false;
+        appendOutput("[Okama Studio] Preview stopped", false);
+        return;
+      }
+      const detailLines = runtimeErrors.length > 0 ? [...runtimeErrors] : [];
+      if (!detailLines.includes(msg)) {
+        detailLines.push(msg);
+      }
+      setError(detailLines.join("\n"));
       setState("error");
       appendOutput(`[Error] ${msg}`, true);
+      stopRequestedRef.current = false;
     }
   }, [code]);
 
-  const stop = () => setState("stopped");
+  const stop = useCallback(() => {
+    stopRequestedRef.current = true;
+    setState((current) => current === "running" ? "stopping" : current);
+  }, []);
+
+  const toggleFullscreen = useCallback(async () => {
+    const root = previewRootRef.current;
+    if (!root) return;
+
+    if (isFullscreen) {
+      setIsFullscreen(false);
+      if (document.fullscreenElement) {
+        await document.exitFullscreen().catch(() => undefined);
+      }
+      return;
+    }
+
+    setIsFullscreen(true);
+    if (root.requestFullscreen) {
+      await root.requestFullscreen().catch(() => undefined);
+    }
+  }, [isFullscreen]);
 
   useEffect(() => {
     if (autoRun) run();
   }, [autoRun, run]);
 
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(document.fullscreenElement === previewRootRef.current);
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      stopRequestedRef.current = true;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any)[PREVIEW_STOP_CALLBACK] = () => true;
+    };
+  }, []);
+
   return (
     <div
-      className="flex flex-col h-full"
-      style={{ background: "#10120f" }}
+      ref={previewRootRef}
+      className={`flex flex-col h-full ${isFullscreen ? "fixed inset-0 z-50" : ""}`}
+      style={{
+        background: "#10120f",
+        width: isFullscreen ? "100vw" : undefined,
+        height: isFullscreen ? "100vh" : undefined,
+      }}
     >
       {/* Toolbar */}
       <div
@@ -959,31 +1830,48 @@ sys.stderr = _StdOut(True)
         </span>
         <div className="flex-1" />
         <button
+          onClick={toggleFullscreen}
+          className="p-1 rounded transition-colors"
+          style={{ color: isFullscreen ? "#8df77f" : "#c9c3b3", background: isFullscreen ? "rgba(141,247,127,0.08)" : "transparent" }}
+          title={isFullscreen ? "Exit fullscreen" : "Fullscreen preview"}
+          aria-label={isFullscreen ? "Exit fullscreen preview" : "Open fullscreen preview"}
+        >
+          {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+        </button>
+        <button
           onClick={run}
-          disabled={state === "loading" || state === "running"}
+          disabled={state === "loading" || state === "running" || state === "stopping"}
           className="flex items-center gap-1.5 px-3 py-1 rounded text-xs font-bold transition-colors"
           style={{
-            background: state === "running" ? "rgba(141,247,127,0.08)" : "#8df77f",
-            color: state === "running" ? "#8df77f" : "#10120f",
+            background: state === "running" || state === "stopping" ? "rgba(141,247,127,0.08)" : "#8df77f",
+            color: state === "running" || state === "stopping" ? "#8df77f" : "#10120f",
             opacity: state === "loading" ? 0.6 : 1,
-            cursor: state === "loading" || state === "running" ? "not-allowed" : "pointer",
+            cursor: state === "loading" || state === "running" || state === "stopping" ? "not-allowed" : "pointer",
           }}
         >
           {state === "loading" ? (
             <><Loader2 size={12} className="animate-spin" /> Loading…</>
+          ) : state === "stopping" ? (
+            <><Loader2 size={12} className="animate-spin" /> Stopping…</>
           ) : state === "running" ? (
             <><Play size={12} fill="currentColor" /> Running</>
           ) : (
             <><Play size={12} fill="currentColor" /> Run</>
           )}
         </button>
-        {state === "running" && (
+        {(state === "running" || state === "stopping") && (
           <button
             onClick={stop}
+            disabled={state === "stopping"}
             className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-bold transition-colors"
-            style={{ background: "rgba(242,109,91,0.15)", color: "#f26d5b" }}
+            style={{
+              background: "rgba(242,109,91,0.15)",
+              color: "#f26d5b",
+              opacity: state === "stopping" ? 0.7 : 1,
+              cursor: state === "stopping" ? "not-allowed" : "pointer",
+            }}
           >
-            <Square size={12} fill="currentColor" /> Stop
+            <Square size={12} fill="currentColor" /> {state === "stopping" ? "Stopping" : "Stop"}
           </button>
         )}
         <button
@@ -1036,10 +1924,18 @@ sys.stderr = _StdOut(True)
             </div>
           )}
           <canvas
-            id={canvasId}
+            id={PREVIEW_CANVAS_ID}
             ref={canvasRef}
+            tabIndex={0}
+            onMouseDown={() => canvasRef.current?.focus()}
             className="max-w-full max-h-full"
-            style={{ display: state === "running" || state === "stopped" ? "block" : "none" }}
+            style={{
+              display: state === "running" || state === "stopping" || state === "stopped" ? "block" : "none",
+              width: "100%",
+              height: "100%",
+              objectFit: "contain",
+              imageRendering: "pixelated",
+            }}
           />
         </div>
 

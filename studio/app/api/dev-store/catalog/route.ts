@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
-import { readdir, readFile } from "fs/promises";
-import { existsSync } from "fs";
-import path from "path";
+import { list } from "@vercel/blob";
 
-const DEV_GAMES_DIR = path.join(process.cwd(), "public", "dev-games");
+const BLOB_PREFIX = "dev-games";
 
 export async function GET() {
   const headers = {
@@ -12,19 +10,22 @@ export async function GET() {
     "Content-Type": "application/json",
   };
 
-  if (!existsSync(DEV_GAMES_DIR)) {
-    return NextResponse.json({ version: 1, games: [] }, { headers });
-  }
-
   try {
-    const files = await readdir(DEV_GAMES_DIR);
-    const manifestFiles = files.filter((f) => f.endsWith(".manifest.json"));
+    // List all blobs with the dev-games prefix
+    const { blobs } = await list({ prefix: `${BLOB_PREFIX}/` });
+    
+    // Filter to only manifest files
+    const manifestBlobs = blobs.filter((b) => 
+      b.pathname.endsWith(".manifest.json")
+    );
 
+    // Fetch each manifest content
     const games = await Promise.all(
-      manifestFiles.map(async (mf) => {
+      manifestBlobs.map(async (blob) => {
         try {
-          const raw = await readFile(path.join(DEV_GAMES_DIR, mf), "utf-8");
-          return JSON.parse(raw);
+          const response = await fetch(blob.url);
+          if (!response.ok) return null;
+          return await response.json();
         } catch {
           return null;
         }

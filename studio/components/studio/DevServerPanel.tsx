@@ -221,7 +221,7 @@ export default function DevServerPanel() {
         </div>
       )}
 
-      {/* Temporary hosting note */}
+      {/* Cloud hosting note */}
       <div
         className="p-3 rounded-lg"
         style={{ background: "rgba(255,207,74,0.04)", border: "1px solid rgba(255,207,74,0.12)" }}
@@ -229,9 +229,8 @@ export default function DevServerPanel() {
         <div className="flex items-start gap-2">
           <Wifi size={12} style={{ color: "#ffcf4a", flexShrink: 0, marginTop: 1 }} />
           <p className="text-xs" style={{ color: "#c9c3b3" }}>
-            <strong style={{ color: "#ffcf4a" }}>Temporary hosting</strong> — games are served from this
-            machine&apos;s dev server. No account required. Packages are stored in{" "}
-            <code style={{ color: "#53d9e6" }}>public/dev-games/</code> and served at the URLs above.
+            <strong style={{ color: "#ffcf4a" }}>Cloud Dev Server</strong> — games are stored in cloud
+            blob storage and accessible from anywhere. Use the catalog URL above in your OkamaOS console.
           </p>
         </div>
       </div>

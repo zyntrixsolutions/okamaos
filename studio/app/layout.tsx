@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/ui/Sidebar";
@@ -12,6 +12,9 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Okama Studio — Game Engine Platform",
   description: "AI-collaborative pygame game creation studio for OkamaOS. Vibe-code cinematic games, learn Python, and export .ok packages.",
+};
+
+export const viewport: Viewport = {
   themeColor: "#10120f",
 };
 

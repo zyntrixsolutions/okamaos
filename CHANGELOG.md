@@ -5,6 +5,13 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.3.1] - 2026-05-02
+
+### Fixed
+- **Game Store URL input**: BACKSPACE key now works correctly in the Set Store URL dialog — the action was previously not handled, preventing users from editing or correcting URL input.
+
+---
+
 ## [1.3.0 / studio-0.3.0] - 2026-05-02
 
 ### Added (Studio — Dev-Server Game Hosting)

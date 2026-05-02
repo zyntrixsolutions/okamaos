@@ -964,7 +964,10 @@ class OkamaShell:
         elif self.state == "game_store":
             self._game_store_input(action, ev)
         elif self.state == "store_url_entry":
-            if action in ("B", "ENTER"):
+            if action == "BACKSPACE":
+                if self._store_url_input:
+                    self._store_url_input = self._store_url_input[:-1]
+            elif action in ("B", "ENTER"):
                 if action == "ENTER":
                     self._store_url_confirm()
                 else:

@@ -104,6 +104,7 @@ body::before {
   gap: clamp(12px, 2vw, 26px);
   color: var(--muted);
   font-size: 0.95rem;
+  flex-wrap: wrap;
 }
 
 .site-header nav a,
@@ -157,7 +158,7 @@ body::before {
 }
 
 .hero {
-  min-height: 92vh;
+  min-height: 88vh;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
   align-items: center;
@@ -186,7 +187,7 @@ p {
 
 h1 {
   margin: 0;
-  font-size: clamp(3.25rem, 10.4vw, 8.8rem);
+  font-size: 5.5rem;
   line-height: 0.9;
   overflow-wrap: normal;
   word-break: keep-all;
@@ -201,7 +202,7 @@ h1 {
 
 h2 {
   margin: 0;
-  font-size: clamp(2rem, 5vw, 4.7rem);
+  font-size: 3.2rem;
   line-height: 0.98;
 }
 
@@ -214,7 +215,7 @@ h3 {
   max-width: 690px;
   margin: 22px 0 0;
   color: var(--paper);
-  font-size: clamp(1.05rem, 2vw, 1.42rem);
+  font-size: 1.24rem;
   line-height: 1.55;
 }
 
@@ -228,7 +229,11 @@ h3 {
 .hero-panel,
 .update-card,
 .catalog-card,
-.creator-steps article {
+.creator-steps article,
+.feature-card,
+.doc-card,
+.tutorial-grid article,
+.ecosystem-steps article {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(24, 26, 22, 0.82);
@@ -282,7 +287,8 @@ h3 {
 
 .intro-grid,
 .split-grid,
-.creator-grid {
+.creator-grid,
+.ecosystem-grid {
   display: grid;
   grid-template-columns: 0.9fr 1.1fr;
   gap: clamp(28px, 6vw, 76px);
@@ -324,6 +330,94 @@ h3 {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 16px;
+}
+
+.download-grid,
+.doc-grid,
+.tutorial-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.feature-card,
+.doc-card,
+.tutorial-grid article {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 230px;
+  padding: 18px;
+  text-decoration: none;
+}
+
+.feature-card.highlighted,
+.doc-card:hover {
+  border-color: rgba(141, 247, 127, 0.48);
+}
+
+.feature-card p,
+.doc-card p,
+.tutorial-grid p,
+.ecosystem-grid p,
+.ecosystem-steps p {
+  color: var(--muted);
+  line-height: 1.62;
+}
+
+.feature-card .button {
+  margin-top: auto;
+}
+
+.doc-card span,
+.tutorial-grid span,
+.ecosystem-steps span {
+  color: var(--cyan);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.doc-card h3,
+.feature-card h3,
+.tutorial-grid h3,
+.ecosystem-steps h3 {
+  margin: 0;
+}
+
+.command-band {
+  background: #111510;
+}
+
+.command-table {
+  display: grid;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(24, 26, 22, 0.82);
+}
+
+.command-table div {
+  display: grid;
+  grid-template-columns: minmax(130px, 210px) 1fr;
+  gap: 16px;
+  padding: 15px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.command-table div:last-child {
+  border-bottom: 0;
+}
+
+.command-table strong {
+  color: var(--green);
+  font-family:
+    "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+.command-table span {
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 .catalog-card {
@@ -396,7 +490,7 @@ h3 {
 }
 
 .update-card h3 {
-  font-size: clamp(1.45rem, 3vw, 2.4rem);
+  font-size: 2rem;
   line-height: 1.05;
   margin-top: 0;
 }
@@ -436,8 +530,19 @@ h3 {
   gap: 14px;
 }
 
+.ecosystem-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
 .creator-steps article {
   min-height: 180px;
+  padding: 18px;
+}
+
+.ecosystem-steps article {
+  min-height: 170px;
   padding: 18px;
 }
 
@@ -488,7 +593,8 @@ h3 {
   .hero,
   .intro-grid,
   .split-grid,
-  .creator-grid {
+  .creator-grid,
+  .ecosystem-grid {
     grid-template-columns: 1fr;
   }
 
@@ -503,6 +609,22 @@ h3 {
 
   .creator-steps {
     grid-template-columns: 1fr;
+  }
+
+  .ecosystem-steps {
+    grid-template-columns: 1fr;
+  }
+
+  h1 {
+    font-size: 3.4rem;
+  }
+
+  h2 {
+    font-size: 2.25rem;
+  }
+
+  .hero-text {
+    font-size: 1.08rem;
   }
 
   .section-heading,
@@ -530,7 +652,24 @@ h3 {
 
   .catalog-card,
   .update-card,
-  .creator-steps article {
+  .creator-steps article,
+  .feature-card,
+  .doc-card,
+  .tutorial-grid article,
+  .ecosystem-steps article {
     padding: 16px;
+  }
+
+  .command-table div {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  h1 {
+    font-size: 2.6rem;
+  }
+
+  h2 {
+    font-size: 1.9rem;
   }
 }

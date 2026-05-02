@@ -20,6 +20,7 @@ import datetime as _dt
 import json
 import posixpath
 import shutil
+import subprocess
 import tarfile
 import tempfile
 import urllib.parse
@@ -119,6 +120,9 @@ def cmd_apply(args):
     print(f"okama-update: {action} OkamaOS to {summary['version']}")
     print(f"  Files        : {len(summary['files'])}")
     print(f"  Config merges: {len(summary['configs'])}")
+    if summary.get("pip_packages"):
+        action_str = "would install" if args.dry_run else "installed"
+        print(f"  Pip packages : {action_str}: {', '.join(summary['pip_packages'])}")
     if summary.get("backup_dir"):
         print(f"  Backup       : {summary['backup_dir']}")
     if summary.get("requires_reboot"):
@@ -221,6 +225,9 @@ def _apply_bundle(path: str, dry_run: bool = False) -> dict:
             "configs": configs,
             "requires_reboot": bool(manifest.get("requires_reboot", True)),
         }
+        pip_packages = _install_requirements(tmp, manifest, dry_run=True)
+        summary["pip_packages"] = pip_packages
+
         if not files and not configs:
             summary["requires_reboot"] = False
             return summary
@@ -231,8 +238,10 @@ def _apply_bundle(path: str, dry_run: bool = False) -> dict:
         _backup_targets(files, configs, backup_dir)
         _install_files(overlay_root, files)
         _merge_configs(configs)
-        _write_history(manifest, files, configs, backup_dir)
+        pip_packages = _install_requirements(tmp, manifest)
+        _write_history(manifest, files, configs, backup_dir, pip_packages)
         summary["backup_dir"] = backup_dir
+        summary["pip_packages"] = pip_packages
         return summary
 
 
@@ -400,19 +409,63 @@ def _write_kv(path: str, data: dict) -> None:
             f.write(f"{key}={data[key]}\n")
 
 
-def _write_history(manifest: dict, files: list, configs: list, backup_dir: str) -> None:
+def _install_requirements(bundle_tmp: str, manifest: dict, dry_run: bool = False) -> list:
+    """Install Python deps from requirements.txt bundled at the tar root.
+
+    The file name is configurable via manifest key ``requirements_file``
+    (default: ``requirements.txt``).  Runs ``sys.executable -m pip install``
+    so the correct interpreter is always used.  A ``PIP_INSTALL_ARGS``
+    okama.conf key can override extra pip flags (default:
+    ``--break-system-packages``).
+
+    Returns the list of installed requirement specs, or [] if absent.
+    """
+    req_file = manifest.get("requirements_file", "requirements.txt")
+    req_path = os.path.join(bundle_tmp, req_file)
+    if not os.path.isfile(req_path):
+        return []
+    with open(req_path, encoding="utf-8") as f:
+        packages = [ln.strip() for ln in f
+                    if ln.strip() and not ln.strip().startswith("#")]
+    if not packages:
+        return []
+    if dry_run:
+        return packages
+
+    extra_args = cfg_mod.get().get(
+        "PIP_INSTALL_ARGS", "--break-system-packages"
+    ).split()
+    cmd = [sys.executable, "-m", "pip", "install", "--quiet"] + extra_args + ["-r", req_path]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    if result.returncode != 0:
+        # Retry without the extra flags in case the flag is unsupported
+        cmd_fallback = [sys.executable, "-m", "pip", "install", "--quiet", "-r", req_path]
+        result = subprocess.run(cmd_fallback, capture_output=True, text=True, timeout=300)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"pip install failed for update requirements:\n"
+            f"{(result.stderr or result.stdout).strip()[:300]}"
+        )
+    return packages
+
+
+def _write_history(manifest: dict, files: list, configs: list, backup_dir: str,
+                   pip_packages: list = None) -> None:
     history_dir = _data_path(cfg_mod.get().get(
         "UPDATE_HISTORY_DIR", os.path.join(UPDATES_DIR, "history")))
     os.makedirs(history_dir, exist_ok=True)
     version = manifest.get("version", "unknown")
+    entry = {
+        "version": version,
+        "applied_at": _dt.datetime.now(_dt.UTC).isoformat(),
+        "backup_dir": backup_dir,
+        "files": files,
+        "configs": configs,
+    }
+    if pip_packages:
+        entry["pip_packages"] = pip_packages
     with open(os.path.join(history_dir, f"{version}.json"), "w", encoding="utf-8") as f:
-        json.dump({
-            "version": version,
-            "applied_at": _dt.datetime.now(_dt.UTC).isoformat(),
-            "backup_dir": backup_dir,
-            "files": files,
-            "configs": configs,
-        }, f, indent=2)
+        json.dump(entry, f, indent=2)
 
 
 def _latest_backup_dir() -> str:

@@ -2,6 +2,13 @@
 
 ## Milestones
 
+### v1.3.1 / Studio 0.3.1 — Pages and Studio Ecosystem Handoff ✅
+- [x] Add Studio sidebar action that opens the OkamaOS Pages downloads section
+- [x] Add Dashboard actions for OS download and manual access
+- [x] Add Studio-local changelog, roadmap, and version tracking
+- [x] Replace scaffolded Studio README with ecosystem workflow docs
+- [x] Keep this change separate from OS runtime bundle generation
+
 ### v0.1 — Buildroot Foundation ✅
 - [x] `okamaos_x86_64_defconfig` with Python3, SDL2, BusyBox, BlueZ, ALSA, Dropbear
 - [x] `okama-runtime` BR2_EXTERNAL package

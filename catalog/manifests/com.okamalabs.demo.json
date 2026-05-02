@@ -1,7 +1,7 @@
 {
   "name": "Okama Demo Game",
   "id": "com.okamalabs.demo",
-  "version": "0.1.1",
+  "version": "0.1.0",
   "runtime": "okama-sdl2",
   "entry": "main.py",
   "min_ram_mb": 48,

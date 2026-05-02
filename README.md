@@ -1,29 +1,58 @@
 # OkamaOS Public Portal
 
-This directory is a GitHub Pages-ready static portal for OkamaOS.
+This repository is the GitHub Pages-ready public hub for OkamaOS.
 
-It is designed for two audiences:
+It serves four audiences:
 
-- players who want games, release notes, and update links
-- creators who want a clear path to ship `.ok` packages into the catalog
+- beginners who need ISO downloads, first-boot help, and tutorials
+- players who need game downloads, release notes, and update links
+- creators who need the `.ok` package contract and Studio workflow
+- developers who need Dev Console and command documentation
 
-## Deploy
+## Public Entry Points
 
-The repository includes `.github/workflows/pages.yml`. Enable GitHub Pages with
-the source set to GitHub Actions, then merge changes to `main`.
+- Homepage: `index.html`
+- Beginner manual: `docs/manual.md`
+- ISO release guide: `docs/releases.md`
+- Command reference: `docs/commands.md`
+- Dev Console manual: `docs/dev-console.md`
+- Package docs: `docs/packages.md`
+- Tutorials: `docs/tutorials.md`
+- Studio ecosystem guide: `docs/studio.md`
+- Update feed: `updates/feed.json`
+- App catalog: `catalog/apps.json`
 
-## Local preview
+## ISO Releases
 
-The site is static. Open `pages/index.html` directly, or preview it over HTTP:
+Full bootable ISO images are distributed through GitHub Releases:
+
+<https://github.com/zyntrixsolutions/okamaos/releases>
+
+The Pages site should link users there for fresh installs, recovery media, and
+full image downloads. The `updates/feed.json` feed is for `.okupdate` bundles
+that update an already-running OkamaOS install.
+
+## Local Preview
+
+The site is static:
 
 ```bash
-python3 -m http.server 8000 --directory pages
+python3 -m http.server 8000 --directory .
 ```
 
-## Catalog feed
+Then open:
+
+```text
+http://localhost:8000
+```
+
+Opening `index.html` directly also works for layout checks, but the JSON feed
+rendering is best tested over HTTP.
+
+## Catalog Feed
 
 `catalog/apps.json` is the app/game catalog consumed by the page and suitable
-for future in-OS store clients.
+for in-OS store clients.
 
 Required app fields:
 
@@ -39,13 +68,20 @@ Required app fields:
 Small `.ok` files can live in `downloads/games/`. Larger games should use
 GitHub Releases and set `download_url` to the release asset.
 
-## Update feed
+## Update Feed
 
 `updates/feed.json` describes the public update channel. Installable
 `.okupdate` bundles live in `updates/` and can replace OkamaOS runtime files
-while preserving user data. OS images can still ship through GitHub Releases;
-this feed should point to the exact asset URL and include `sha256` plus byte
-size when artifacts are final.
+while preserving user data. OS images ship through GitHub Releases.
 
 Current builds can use the feed as both a human-readable update source and a
 machine-readable update contract.
+
+## Version and Roadmap Tracking
+
+- Portal version: `VERSION`
+- Portal changelog: `CHANGELOG.md`
+- Portal roadmap: `ROADMAP.md`
+
+Update all three when changing public docs, downloads, feed shape, visible copy,
+or ecosystem workflow.

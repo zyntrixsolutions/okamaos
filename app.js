@@ -3,17 +3,17 @@ const fallbackCatalog = {
     {
       id: "com.okamalabs.demo",
       name: "Okama Demo Game",
-      version: "0.1.1",
+      version: "0.1.0",
       runtime: "okama-sdl2",
       category: "Starter",
       status: "available",
       tagline: "The first controller-first drop for every fresh OkamaOS build.",
       description:
         "Reference demo game showing sprite movement, pause handling, save state, audio permissions, and clean return to the OkamaOS shell.",
-      download_url: "https://zyntrixsolutions.github.io/okamaos/downloads/games/com.okamalabs.demo-0.1.1.ok",
+      download_url: "https://zyntrixsolutions.github.io/okamaos/downloads/games/com.okamalabs.demo-0.1.0.ok",
       manifest_url: "https://zyntrixsolutions.github.io/okamaos/catalog/manifests/com.okamalabs.demo.json",
-      sha256: "10689ad9449d9d54bbc648e66a6b59784424757a035f8f6164479b2d4cd6ef44",
-      size_bytes: 13520,
+      sha256: "372ded0cb3615d266b48ab80d8e33bc8ced062cab120606e00b4dfbfbd4c9cf3",
+      size_bytes: 13518,
       min_os_version: "0.1.0",
       target_fps: 30,
       featured: true
@@ -23,21 +23,23 @@ const fallbackCatalog = {
 
 const fallbackUpdates = {
   latest: {
-    version: "1.0.2",
-    codename: "Safe System Update",
-    date: "2026-04-29",
+    version: "1.3.0",
+    codename: "devlink",
+    date: "2026-05-02",
     status: "preview",
     priority: "recommended",
-    title: "Safe system updates with data preservation",
+    title: "Dev-server hosting, ZIP package support, input and console fixes",
     summary:
-      "OkamaOS can now apply repo-hosted system update bundles that replace CLI, shell, runtime, and brand files while preserving games, saves, settings, and update backups.",
+      "Fixes .ok package installs from Okama Studio, enables key-hold navigation, cleans Dev Console ANSI output, and adds custom store URL entry for Studio LAN testing.",
     notes: [
-      "Adds real okama-update apply support for .okupdate system bundles.",
-      "Backs up replaced system files before applying an update.",
-      "Preserves games, saves, controllers, logs, cache, and local config."
+      "Fix: .ok packages built by Okama Studio now install and run correctly.",
+      "Fix: holding arrow or WASD keys auto-repeats navigation.",
+      "Fix: Dev Console command output stays readable.",
+      "Feature: Game Store custom URL entry supports Studio dev-server installs."
     ],
     release_notes_url: "CHANGELOG.md",
-    download_url: "https://zyntrixsolutions.github.io/okamaos/updates/okamaos-v1.0.2.okupdate",
+    download_url: "https://zyntrixsolutions.github.io/okamaos/updates/okamaos-v1.3.0.okupdate",
+    release_url: "https://github.com/zyntrixsolutions/okamaos/releases",
     artifact_status: "bundle-ready"
   }
 };
@@ -104,9 +106,14 @@ function renderCatalog(data) {
 function renderUpdate(data) {
   const latest = data.latest || {};
   const notes = latest.notes || [];
+  const versionText = latest.version
+    ? `v${latest.version} ${latest.codename || ""}`.trim()
+    : "Update feed";
+  const heroVersion = $("#heroUpdateVersion");
+  if (heroVersion) heroVersion.textContent = versionText;
   const downloadLabel =
-    latest.artifact_status === "manifest-ready"
-      ? "Download v1 update"
+    latest.artifact_status === "bundle-ready"
+      ? `Download v${latest.version || ""} update`.trim()
       : "Release assets";
   $("#updateCard").innerHTML = `
     <span class="status-pill">${latest.priority || "update"}</span>
@@ -123,6 +130,7 @@ function renderUpdate(data) {
     <div class="download-row">
       <a class="button primary" href="${latest.download_url || "#"}">${downloadLabel}</a>
       <a class="button secondary" href="${latest.release_notes_url || "CHANGELOG.md"}">Release notes</a>
+      <a class="button secondary" href="${latest.release_url || "https://github.com/zyntrixsolutions/okamaos/releases"}">ISO releases</a>
     </div>
   `;
 }

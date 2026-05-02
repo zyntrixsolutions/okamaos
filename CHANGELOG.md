@@ -1,5 +1,14 @@
 # OkamaOS Portal Changelog
 
+## 2026-05-02 - Manuals and ecosystem docs (portal v1.3.1)
+
+- Added a beginner manual covering ISO downloads, first boot, shell navigation, games, updates, persistence, disk install, Dev Console, Studio, and troubleshooting.
+- Added dedicated docs for GitHub Releases ISO downloads, command reference, Dev Console usage, package formats, tutorials, and Studio-to-OkamaOS workflow.
+- Updated the homepage into a documentation hub with direct paths to ISO releases, update feed, app catalog, manual, commands, tutorials, and Studio.
+- Updated the public update feed metadata with release, ISO releases, documentation, and Studio documentation URLs while keeping the current OS update at `1.3.0`.
+- Corrected the demo game catalog entry to point at the committed `com.okamalabs.demo-0.1.0.ok` package and matching SHA-256 until a newer artifact is published.
+- Added `VERSION` and `ROADMAP.md` for portal version control and milestone tracking.
+
 ## 2026-05-02 - devlink (v1.3.0)
 
 - Published `okamaos-v1.3.0.okupdate` system update bundle.

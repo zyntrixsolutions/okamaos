@@ -859,9 +859,11 @@ export default function GamePreview({ code, autoRun = false, onSendToAI }: GameP
         appendOutput(text, true);
       };
       
-      // Expose to Python
-      (window as unknown as Record<string, unknown>).__okama_log = logCallback;
-      (window as unknown as Record<string, unknown>).__okama_err = errCallback;
+      // Expose to Python via globalThis (required for Pyodide >= 0.21)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const winAny = window as any;
+      winAny.__okama_log = logCallback;
+      winAny.__okama_err = errCallback;
 
       // Set up stdout capture with JS callback
       setProgress("Setting up stdout…");

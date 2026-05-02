@@ -5,6 +5,16 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.3.1 / studio-0.3.1] - 2026-05-02
+
+### Fixed (Studio — Game Preview)
+- **Python name-mangling crash** in `GamePreview`: `js.__okama_log` / `js.__okama_err` inside `_StdOut` were mangled by Python to `_StdOut__okama_log` / `_StdOut__okama_err`, causing `AttributeError` and `lost sys.stderr` on every preview run.
+- Replaced inline `_StdOut` class with module-level `STDIO_SETUP_CODE` constant using `_OkamaStudioStdIO` and a standalone `_okama_emit` helper that resolves callbacks via `getattr(js, callback_name)` — no double-underscore attribute access inside any class.
+- Added `STDIO_TEARDOWN_CODE` executed in a `finally` block to restore original `sys.stdout`/`sys.stderr` after each run so subsequent runs start from a clean Pyodide state.
+- Improved error aggregation in the preview error panel: all stderr lines are collected and included in the AI Fix context.
+
+---
+
 ## [1.3.0 / studio-0.3.0] - 2026-05-02
 
 ### Added (Studio — Dev-Server Game Hosting)

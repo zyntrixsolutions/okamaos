@@ -1,5 +1,9 @@
 'use client';
 
+import { STELLAR_DRIFT_CODE, STELLAR_DRIFT_README } from "@/lib/demo/stellarDrift";
+
+export const DEMO_PROJECT_ID = "okama-demo-stellar-drift";
+
 export interface ProjectFile {
   name: string;
   content: string;
@@ -110,6 +114,47 @@ export function createBlankProject(name: string, genre: string, publisherId: str
     ],
     manifest,
   };
+}
+
+export function createDemoProject(): Project {
+  const manifest: OkManifest = {
+    name: "Stellar Drift",
+    id: "com.okamalabs.stellar-drift",
+    version: "1.0.0",
+    runtime: "okama-sdl2",
+    entry: "main.py",
+    min_ram_mb: 128,
+    target_fps: 60,
+    permissions: ["controller", "audio"],
+    age_rating: "Everyone",
+    supports_save_state: false,
+    controller_required: false,
+    keyboard_usage: "full",
+    description: "A cinematic space shooter — Okama Studio demo game.",
+    python_deps: [],
+  };
+
+  return {
+    id: DEMO_PROJECT_ID,
+    name: "Stellar Drift (Demo)",
+    genre: "shooter",
+    createdAt: 0,
+    updatedAt: 0,
+    files: [
+      { name: "main.py",          content: STELLAR_DRIFT_CODE,   type: "python" },
+      { name: "README.md",        content: STELLAR_DRIFT_README, type: "text" },
+      { name: "manifest.ok.json", content: JSON.stringify(manifest, null, 2), type: "json" },
+    ],
+    manifest,
+  };
+}
+
+export function ensureDemoProject(): void {
+  if (typeof window === "undefined") return;
+  const existing = getProject(DEMO_PROJECT_ID);
+  if (!existing) {
+    saveProject(createDemoProject());
+  }
 }
 
 function generateStarterCode(genre: string, name: string): string {

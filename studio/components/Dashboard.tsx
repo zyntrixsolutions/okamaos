@@ -8,7 +8,7 @@ import {
   Gamepad2, Sword, Car, Globe, Pencil, Star, Clock,
 } from "lucide-react";
 import Header from "@/components/ui/Header";
-import { loadProjects, createBlankProject, saveProject, type Project } from "@/lib/store/projects";
+import { loadProjects, createBlankProject, saveProject, ensureDemoProject, DEMO_PROJECT_ID, type Project } from "@/lib/store/projects";
 
 const GENRES = [
   { id: "platformer", label: "Platformer", icon: Sword, desc: "Jump, run, explore" },
@@ -34,9 +34,17 @@ export default function Dashboard() {
   const [gameName, setGameName] = useState("");
   const [genre, setGenre] = useState("platformer");
   const [creating, setCreating] = useState(false);
+  const [hasKey, setHasKey] = useState(true);
 
   useEffect(() => {
-    setProjects(loadProjects().sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 6));
+    ensureDemoProject();
+    setProjects(
+      loadProjects()
+        .filter((p) => p.id !== DEMO_PROJECT_ID)
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .slice(0, 6)
+    );
+    setHasKey(Boolean(localStorage.getItem("okama-gemini-key") || localStorage.getItem("okama-qwen-key")));
   }, []);
 
   const handleCreate = () => {
@@ -87,10 +95,17 @@ export default function Dashboard() {
               {" "}<code style={{ color: "#53d9e6" }}>.ok</code> packages ready for the console.
             </p>
             <div className="flex items-center gap-3 flex-wrap">
-              <button
-                onClick={() => setShowNew(true)}
+              <Link
+                href={`/studio/${DEMO_PROJECT_ID}`}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all"
                 style={{ background: "#8df77f", color: "#10120f" }}
+              >
+                <Gamepad2 size={16} /> Try Demo Game
+              </Link>
+              <button
+                onClick={() => setShowNew(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-colors"
+                style={{ background: "rgba(141,247,127,0.10)", color: "#8df77f", border: "1px solid rgba(141,247,127,0.2)" }}
               >
                 <Plus size={16} /> New Game
               </button>
@@ -106,6 +121,99 @@ export default function Dashboard() {
         </div>
 
         <div className="max-w-5xl mx-auto px-6 py-8 space-y-10">
+          {/* No-key banner */}
+          {!hasKey && (
+            <div
+              className="rounded-xl border p-4 flex items-start gap-4"
+              style={{ background: "rgba(255,207,74,0.06)", borderColor: "rgba(255,207,74,0.25)" }}
+            >
+              <span className="text-2xl shrink-0">🚀</span>
+              <div className="flex-1 min-w-0">
+                <p className="font-black text-sm mb-1" style={{ color: "#ffcf4a" }}>
+                  No AI key yet? Start with the demo!
+                </p>
+                <p className="text-xs leading-relaxed mb-3" style={{ color: "#c9c3b3" }}>
+                  <strong style={{ color: "#f3efe4" }}>Stellar Drift</strong> is a fully playable space shooter — run it right now in the Preview tab, read the code,
+                  and understand how every system works. Get your free Gemini key when you're ready to build your own game.
+                </p>
+                <div className="flex gap-2 flex-wrap">
+                  <Link
+                    href={`/studio/${DEMO_PROJECT_ID}`}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs"
+                    style={{ background: "#ffcf4a", color: "#10120f" }}
+                  >
+                    <Gamepad2 size={13} /> Open Demo Studio
+                  </Link>
+                  <Link
+                    href="/settings"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs"
+                    style={{ background: "rgba(255,207,74,0.12)", color: "#ffcf4a", border: "1px solid rgba(255,207,74,0.2)" }}
+                  >
+                    <Zap size={13} /> Add AI Key
+                  </Link>
+                  <a
+                    href="https://aistudio.google.com/app/apikey"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-xs"
+                    style={{ color: "#6b7464" }}
+                  >
+                    Get free Gemini key →
+                  </a>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Demo spotlight card */}
+          <div
+            className="rounded-xl border overflow-hidden"
+            style={{ background: "#181a16", borderColor: "rgba(141,247,127,0.2)" }}
+          >
+            <div
+              className="px-4 py-3 flex items-center justify-between border-b"
+              style={{ borderColor: "rgba(141,247,127,0.12)", background: "rgba(141,247,127,0.04)" }}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-base">🚀</span>
+                <span className="text-xs font-black uppercase tracking-widest" style={{ color: "#8df77f" }}>
+                  Demo Game — Stellar Drift
+                </span>
+                <span
+                  className="text-xs px-2 py-0.5 rounded-full font-bold"
+                  style={{ background: "rgba(141,247,127,0.12)", color: "#8df77f" }}
+                >
+                  No key needed
+                </span>
+              </div>
+              <Link
+                href={`/studio/${DEMO_PROJECT_ID}`}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold"
+                style={{ background: "#8df77f", color: "#10120f" }}
+              >
+                Open <ArrowRight size={12} />
+              </Link>
+            </div>
+            <div className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { icon: "✨", label: "Particle System",   desc: "Explosions, exhaust, sparks" },
+                { icon: "🌌", label: "Parallax Stars",     desc: "3-layer depth scroll" },
+                { icon: "🤖", label: "Enemy AI (3 types)", desc: "Drone, Hunter, Tank" },
+                { icon: "🎯", label: "Collision Detection",desc: "Rect + point checks" },
+              ].map(({ icon, label, desc }) => (
+                <div
+                  key={label}
+                  className="p-3 rounded-lg"
+                  style={{ background: "rgba(243,239,228,0.04)", border: "1px solid rgba(243,239,228,0.06)" }}
+                >
+                  <span className="text-lg block mb-1">{icon}</span>
+                  <p className="text-xs font-bold mb-0.5" style={{ color: "#f3efe4" }}>{label}</p>
+                  <p className="text-xs" style={{ color: "#6b7464" }}>{desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Quick actions */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[

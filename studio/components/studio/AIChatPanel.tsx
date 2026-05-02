@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Bot, User, Sparkles, Copy, Check, AlertCircle } from "lucide-react";
+import { Send, Bot, User, Sparkles, Copy, Check, AlertCircle, ExternalLink } from "lucide-react";
 import { streamAI, type ModelId, type HistoryMessage } from "@/lib/ai/router";
 
 interface AIChatPanelProps {
@@ -226,6 +226,40 @@ export default function AIChatPanel({
           {model}
         </span>
       </div>
+
+      {/* No-key warning */}
+      {!geminiKey && !qwenKey && (
+        <div
+          className="mx-3 mt-2 p-3 rounded-xl flex flex-col gap-2 shrink-0"
+          style={{ background: "rgba(255,207,74,0.07)", border: "1px solid rgba(255,207,74,0.22)" }}
+        >
+          <p className="text-xs font-bold" style={{ color: "#ffcf4a" }}>No AI key configured</p>
+          <p className="text-xs leading-relaxed" style={{ color: "#c9c3b3" }}>
+            AI features require a free Gemini or Qwen key. This is the{" "}
+            <strong style={{ color: "#f3efe4" }}>Stellar Drift demo</strong> — you can still run the
+            game in the <strong style={{ color: "#f3efe4" }}>Preview</strong> tab and read the code
+            without a key.
+          </p>
+          <div className="flex gap-2 flex-wrap">
+            <a
+              href="/settings"
+              className="flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg"
+              style={{ background: "#ffcf4a", color: "#10120f" }}
+            >
+              Add Key
+            </a>
+            <a
+              href="https://aistudio.google.com/app/apikey"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-xs"
+              style={{ color: "#6b7464" }}
+            >
+              Get free Gemini key <ExternalLink size={10} />
+            </a>
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3">

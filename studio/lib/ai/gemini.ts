@@ -2,7 +2,12 @@
 
 import { GoogleGenerativeAI, type GenerateContentStreamResult } from "@google/generative-ai";
 
-export type GeminiModel = "gemini-3.1-flash-lite" | "gemini-3.0-flash" | "gemini-2.5-flash" | "gemini-1.5-flash" | "gemini-1.5-pro";
+export type GeminiModel =
+  | "gemini-2.5-flash-lite-preview-06-17"
+  | "gemini-2.5-flash"
+  | "gemini-2.0-flash"
+  | "gemini-1.5-flash"
+  | "gemini-1.5-pro";
 
 export interface Message {
   role: "user" | "model";

@@ -6,7 +6,7 @@ import Header from "@/components/ui/Header";
 import { MODEL_OPTIONS, type ModelId } from "@/lib/ai/router";
 
 export default function SettingsClient() {
-  const [model, setModel] = useState<ModelId>("gemini-3.1-flash-lite");
+  const [model, setModel] = useState<ModelId>("gemini-2.5-flash-lite-preview-06-17");
   const [geminiKey, setGeminiKey] = useState("");
   const [qwenKey, setQwenKey] = useState("");
   const [publisherId, setPublisherId] = useState("com.okamalabs");
@@ -17,7 +17,7 @@ export default function SettingsClient() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    setModel((localStorage.getItem("okama-model") as ModelId) ?? "gemini-3.1-flash-lite");
+    setModel((localStorage.getItem("okama-model") as ModelId) ?? "gemini-2.5-flash-lite-preview-06-17");
     setGeminiKey(localStorage.getItem("okama-gemini-key") ?? "");
     setQwenKey(localStorage.getItem("okama-qwen-key") ?? "");
     setPublisherId(localStorage.getItem("okama-publisher-id") ?? "com.okamalabs");
@@ -82,12 +82,20 @@ export default function SettingsClient() {
                           {m.badge && (
                             <span
                               className="text-xs px-1.5 py-0.5 rounded font-bold"
-                              style={{ background: "rgba(141,247,127,0.12)", color: "#8df77f" }}
+                              style={{
+                                background: m.badge === "Free" ? "rgba(83,217,230,0.12)" : "rgba(141,247,127,0.12)",
+                                color: m.badge === "Free" ? "#53d9e6" : "#8df77f",
+                              }}
                             >
                               {m.badge}
                             </span>
                           )}
                         </div>
+                        {m.note && (
+                          <span className="text-xs font-mono" style={{ color: "#6b7464" }}>
+                            {m.note}
+                          </span>
+                        )}
                       </button>
                     ))}
                   </div>

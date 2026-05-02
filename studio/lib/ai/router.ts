@@ -40,9 +40,10 @@ export async function* streamAI(
   config: AIConfig,
   mode: PromptMode,
   history: HistoryMessage[],
-  userMessage: string
+  userMessage: string,
+  systemPromptOverride?: string
 ): AsyncGenerator<string> {
-  const systemPrompt = getSystemPrompt(mode);
+  const systemPrompt = systemPromptOverride ?? getSystemPrompt(mode);
 
   if (isGemini(config.model)) {
     if (!config.geminiKey) throw new Error("Gemini API key not set. Add it in Settings.");

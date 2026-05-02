@@ -5,6 +5,28 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [studio-0.2.0] - 2026-05-02
+
+### Added (Okama Agent — Agentic AI Upgrade)
+- **Okama Agent (`AgentChat.tsx`)**: Full agentic AI panel replacing basic chat — streams responses, parses XML tool calls, and executes them inline with per-tool status badges (running / done / error)
+- **Agentic tool system (`lib/ai/agentTools.ts`)**: Nine tools: `write_file`, `read_file`, `delete_file`, `list_files`, `search_files`, `commit`, `create_branch`, `create_issue`, `run_preview` — parsed from AI responses using XML format
+- **Full-file write semantics**: AI always sends complete file contents via `<write_file path="...">` — no partial patches, no copy-paste required
+- **Automatic file splitting**: Agent system prompt instructs AI to split files >250 lines into `lib/` modules (`player.py`, `enemies.py`, `world.py`, etc.)
+- **Project context injection**: Full file tree + all file contents injected into every AI request for deep codebase awareness
+- **Mock version control (`lib/store/versionHistory.ts`)**: Full localStorage-backed VCS — branches, commits (file snapshots), issues with labels, pull requests with merge/close
+- **Version History panel (`VersionPanel.tsx`)**: 4-tab panel — Commits (restore snapshots), Branches (switch/create), Issues (create/close with labels), Pull Requests (create/merge/close)
+- **Agent VCS integration**: Agent can call `<commit />`, `<create_branch />`, `<create_issue />` directly from responses
+- **`AGENT_SYSTEM_PROMPT`**: New system prompt in `prompts.ts` with full tool documentation, file architecture rules, and quality standards
+- **`streamAI` override**: Added optional `systemPromptOverride` parameter to use agent prompt without mode enum change
+- **Free-tier Gemini models**: Updated defaults to `gemini-3.1-flash-lite-preview` (15 RPM, 250 TPM, 500 RPD free) with `gemini-3-flash-preview` and `gemini-2.5-flash` as alternatives; paid tier shows Gemini 2.5 Pro and 3.1 Pro with billing notice in Settings
+
+### Changed
+- Right panel tabs: `AI Chat` renamed to **Agent**, added **History** tab
+- Default AI model changed from `gemini-2.0-flash` (no free tier) to `gemini-3.1-flash-lite-preview`
+- Settings model selector split into Free Tier / Paid Tier sections with per-model rate limit notes
+
+---
+
 ## [studio-0.1.0] - 2026-05-01
 
 ### Added (Okama Studio — `studio/`)

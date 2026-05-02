@@ -2,20 +2,24 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Package, ChevronLeft } from "lucide-react";
+import { Package, GitBranch } from "lucide-react";
 import Header from "@/components/ui/Header";
 import FileTree from "@/components/studio/FileTree";
 import CodeEditor from "@/components/studio/CodeEditor";
 import GamePreview from "@/components/studio/GamePreview";
-import AIChatPanel from "@/components/studio/AIChatPanel";
+import AgentChat from "@/components/studio/AgentChat";
 import AssetManager from "@/components/studio/AssetManager";
 import PackageBuilder from "@/components/studio/PackageBuilder";
+import VersionPanel from "@/components/studio/VersionPanel";
 import {
   getProject, saveProject, type Project, type ProjectFile, type OkManifest,
 } from "@/lib/store/projects";
+import {
+  vcsCommit, vcsCreateBranch, vcsCreateIssue,
+} from "@/lib/store/versionHistory";
 import type { ModelId } from "@/lib/ai/router";
 
-type RightTab = "preview" | "chat" | "assets" | "package";
+type RightTab = "agent" | "preview" | "assets" | "package" | "history";
 
 interface StudioClientProps {
   projectId: string;
@@ -41,7 +45,8 @@ export default function StudioClient({ projectId }: StudioClientProps) {
   const { model, geminiKey, qwenKey } = useAIConfig();
   const [project, setProject] = useState<Project | null>(null);
   const [activeFile, setActiveFile] = useState("main.py");
-  const [rightTab, setRightTab] = useState<RightTab>("chat");
+  const [rightTab, setRightTab] = useState<RightTab>("agent");
+  const [vcsRefreshKey, setVcsRefreshKey] = useState(0);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errorContext, setErrorContext] = useState<string>();
@@ -77,17 +82,37 @@ export default function StudioClient({ projectId }: StudioClientProps) {
     setDirty(true);
   }, [activeFile]);
 
-  const applyAICode = useCallback((code: string) => {
+  const handleFilesChange = useCallback((files: ProjectFile[]) => {
+    setProject((prev) => prev ? { ...prev, files } : prev);
+    setDirty(true);
+  }, []);
+
+  const handleCommit = useCallback((message: string) => {
     setProject((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        files: prev.files.map((f) =>
-          f.name === "main.py" ? { ...f, content: code } : f
-        ),
-      };
+      if (prev) { vcsCommit(prev.id, message, prev.files); }
+      return prev;
     });
-    setActiveFile("main.py");
+    setVcsRefreshKey((k) => k + 1);
+  }, []);
+
+  const handleCreateBranch = useCallback((name: string) => {
+    setProject((prev) => {
+      if (prev) { vcsCreateBranch(prev.id, name); }
+      return prev;
+    });
+    setVcsRefreshKey((k) => k + 1);
+  }, []);
+
+  const handleCreateIssue = useCallback((title: string, body: string, labels: string[]) => {
+    setProject((prev) => {
+      if (prev) { vcsCreateIssue(prev.id, title, body, labels); }
+      return prev;
+    });
+    setVcsRefreshKey((k) => k + 1);
+  }, []);
+
+  const handleRestoreCommit = useCallback((files: ProjectFile[]) => {
+    setProject((prev) => prev ? { ...prev, files } : prev);
     setDirty(true);
   }, []);
 
@@ -124,7 +149,7 @@ export default function StudioClient({ projectId }: StudioClientProps) {
 
   const handlePreviewError = useCallback((error: string) => {
     setErrorContext(error);
-    setRightTab("chat"); // Switch to chat tab to show the error
+    setRightTab("agent");
   }, []);
 
   if (!project) {
@@ -138,6 +163,14 @@ export default function StudioClient({ projectId }: StudioClientProps) {
   const activeFileObj = project.files.find((f) => f.name === activeFile);
   const mainCode = project.files.find((f) => f.name === "main.py")?.content ?? "";
   const assets = project.files.filter((f) => f.type === "asset");
+
+  const TAB_LABELS: Record<RightTab, string> = {
+    agent: "Agent",
+    preview: "Preview",
+    assets: "Assets",
+    package: "Export",
+    history: "History",
+  };
 
   const tabStyle = (t: RightTab) => ({
     color: rightTab === t ? "#f3efe4" : "#c9c3b3",
@@ -228,22 +261,27 @@ export default function StudioClient({ projectId }: StudioClientProps) {
             className="flex items-center border-b shrink-0 overflow-x-auto"
             style={{ borderColor: "rgba(243,239,228,0.08)", background: "#181a16" }}
           >
-            {(["chat", "preview", "assets", "package"] as RightTab[]).map((t) => (
+            {(["agent", "preview", "assets", "package", "history"] as RightTab[]).map((t) => (
               <button key={t} onClick={() => setRightTab(t)} style={tabStyle(t)}>
-                {t === "chat" ? "AI Chat" : t === "preview" ? "Preview" : t === "assets" ? "Assets" : "Export"}
+                {t === "history" ? <><GitBranch size={10} className="inline mr-1" />{TAB_LABELS[t]}</> : TAB_LABELS[t]}
               </button>
             ))}
           </div>
 
           <div className="flex-1 min-h-0 overflow-hidden">
-            {rightTab === "chat" && (
-              <AIChatPanel
-                projectCode={mainCode}
+            {rightTab === "agent" && (
+              <AgentChat
+                projectFiles={project.files}
                 projectName={project.name}
+                projectId={project.id}
                 model={model}
                 geminiKey={geminiKey}
                 qwenKey={qwenKey}
-                onApplyCode={applyAICode}
+                onFilesChange={handleFilesChange}
+                onCommit={handleCommit}
+                onCreateBranch={handleCreateBranch}
+                onCreateIssue={handleCreateIssue}
+                onRunPreview={() => setRightTab("preview")}
                 errorContext={errorContext}
               />
             )}
@@ -258,13 +296,19 @@ export default function StudioClient({ projectId }: StudioClientProps) {
                 assets={assets}
                 onUpload={addAsset}
                 onDelete={deleteFile}
-                onGenerateCode={(asset) => {
-                  setRightTab("chat");
-                }}
+                onGenerateCode={(_asset) => setRightTab("agent")}
               />
             )}
             {rightTab === "package" && (
               <PackageBuilder project={project} onManifestChange={updateManifest} />
+            )}
+            {rightTab === "history" && (
+              <VersionPanel
+                projectId={project.id}
+                currentFiles={project.files}
+                onRestoreCommit={handleRestoreCommit}
+                refreshKey={vcsRefreshKey}
+              />
             )}
           </div>
         </div>

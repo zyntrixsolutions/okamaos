@@ -5,6 +5,23 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [2.1.0] - 2026-05-02 — Relay Controls & Dev Tooling
+
+### Added — OS (`usr/`)
+- **`usr/lib/okamaos/parent.py`** — `wallet_enabled()`, `wallet_daily_limit_okt()`, `set_wallet_enabled()`, `set_wallet_daily_limit_okt()` — parent-controlled wallet flags read/write from `parent.conf`.
+- **`usr/lib/okamaos/wallet.py`** — Argon2id passphrase derivation via `derive_passphrase(pin, salt_hex)`. `generate()` saves `pin_params.json` (salt + params) and stretches the passphrase before encrypting the keystore. `load()` re-derives the passphrase from saved params; checks `parent.wallet_enabled()` before decrypting.
+- **`usr/bin/okama-shell`**:
+  - Settings › Wallet: `[A]` now opens a **PIN unlock overlay** (masked input, `settings_wallet_unlock` state) that decrypts the wallet and fetches live ETH + OKT balances via RPC on confirm.
+  - Settings › Updates: **Browse Update History** action added (dev mode only) — opens `settings_update_catalog` sub-screen.
+  - Settings › Updates › Update History: fetches `feed.json` from the configured `UPDATE_URL`, lists all versions (latest ★ + previous), `[A]` queues download of any version, progress bar visible during download.
+  - Game Store: **Set Server URL** button (`X`) and click handler are now **dev mode only** (hidden in normal play mode).
+
+### Security
+- Wallet passphrase is Argon2id-stretched (time=2, mem=64MB, threads=2, len=32) when `argon2-cffi` is available; salt stored in `pin_params.json` (chmod 600). Gracefully falls back to raw PIN if library absent.
+- `wallet.load()` gates on `parent.wallet_enabled()` — returns `WalletError` if parent has disabled wallet.
+
+---
+
 ## [2.0.0] - 2026-05-02 — Blockchain Foundation
 
 ### Added — Contracts (`contracts/`)

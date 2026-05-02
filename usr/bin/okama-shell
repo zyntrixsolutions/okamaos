@@ -304,7 +304,7 @@ SETTINGS_OPTIONS = [
     "Support",
 ]
 
-_UPDATE_ACTIONS = [
+_UPDATE_ACTIONS_BASE = [
     "Check for Updates",
     "Download OS Update",
     "Apply Downloaded Update",
@@ -514,6 +514,13 @@ class OkamaShell:
         # Wallet state
         self._wallet_info: list = []
         self._wallet_status: str = ""
+        self._wallet_pin_input: str = ""
+        self._wallet_pin_error: str = ""
+
+        # Update catalog (dev mode)
+        self._update_catalog_entries: list = []
+        self._update_catalog_idx: int = 0
+        self._update_catalog_status: str = ""
 
         # Animation / visual state
         self._tick = 0            # frame counter for animations
@@ -888,7 +895,8 @@ class OkamaShell:
         return events
 
     def _is_text_entry_state(self) -> bool:
-        return self.state in ("dev_console", "wifi_psk", "store_url_entry")
+        return self.state in ("dev_console", "wifi_psk", "store_url_entry",
+                              "settings_wallet_unlock")
 
     def _handle_axis_to_dpad(self, ev: dict, out: list):
         axis = ev.get("axis", "")
@@ -946,6 +954,8 @@ class OkamaShell:
                 self.wifi_psk_input = self.wifi_psk_input[:-1]
             elif self.state == "store_url_entry" and self._store_url_input:
                 self._store_url_input = self._store_url_input[:-1]
+            elif self.state == "settings_wallet_unlock" and self._wallet_pin_input:
+                self._wallet_pin_input = self._wallet_pin_input[:-1]
             return
 
         if self.state == "home":
@@ -985,6 +995,10 @@ class OkamaShell:
             self._settings_install_input(action, ev)
         elif self.state == "settings_wallet":
             self._settings_wallet_input(action, ev)
+        elif self.state == "settings_wallet_unlock":
+            self._settings_wallet_unlock_input(action, ev)
+        elif self.state == "settings_update_catalog":
+            self._settings_update_catalog_input(action, ev)
         elif self.state == "settings_support":
             self._settings_support_input(action, ev)
         elif self.state == "dev_console":
@@ -996,7 +1010,8 @@ class OkamaShell:
 
     def _dispatch_text_entry(self):
         """Process accumulated _char_buf for text-entry states."""
-        if self.state in ("dev_console", "wifi_psk", "store_url_entry"):
+        if self.state in ("dev_console", "wifi_psk", "store_url_entry",
+                          "settings_wallet_unlock"):
             for ch in self._char_buf:
                 if ord(ch) == 8:  # Backspace handling via special
                     if self.state == "dev_console" and self._dev_console_cmd:
@@ -1005,6 +1020,8 @@ class OkamaShell:
                         self.wifi_psk_input = self.wifi_psk_input[:-1]
                     elif self.state == "store_url_entry" and self._store_url_input:
                         self._store_url_input = self._store_url_input[:-1]
+                    elif self.state == "settings_wallet_unlock" and self._wallet_pin_input:
+                        self._wallet_pin_input = self._wallet_pin_input[:-1]
                 else:
                     if self.state == "dev_console":
                         self._dev_console_cmd += ch
@@ -1012,6 +1029,8 @@ class OkamaShell:
                         self.wifi_psk_input += ch
                     elif self.state == "store_url_entry":
                         self._store_url_input += ch
+                    elif self.state == "settings_wallet_unlock":
+                        self._wallet_pin_input += ch
 
     def _home_input(self, action: str, ev: dict = None):
         n = len(SECTIONS)
@@ -2311,7 +2330,7 @@ class OkamaShell:
             self.state = "play"
         elif action == "Y":
             self._fetch_store_catalog()
-        elif action == "X":
+        elif action == "X" and self.dev_mode:
             self._enter_store_url_entry()
         elif action == "DPAD_UP" and n:
             self.store_idx = (self.store_idx - 1) % n
@@ -2335,10 +2354,11 @@ class OkamaShell:
             if refresh_r.collidepoint(pos):
                 self._fetch_store_catalog()
                 return
-            url_r = self._store_seturl_rect()
-            if url_r.collidepoint(pos):
-                self._enter_store_url_entry()
-                return
+            if self.dev_mode:
+                url_r = self._store_seturl_rect()
+                if url_r.collidepoint(pos):
+                    self._enter_store_url_entry()
+                    return
             rects = self._store_catalog_rects(n)
             for j, r in enumerate(rects):
                 if r.collidepoint(pos):
@@ -2448,15 +2468,16 @@ class OkamaShell:
                                        else COL_DIM)
         self.screen.blit(status_s, (24, 70))
 
-        # Set Server button
-        ur = self._store_seturl_rect()
-        u_hov = ur.collidepoint(mx, my)
-        u_bg = _lerp_color(COL_CARD, (83, 217, 230), 0.3 if u_hov else 0.08)
-        pygame.draw.rect(self.screen, u_bg, ur, border_radius=8)
-        pygame.draw.rect(self.screen, (83, 217, 230), ur, 1, border_radius=8)
-        lbl_u = self.font_hint.render("X Set Server", True, (83, 217, 230))
-        self.screen.blit(lbl_u, (ur.x + ur.w // 2 - lbl_u.get_width() // 2,
-                                  ur.y + ur.h // 2 - lbl_u.get_height() // 2))
+        # Set Server button (dev mode only)
+        if self.dev_mode:
+            ur = self._store_seturl_rect()
+            u_hov = ur.collidepoint(mx, my)
+            u_bg = _lerp_color(COL_CARD, (83, 217, 230), 0.3 if u_hov else 0.08)
+            pygame.draw.rect(self.screen, u_bg, ur, border_radius=8)
+            pygame.draw.rect(self.screen, (83, 217, 230), ur, 1, border_radius=8)
+            lbl_u = self.font_hint.render("X Set Server", True, (83, 217, 230))
+            self.screen.blit(lbl_u, (ur.x + ur.w // 2 - lbl_u.get_width() // 2,
+                                      ur.y + ur.h // 2 - lbl_u.get_height() // 2))
 
         # Refresh button
         rr = self._store_refresh_rect()
@@ -2563,8 +2584,14 @@ class OkamaShell:
             self._update_local_files = self._find_files((".okupdate", ".ok-update"))
         self.state = "settings_updates"
 
+    def _get_update_actions(self) -> list:
+        actions = list(_UPDATE_ACTIONS_BASE)
+        if self.dev_mode:
+            actions.append("Browse Update History  [dev]")
+        return actions
+
     def _settings_updates_input(self, action: str, ev: dict = None):
-        n = len(_UPDATE_ACTIONS)
+        n = len(self._get_update_actions())
         if action in ("B", "START"):
             self.state = "settings"
         elif action == "DPAD_UP":
@@ -2582,7 +2609,10 @@ class OkamaShell:
             return
 
     def _update_select(self):
-        opt = _UPDATE_ACTIONS[self.update_idx]
+        actions = self._get_update_actions()
+        if self.update_idx >= len(actions):
+            return
+        opt = actions[self.update_idx]
         if "Check" in opt:
             self._check_os_update()
         elif opt.startswith("Download OS"):
@@ -2593,6 +2623,8 @@ class OkamaShell:
             self._download_game_updates()
         elif "Rollback" in opt:
             self._rollback_update()
+        elif "Browse Update History" in opt:
+            self._enter_settings_update_catalog()
 
     def _check_os_update(self):
         if updates_mod is None:
@@ -2801,9 +2833,146 @@ class OkamaShell:
 
         # Action list
         self._draw_subscreen_list(
-            [{"label": a} for a in _UPDATE_ACTIONS],
+            [{"label": a} for a in self._get_update_actions()],
             self.update_idx,
             key_fn=lambda x: x["label"])
+
+    # -----------------------------------------------------------------------
+    # Settings > Update Catalog  [dev mode]
+    # -----------------------------------------------------------------------
+    def _enter_settings_update_catalog(self):
+        self._update_catalog_entries = []
+        self._update_catalog_idx = 0
+        self._update_catalog_status = "Fetching update history…"
+        self.state = "settings_update_catalog"
+        threading.Thread(target=self._load_update_catalog, daemon=True).start()
+
+    def _load_update_catalog(self):
+        try:
+            feed_url = self.conf.get(
+                "UPDATE_URL",
+                "https://zyntrixsolutions.github.io/okamaos/updates/feed.json",
+            )
+            req = urllib.request.Request(feed_url, headers={"User-Agent": "OkamaOS/2.1"})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                feed = json.load(resp)
+            entries = []
+            latest = feed.get("latest")
+            if latest:
+                latest = dict(latest)
+                latest["_is_latest"] = True
+                entries.append(latest)
+            for prev in feed.get("previous", []):
+                entries.append(prev)
+            self._update_catalog_entries = entries
+            self._update_catalog_status = (
+                f"{len(entries)} version(s) in feed." if entries else "No history found."
+            )
+        except Exception as e:
+            self._update_catalog_status = f"Fetch failed: {str(e)[:60]}"
+
+    def _settings_update_catalog_input(self, action: str, ev: dict = None):
+        n = len(self._update_catalog_entries)
+        if action in ("B", "START"):
+            self.state = "settings_updates"
+        elif action == "DPAD_UP" and n:
+            self._update_catalog_idx = (self._update_catalog_idx - 1) % n
+        elif action == "DPAD_DOWN" and n:
+            self._update_catalog_idx = (self._update_catalog_idx + 1) % n
+        elif action == "A" and n:
+            self._catalog_download_entry(self._update_catalog_entries[self._update_catalog_idx])
+        elif action == "CLICK" and ev:
+            rects = self._subscreen_rects(n)
+            for i, r in enumerate(rects):
+                if r.collidepoint(ev["pos"]):
+                    if i == self._update_catalog_idx:
+                        self._catalog_download_entry(self._update_catalog_entries[i])
+                    else:
+                        self._update_catalog_idx = i
+            return
+
+    def _catalog_download_entry(self, entry: dict):
+        url  = entry.get("download_url", "")
+        ver  = entry.get("version", "?")
+        sha  = entry.get("sha256", "")
+        size = int(entry.get("size_bytes") or 0)
+        if not url:
+            self._update_catalog_status = f"No download URL for v{ver}."
+            return
+        if self.update_loading:
+            self._update_catalog_status = "Download already in progress."
+            return
+        name = f"okamaos-v{ver}.okupdate"
+        dest = os.path.join(self._downloads_dir(), name)
+        self.update_loading = True
+        self._update_download_progress = (0, size)
+        self._update_catalog_status = f"Downloading v{ver}…"
+        def _work():
+            try:
+                self._download_url_to(url, dest, expected_sha256=sha)
+                if dest not in self._update_local_files:
+                    self._update_local_files = sorted(
+                        set(self._update_local_files + [dest])
+                    )
+                self._update_catalog_status = f"✓ v{ver} downloaded — go to Updates > Apply."
+                self.update_status = f"v{ver} ready — select Apply Downloaded Update."
+            except Exception as e:
+                self._update_catalog_status = f"Download failed: {str(e)[:60]}"
+            finally:
+                self.update_loading = False
+        threading.Thread(target=_work, daemon=True).start()
+
+    def _draw_settings_update_catalog(self):
+        self._draw_section_header("* Update History  [dev]", COL_UPDATE)
+        # Status
+        if self._update_catalog_status:
+            is_err = any(x in self._update_catalog_status.lower()
+                         for x in ("failed", "error"))
+            is_ok  = self._update_catalog_status.startswith("\u2713")
+            col = COL_ERROR if is_err else (COL_OK if is_ok else COL_DIM)
+            s = self.font_sm.render(self._update_catalog_status, True, col)
+            self.screen.blit(s, (48, 70))
+
+        entries = self._update_catalog_entries
+        if not entries:
+            return
+
+        # Download progress bar (while active)
+        if self.update_loading:
+            recv, total = self._update_download_progress
+            if total:
+                bar_y = HEIGHT - 54
+                fill_w = int((WIDTH - 80) * recv / total)
+                pygame.draw.rect(self.screen, COL_CARD,
+                                 pygame.Rect(40, bar_y, WIDTH - 80, 4))
+                pygame.draw.rect(self.screen, COL_UPDATE,
+                                 pygame.Rect(40, bar_y, fill_w, 4))
+
+        # Build label items
+        items = []
+        for e in entries:
+            ver   = e.get("version", "?")
+            title = (e.get("title") or e.get("codename") or ver)[:42]
+            star  = " \u2605 latest" if e.get("_is_latest") else ""
+            label = f"v{ver}  {title}{star}"
+            items.append({"label": label})
+
+        self._draw_subscreen_list(items, self._update_catalog_idx,
+                                  key_fn=lambda x: x["label"])
+
+        # Notes for selected entry
+        if 0 <= self._update_catalog_idx < len(entries):
+            sel   = entries[self._update_catalog_idx]
+            notes = sel.get("notes") or []
+            if isinstance(notes, list) and notes:
+                y = HEIGHT - 126
+                for note in notes[:2]:
+                    ns = self.font_hint.render(note[:90], True, COL_DIM)
+                    self.screen.blit(ns, (48, y))
+                    y += 20
+
+        hint = self.font_hint.render("[A] Download  [B] Back", True, COL_DIM)
+        self.screen.blit(hint, (48, HEIGHT - 90))
 
     # -----------------------------------------------------------------------
     # Settings > Wallet
@@ -2853,28 +3022,95 @@ class OkamaShell:
             self._wallet_status = ""
 
     def _settings_wallet_input(self, action: str, ev: dict = None):
-        if action in ("B", "START", "A"):
+        if action in ("B", "START"):
             self.state = "settings"
+        elif action == "A":
+            # A = unlock wallet with PIN to refresh live balances
+            self._wallet_pin_input = ""
+            self._wallet_pin_error = ""
+            self.state = "settings_wallet_unlock"
+
+    def _settings_wallet_unlock_input(self, action: str, ev: dict = None):
+        if action in ("B", "START"):
+            self.state = "settings_wallet"
+        elif action == "ENTER":
+            self._wallet_pin_confirm()
+
+    def _wallet_pin_confirm(self):
+        pin = self._wallet_pin_input.strip()
+        if not pin:
+            self._wallet_pin_error = "Enter your Parent PIN."
+            return
+        self._wallet_pin_error = ""
+        self._wallet_status = "Verifying PIN…"
+        self.state = "settings_wallet"
+        def _work():
+            try:
+                import okamaos.wallet as _wm
+                acct = _wm.load(pin)
+                eth_wei = _wm.eth_balance(acct.address)
+                okt_wei = _wm.ok_balance(acct.address)
+                self._wallet_info = [
+                    ("Address", acct.address),
+                    ("ETH balance", _wm.format_eth(eth_wei)),
+                    ("OKToken", _wm.format_ok(okt_wei)),
+                ]
+                self._wallet_status = ""
+            except Exception as e:
+                self._wallet_status = f"Error: {str(e)[:60]}"
+        threading.Thread(target=_work, daemon=True).start()
+
+    def _draw_wallet_unlock_overlay(self):
+        COL_WALLET = (100, 180, 255)
+        bw, bh = WIDTH - 80, 170
+        bx, by = 40, HEIGHT // 2 - bh // 2
+        overlay = _alpha_surf(bw, bh, (0, 0, 0), 220)
+        self.screen.blit(overlay, (bx, by))
+        pygame.draw.rect(self.screen, COL_WALLET,
+                         pygame.Rect(bx, by, bw, bh), 2, border_radius=12)
+        title_s = self.font_sm.render("⋆ Enter Parent PIN to unlock wallet", True, COL_WALLET)
+        self.screen.blit(title_s, (bx + 18, by + 14))
+        if self._wallet_pin_error:
+            err_s = self.font_hint.render(self._wallet_pin_error, True, COL_ERROR)
+            self.screen.blit(err_s, (bx + 18, by + 42))
+        # Masked PIN display
+        masked = "•" * len(self._wallet_pin_input) or "_"
+        inp_y = by + 72
+        inp_w = bw - 40
+        pygame.draw.rect(self.screen, (20, 24, 18),
+                         pygame.Rect(bx + 18, inp_y, inp_w, 36), border_radius=6)
+        pygame.draw.rect(self.screen, COL_WALLET,
+                         pygame.Rect(bx + 18, inp_y, inp_w, 36), 1, border_radius=6)
+        pin_s = self.font_mdb.render(masked, True, COL_TEXT)
+        self.screen.blit(pin_s, (bx + 28, inp_y + 8))
+        hint_s = self.font_hint.render("[Enter] Confirm   [Esc/B] Cancel", True, COL_DIM)
+        self.screen.blit(hint_s, (bx + 18, by + bh - 30))
 
     def _draw_settings_wallet(self):
         COL_WALLET = (100, 180, 255)
         self._draw_section_header("* Wallet  (Base)", COL_WALLET)
         y = 130
         if self._wallet_status:
-            s = self.font_md.render(self._wallet_status, True, COL_DIM)
+            col = COL_ERROR if self._wallet_status.startswith("Error") else COL_DIM
+            s = self.font_md.render(self._wallet_status, True, col)
             self.screen.blit(s, (70, y))
-            return
-        for label, value in self._wallet_info:
-            lbl_s = self.font_sm.render(label, True, COL_DIM)
-            val_font = self.font_sm if len(value) > 40 else self.font_mdb
-            val_s = val_font.render(value, True, COL_TEXT)
-            self.screen.blit(lbl_s, (70, y))
-            self.screen.blit(val_s, (70, y + 22))
-            y += 70
-            if y + 60 > HEIGHT - 60:
-                break
+        elif self._wallet_info:
+            for label, value in self._wallet_info:
+                lbl_s = self.font_sm.render(label, True, COL_DIM)
+                val_font = self.font_sm if len(value) > 40 else self.font_mdb
+                val_s = val_font.render(value, True, COL_TEXT)
+                self.screen.blit(lbl_s, (70, y))
+                self.screen.blit(val_s, (70, y + 22))
+                y += 70
+                if y + 60 > HEIGHT - 60:
+                    break
+        else:
+            empty = self.font_sm.render("Press [A] to unlock wallet with Parent PIN.",
+                                        True, COL_DIM)
+            self.screen.blit(empty, (70, y))
         hint = self.font_sm.render(
-            "[Esc/B] Back    manage: okama-wallet CLI", True, COL_DIM)
+            "[A] Unlock  [Esc/B] Back    okama-wallet CLI for full management",
+            True, COL_DIM)
         self.screen.blit(hint, (70, HEIGHT - 90))
 
     # -----------------------------------------------------------------------
@@ -3270,6 +3506,11 @@ class OkamaShell:
             self._draw_settings_install()
         elif self.state == "settings_wallet":
             self._draw_settings_wallet()
+        elif self.state == "settings_wallet_unlock":
+            self._draw_settings_wallet()
+            self._draw_wallet_unlock_overlay()
+        elif self.state == "settings_update_catalog":
+            self._draw_settings_update_catalog()
         elif self.state == "settings_support":
             self._draw_settings_support()
         elif self.state == "dev_console":

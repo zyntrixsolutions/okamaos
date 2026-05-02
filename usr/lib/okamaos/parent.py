@@ -54,6 +54,61 @@ def set_pin(new_pin: str) -> None:
         f.writelines(lines)
 
 
+def _read_conf_value(key: str, default: str = "") -> str:
+    """Read a single key=value from parent.conf."""
+    try:
+        with open(PARENT_CONF) as f:
+            for line in f:
+                m = re.match(rf"^{re.escape(key)}=(.+)", line.strip())
+                if m:
+                    return m.group(1).strip()
+    except FileNotFoundError:
+        pass
+    return default
+
+
+def _write_conf_value(key: str, value: str) -> None:
+    """Write or replace a single key=value in parent.conf."""
+    lines = []
+    written = False
+    try:
+        with open(PARENT_CONF) as f:
+            for line in f:
+                if line.startswith(f"{key}="):
+                    lines.append(f"{key}={value}\n")
+                    written = True
+                else:
+                    lines.append(line)
+    except FileNotFoundError:
+        lines = []
+    if not written:
+        lines.append(f"{key}={value}\n")
+    os.makedirs(os.path.dirname(PARENT_CONF), exist_ok=True)
+    with open(PARENT_CONF, "w") as f:
+        f.writelines(lines)
+
+
+def wallet_enabled() -> bool:
+    """Return True if wallet transactions are allowed (default: True)."""
+    return _read_conf_value("WALLET_ENABLED", "yes").lower() == "yes"
+
+
+def set_wallet_enabled(enabled: bool) -> None:
+    _write_conf_value("WALLET_ENABLED", "yes" if enabled else "no")
+
+
+def wallet_daily_limit_okt() -> float:
+    """Return the daily OKT spend limit (0 = unlimited, default: 0)."""
+    try:
+        return float(_read_conf_value("WALLET_DAILY_LIMIT_OKT", "0"))
+    except ValueError:
+        return 0.0
+
+
+def set_wallet_daily_limit_okt(limit: float) -> None:
+    _write_conf_value("WALLET_DAILY_LIMIT_OKT", f"{limit:.2f}")
+
+
 def is_locked() -> bool:
     return os.path.exists(PARENT_LOCK)
 

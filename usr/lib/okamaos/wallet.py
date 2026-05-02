@@ -17,8 +17,14 @@ from typing import Optional
 
 WALLET_DIR_DEFAULT = "/var/okamaos/wallet"
 KEYSTORE_FILE      = "keystore.json"
+PIN_PARAMS_FILE    = "pin_params.json"
 TX_LOG_FILE        = "tx-log.json"
 ASSETS_FILE        = "assets.json"
+
+ARGON2_TIME_COST   = 2
+ARGON2_MEMORY_COST = 65536  # 64 MB
+ARGON2_PARALLELISM = 2
+ARGON2_HASH_LEN    = 32
 
 BASE_RPC_DEFAULT        = "https://mainnet.base.org"
 BASE_SEPOLIA_RPC        = "https://sepolia.base.org"
@@ -55,8 +61,74 @@ def assets_path() -> str:
     return os.path.join(wallet_dir(), ASSETS_FILE)
 
 
+def pin_params_path() -> str:
+    return os.path.join(wallet_dir(), PIN_PARAMS_FILE)
+
+
 def is_initialized() -> bool:
     return os.path.exists(keystore_path())
+
+
+# ---------------------------------------------------------------------------
+# Argon2id passphrase derivation
+# ---------------------------------------------------------------------------
+
+def _argon2_available() -> bool:
+    try:
+        import argon2.low_level  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def derive_passphrase(pin: str, salt_hex: str) -> str:
+    """Derive an Argon2id-stretched passphrase from a PIN + stored salt.
+
+    Falls back to the raw PIN if argon2-cffi is not installed.
+    """
+    if not salt_hex or not _argon2_available():
+        return pin
+    try:
+        import argon2.low_level as _al
+        salt = bytes.fromhex(salt_hex)
+        raw = _al.hash_secret_raw(
+            pin.encode(),
+            salt,
+            time_cost=ARGON2_TIME_COST,
+            memory_cost=ARGON2_MEMORY_COST,
+            parallelism=ARGON2_PARALLELISM,
+            hash_len=ARGON2_HASH_LEN,
+            type=_al.Type.ID,
+        )
+        return raw.hex()
+    except Exception:
+        return pin
+
+
+def _load_pin_params() -> dict:
+    path = pin_params_path()
+    if os.path.exists(path):
+        try:
+            with open(path) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def _save_pin_params(salt_hex: str) -> None:
+    params = {
+        "algo": "argon2id",
+        "salt": salt_hex,
+        "time_cost": ARGON2_TIME_COST,
+        "memory_cost": ARGON2_MEMORY_COST,
+        "parallelism": ARGON2_PARALLELISM,
+        "hash_len": ARGON2_HASH_LEN,
+    }
+    path = pin_params_path()
+    with open(path, "w") as f:
+        json.dump(params, f, indent=2)
+    os.chmod(path, 0o600)
 
 
 # ---------------------------------------------------------------------------
@@ -83,6 +155,8 @@ def generate(passphrase: str) -> dict:
 
     Returns {'address': '0x...', 'mnemonic': '...'}.
     The mnemonic is returned ONCE and never persisted.
+    If argon2-cffi is available the passphrase is Argon2id-stretched before
+    being used as the keystore encryption passphrase.
     """
     try:
         from mnemonic import Mnemonic
@@ -91,8 +165,12 @@ def generate(passphrase: str) -> dict:
     Account = _eth_account()
     words   = Mnemonic("english").generate(strength=128)
     acct    = Account.from_mnemonic(words)
-    enc     = Account.encrypt(acct.key, passphrase)
-    path    = keystore_path()
+    # Save Argon2id params (random salt) before deriving passphrase
+    salt_hex = os.urandom(16).hex()
+    _save_pin_params(salt_hex)
+    enc_pass = derive_passphrase(passphrase, salt_hex)
+    enc  = Account.encrypt(acct.key, enc_pass)
+    path = keystore_path()
     with open(path, "w") as f:
         json.dump(enc, f, indent=2)
     os.chmod(path, 0o600)
@@ -100,15 +178,29 @@ def generate(passphrase: str) -> dict:
 
 
 def load(passphrase: str):
-    """Decrypt and return an eth_account LocalAccount."""
+    """Decrypt and return an eth_account LocalAccount.
+
+    Checks parent controls before decrypting.
+    Applies Argon2id stretching if pin_params.json is present.
+    """
+    # Parent control gate
+    try:
+        import okamaos.parent as _parent
+        if not _parent.wallet_enabled():
+            raise WalletError("Wallet is disabled by Parent Controls.")
+    except ImportError:
+        pass
     Account = _eth_account()
     path = keystore_path()
     if not os.path.exists(path):
         raise WalletError("No wallet found. Run 'okama-wallet init' first.")
     with open(path) as f:
         ks = json.load(f)
+    params = _load_pin_params()
+    salt_hex = params.get("salt", "")
+    enc_pass = derive_passphrase(passphrase, salt_hex)
     try:
-        return Account.from_key(Account.decrypt(ks, passphrase))
+        return Account.from_key(Account.decrypt(ks, enc_pass))
     except Exception as e:
         raise WalletError(f"Failed to decrypt wallet (wrong PIN?): {e}")
 

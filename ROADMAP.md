@@ -310,12 +310,14 @@
 - [x] **Portal: leaderboard.html** — OKToken play-to-earn rankings
 - [x] **docs/blockchain.md** — Full integration reference
 
-### v2.1.0 — Relay & Minting (pending)
+### v2.1.0 — Relay Controls & Dev Tooling ✅ (feature/v2.1-relay-controls)
 - [ ] OkamaLabs relay API (`/v1/rewards/claim`) — ECDSA verify + OKT mint
 - [ ] On-chain score proof via oracle (Chainlink / custom)
-- [ ] Parent Controls: `WALLET_ENABLED`, `WALLET_DAILY_LIMIT_OKT` in `parent.conf`
-- [ ] PIN upgrade: Argon2id for wallet passphrase (replacing SHA-256 in `parent.py`)
-- [ ] `okama-shell` PIN prompt for wallet operations
+- [x] Parent Controls: `WALLET_ENABLED`, `WALLET_DAILY_LIMIT_OKT` in `parent.conf`
+- [x] PIN upgrade: Argon2id for wallet passphrase — `derive_passphrase()` + `pin_params.json`
+- [x] `okama-shell` PIN prompt (overlay) for wallet operations
+- [x] `okama-shell` Settings › Updates: Update History browser (dev mode) — fetch feed.json, list versions, download by selection
+- [x] Game Store: Set Server URL gated to dev mode only
 
 ### v2.2.0 — Marketplace & Leaderboard (pending)
 - [ ] Relay leaderboard index API (`/v1/leaderboard`)

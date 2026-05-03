@@ -328,14 +328,20 @@
 - [x] `okama-run` watchdog, startup timeout, emergency exit, crash logs, and friendly recovery screen
 - [x] Plain pygame framebuffer bootstrap and safer templates
 
-### v2.2.0 — Marketplace & Leaderboard (pending)
+### v2.2.0 — System Repair Update ✅ (feature/v2.2.0-repair-update)
+- [x] **`okama-install --repair-update`** — Preserve user data during OS updates
+- [x] **`okama-install --detect-existing-os`** — Detect existing OkamaOS installations on target disks
+- [x] **User data preservation** — Games, saves, wallet, Wi-Fi profiles, controller configs, SSH keys
+- [x] **`okama-shell` Repair Update UI** — Auto-detect existing OS, select disk for repair update, live progress feedback
+
+### v2.3.0 — Marketplace & Leaderboard (pending)
 - [ ] Relay leaderboard index API (`/v1/leaderboard`)
 - [ ] Portal marketplace listing + buy flow (OKT spend)
 - [ ] IPFS/Pinata metadata pipeline for OKAssets
 - [ ] Studio: NFT asset attachment to game packages
 - [ ] Studio: Preview `OKAMA_ASSETS_PATH` in Pyodide sandbox
 
-### v2.3.0 — Cross-Game Assets (pending)
+### v2.4.0 — Cross-Game Assets (pending)
 - [ ] Shared asset registry: one NFT works across multiple games
 - [ ] Asset unlock content hooks in `okama-run`
 - [ ] Creator royalties on secondary marketplace sales

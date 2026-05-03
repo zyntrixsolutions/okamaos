@@ -5,6 +5,32 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [2.2.0] - 2026-05-03 — System Repair Update
+
+### Added — OS Installer (`usr/bin/okama-install`)
+- **`--repair-update`** — New installation mode that preserves user data (games, saves, wallet, Wi-Fi profiles, controller configs) when updating an existing OkamaOS installation.
+- **`--detect-existing-os <disk>`** — Detects existing OkamaOS installations on target disks, returning `okamaos:<version>` or `none`.
+- **`preserve_user_data()` / `restore_user_data()`** — Backup and restore functions for user data paths:
+  - Games (`var/okamaos/games`)
+  - Saves (`var/okamaos/saves`)
+  - Controllers (`var/okamaos/controllers`)
+  - Wallet (`var/okamaos/wallet`)
+  - Downloads (`var/okamaos/downloads`, `var/okamaos/updates/downloads`)
+  - Wi-Fi profiles (`etc/okamaos/wifi`)
+  - Parent config (`etc/okamaos/parent.conf`)
+  - System config (`etc/okamaos/config.json`)
+  - SSH keys (`root/.ssh`)
+- **Repair update tracking** — `install-state.conf` now records `UPDATED_FROM`, `UPDATED_AT`, and `REPAIR_UPDATE=yes` when performing a repair update.
+
+### Added — Shell UI (`usr/bin/okama-shell`)
+- **Settings › Install / Persistence** — Auto-detects existing OkamaOS installations on available disks and displays them with version info.
+- **`[X] Repair Update`** — New button (visible only when OS installations detected) opens the repair update selection screen.
+- **`[SELECT] Fresh Install`** — Quick access to fresh install commands via dev console.
+- **Repair Update Selection Screen** — Lists all disks with existing OkamaOS installations, allows selecting a target disk for repair update with confirmation.
+- **Live progress feedback** — Shows status during repair update operation with timeout protection (5 minutes).
+
+---
+
 ## [2.1.2] - 2026-05-03 — Update Safety, Storage, and Game Recovery
 
 ### Added

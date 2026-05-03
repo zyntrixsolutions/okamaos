@@ -2,7 +2,7 @@
 # Install the running OkamaOS live system to disk or prepare live USB persistence.
 set -eu
 
-VERSION="2.1.2"
+VERSION="2.2.0"
 MOUNTPOINT="${OKAMA_INSTALL_MOUNT:-/mnt/okama-install}"
 BOOT_ASSET_DIR="${OKAMA_INSTALL_BOOT_ASSETS:-/usr/share/okamaos/boot}"
 KERNEL_SRC="${OKAMA_INSTALL_KERNEL:-/boot/okamaos/vmlinuz}"
@@ -21,6 +21,10 @@ PERSIST_ONLY="no"
 PERSIST_STATUS="no"
 MOUNTED="no"
 FS_TYPE="ext2"
+REPAIR_UPDATE="no"
+DETECT_EXISTING="no"
+BACKUP_DIR=""
+EXISTING_OS_VERSION=""
 
 usage() {
     cat <<EOF
@@ -30,12 +34,19 @@ Usage:
   okama-install --list-disks
   okama-install --target /dev/sdX --dry-run
   okama-install --target /dev/sdX --yes
+  okama-install --target /dev/sdX --repair-update --yes
+  okama-install --detect-existing-os /dev/sdX
   okama-install --make-persistence /dev/sdXN --yes
   okama-install --persistence-status
 
 Disk install erases the selected whole disk, creates one Linux partition,
 copies the running OkamaOS root filesystem, and installs a legacy BIOS
 Extlinux bootloader.
+
+Repair Update (--repair-update):
+  Detects existing OkamaOS installation on target disk and preserves user
+  data (games, saves, wallet, configs, Wi-Fi profiles) before updating
+  the system files. Only available when an existing installation is detected.
 
 Persistence formats the selected partition with label ${PERSIST_LABEL}. On
 future live boots OkamaOS mounts that partition at /var/okamaos so games,
@@ -170,6 +181,50 @@ list_disks() {
         fi
         printf '%-14s %-10s %-10s %s%s\n' "/dev/${name}" "$(human_size "$size")" "$removable" "${model:-disk}" "$marker"
     done
+}
+
+detect_existing_os() {
+    local disk="$1"
+    local part part_uuid install_conf
+    part="$(partition_path "$disk")"
+
+    if [ ! -b "$part" ]; then
+        printf 'none\n'
+        return 1
+    fi
+
+    # Check for OkamaOS install state marker
+    part_uuid="$(partuuid_for_disk "$disk" 2>/dev/null || true)"
+    if [ -z "$part_uuid" ]; then
+        # Try reading directly from partition
+        part_uuid="$(blkid -s PARTUUID -o value "$part" 2>/dev/null || true)"
+    fi
+
+    # Create temp mount to check for existing installation
+    local temp_mount="/tmp/okama-detect-$$"
+    mkdir -p "$temp_mount"
+    if mount "$part" "$temp_mount" 2>/dev/null; then
+        install_conf="$temp_mount/etc/okamaos/install-state.conf"
+        if [ -f "$install_conf" ]; then
+            EXISTING_OS_VERSION="$(awk -F= '/^VERSION=/ {print $2}' "$install_conf" 2>/dev/null || echo "unknown")"
+            umount "$temp_mount" 2>/dev/null || true
+            rmdir "$temp_mount" 2>/dev/null || true
+            printf 'okamaos:%s\n' "$EXISTING_OS_VERSION"
+            return 0
+        fi
+        # Check for extlinux.conf as secondary indicator
+        if [ -f "$temp_mount/boot/extlinux/extlinux.conf" ]; then
+            umount "$temp_mount" 2>/dev/null || true
+            rmdir "$temp_mount" 2>/dev/null || true
+            EXISTING_OS_VERSION="unknown"
+            printf 'okamaos:unknown\n'
+            return 0
+        fi
+        umount "$temp_mount" 2>/dev/null || true
+    fi
+    rmdir "$temp_mount" 2>/dev/null || true
+    printf 'none\n'
+    return 1
 }
 
 partition_path() {
@@ -407,6 +462,81 @@ copy_rootfs() {
     chmod 1777 "$MOUNTPOINT"/tmp
 }
 
+# User data paths to preserve during repair update
+PRESERVE_PATHS="
+var/okamaos/games
+var/okamaos/saves
+var/okamaos/controllers
+var/okamaos/wallet
+var/okamaos/downloads
+var/okamaos/updates/downloads
+etc/okamaos/wifi
+etc/okamaos/parent.conf
+etc/okamaos/config.json
+root/.ssh
+"
+
+preserve_user_data() {
+    local source_mount="$1"
+    local backup_dir="$2"
+    local path src_path
+
+    log "Preserving user data to $backup_dir..."
+    mkdir -p "$backup_dir"
+
+    for path in $PRESERVE_PATHS; do
+        src_path="$source_mount/$path"
+        if [ -e "$src_path" ]; then
+            log "  Preserving: $path"
+            mkdir -p "$(dirname "$backup_dir/$path")"
+            cp -a "$src_path" "$backup_dir/$path" 2>/dev/null || true
+        fi
+    done
+
+    # Save metadata about preserved data
+    cat > "$backup_dir/backup-info.txt" <<EOF
+Backup created: $(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date)
+Source OS version: $EXISTING_OS_VERSION
+New OS version: $VERSION
+Source device: $TARGET_DISK
+EOF
+
+    log "User data preserved."
+}
+
+restore_user_data() {
+    local backup_dir="$1"
+    local dest_mount="$2"
+    local path backup_path
+
+    log "Restoring user data from $backup_dir..."
+
+    if [ ! -f "$backup_dir/backup-info.txt" ]; then
+        log "WARNING: No backup metadata found, skipping restore"
+        return 1
+    fi
+
+    for path in $PRESERVE_PATHS; do
+        backup_path="$backup_dir/$path"
+        if [ -e "$backup_path" ]; then
+            log "  Restoring: $path"
+            mkdir -p "$(dirname "$dest_mount/$path")"
+            # Remove any default/new data first
+            rm -rf "$dest_mount/$path" 2>/dev/null || true
+            cp -a "$backup_path" "$dest_mount/$path" 2>/dev/null || true
+        fi
+    done
+
+    log "User data restored."
+}
+
+cleanup_backup() {
+    if [ -n "$BACKUP_DIR" ] && [ -d "$BACKUP_DIR" ]; then
+        log "Cleaning up backup directory..."
+        rm -rf "$BACKUP_DIR"
+    fi
+}
+
 partuuid_for_disk() {
     local disk="$1"
     local b1 b2 b3 b4
@@ -480,15 +610,32 @@ EOF
 }
 
 run_install() {
-    local part
+    local part existing_os_detected="no" old_mount=""
     validate_target_disk
     require_installer_tools
     require_boot_assets
 
     part="$(partition_path "$TARGET_DISK")"
 
+    # Check for existing installation if repair update requested
+    if [ "$REPAIR_UPDATE" = "yes" ]; then
+        log "Checking for existing OkamaOS installation..."
+        if detect_existing_os "$TARGET_DISK" >/dev/null 2>&1; then
+            existing_os_detected="yes"
+            log "Existing OkamaOS $EXISTING_OS_VERSION detected."
+        else
+            die "No existing OkamaOS installation found on $TARGET_DISK. Use standard install without --repair-update."
+        fi
+    fi
+
     log "OkamaOS hard drive install plan:"
-    log "  Erase disk      : $TARGET_DISK"
+    if [ "$REPAIR_UPDATE" = "yes" ]; then
+        log "  Mode            : Repair Update (preserve user data)"
+        log "  Existing OS     : $EXISTING_OS_VERSION"
+    else
+        log "  Mode            : Fresh Install (erase all data)"
+    fi
+    log "  Target disk     : $TARGET_DISK"
     log "  Root partition  : $part"
     log "  Mount point     : $MOUNTPOINT"
     log "  Kernel source   : $KERNEL_SRC"
@@ -501,18 +648,64 @@ run_install() {
         return
     fi
 
-    confirm_target
+    # Phase 1: Preserve user data if doing repair update
+    if [ "$REPAIR_UPDATE" = "yes" ] && [ "$existing_os_detected" = "yes" ]; then
+        BACKUP_DIR="/tmp/okama-repair-backup-$$"
+        log "Mounting existing installation to preserve user data..."
+        old_mount="/tmp/okama-old-root-$$"
+        mkdir -p "$old_mount"
+        if mount "$part" "$old_mount" 2>/dev/null; then
+            preserve_user_data "$old_mount" "$BACKUP_DIR"
+            umount "$old_mount" 2>/dev/null || true
+            rmdir "$old_mount" 2>/dev/null || true
+            log ""
+        else
+            rmdir "$old_mount" 2>/dev/null || true
+            die "Failed to mount existing partition for data preservation"
+        fi
+
+        confirm_phrase "REPAIR UPDATE ${TARGET_DISK}"
+    else
+        confirm_target
+    fi
+
+    # Phase 2: Prepare disk (partition/format)
     partition_disk "$TARGET_DISK"
     wait_for_partition "$part"
     format_partition "$part"
+
+    # Phase 3: Install fresh system
     mount_target "$part"
     copy_rootfs
+
+    # Phase 4: Restore user data if repair update
+    if [ "$REPAIR_UPDATE" = "yes" ] && [ -n "$BACKUP_DIR" ] && [ -d "$BACKUP_DIR" ]; then
+        log ""
+        log "Restoring preserved user data..."
+        restore_user_data "$BACKUP_DIR" "$MOUNTPOINT"
+        cleanup_backup
+    fi
+
+    # Phase 5: Finalize installation
     write_install_state "$part"
+    # Add version info to install state for repair update tracking
+    if [ "$REPAIR_UPDATE" = "yes" ] && [ "$existing_os_detected" = "yes" ]; then
+        cat >> "$MOUNTPOINT/etc/okamaos/install-state.conf" <<EOF
+UPDATED_FROM=$EXISTING_OS_VERSION
+UPDATED_AT=$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date)
+REPAIR_UPDATE=yes
+EOF
+    fi
     install_bootloader "$TARGET_DISK" "$part"
     sync
 
     log ""
-    log "Install complete."
+    if [ "$REPAIR_UPDATE" = "yes" ]; then
+        log "Repair update complete."
+        log "Your games, saves, wallet, and settings have been preserved."
+    else
+        log "Install complete."
+    fi
     log "Remove the live media, set the disk as the boot device, and reboot."
 }
 
@@ -569,6 +762,14 @@ while [ "$#" -gt 0 ]; do
         --list-disks)
             LIST_ONLY="yes"
             ;;
+        --detect-existing-os)
+            shift
+            TARGET_DISK="${1:-}"
+            DETECT_EXISTING="yes"
+            ;;
+        --repair-update)
+            REPAIR_UPDATE="yes"
+            ;;
         --yes)
             ASSUME_YES="yes"
             ;;
@@ -594,6 +795,14 @@ fi
 if [ "$PERSIST_STATUS" = "yes" ]; then
     persistence_status
     exit 0
+fi
+
+if [ "$DETECT_EXISTING" = "yes" ]; then
+    if [ -z "$TARGET_DISK" ]; then
+        die "--detect-existing-os requires a disk argument (e.g., /dev/sda)"
+    fi
+    detect_existing_os "$TARGET_DISK"
+    exit $?
 fi
 
 if [ "$(id -u)" -ne 0 ] && [ "$DRY_RUN" != "yes" ]; then

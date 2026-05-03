@@ -1055,6 +1055,8 @@ class OkamaShell:
             self._settings_update_confirm_input(action, ev)
         elif self.state == "settings_install":
             self._settings_install_input(action, ev)
+        elif self.state == "settings_repair_update":
+            self._settings_repair_update_input(action, ev)
         elif self.state == "settings_wallet":
             self._settings_wallet_input(action, ev)
         elif self.state == "settings_wallet_unlock":
@@ -2278,6 +2280,8 @@ class OkamaShell:
 
     def _collect_install_system_info(self) -> list:
         lines = []
+        self._install_disks = []
+        self._install_existing_os = {}  # disk -> version
         installer = shutil.which("okama-install")
         if not installer:
             sibling = os.path.join(os.path.dirname(os.path.realpath(__file__)), "okama-install")
@@ -2300,7 +2304,33 @@ class OkamaShell:
             disk_lines = [line.rstrip() for line in disks.stdout.splitlines() if line.strip()]
             if disk_lines:
                 lines.append("")
-                lines.extend(disk_lines[:8])
+                lines.append("Available disks:")
+                for line in disk_lines[:8]:
+                    lines.append(line)
+                    # Parse disk device from line (e.g., "/dev/sda   120.0 GiB...")
+                    parts = line.split()
+                    if parts and parts[0].startswith("/dev/"):
+                        disk_dev = parts[0]
+                        self._install_disks.append(disk_dev)
+                        # Check for existing OS on this disk
+                        try:
+                            detect = subprocess.run(
+                                [installer, "--detect-existing-os", disk_dev],
+                                capture_output=True, text=True, timeout=4)
+                            result = detect.stdout.strip()
+                            if result.startswith("okamaos:"):
+                                version = result.split(":", 1)[1]
+                                self._install_existing_os[disk_dev] = version
+                        except Exception:
+                            pass
+                # Show disks with existing OS
+                os_disks = [d for d in self._install_disks if d in self._install_existing_os]
+                if os_disks:
+                    lines.append("")
+                    lines.append("Disks with existing OkamaOS (repair update available):")
+                    for disk in os_disks:
+                        ver = self._install_existing_os[disk]
+                        lines.append(f"  {disk} (v{ver})")
         except Exception as e:
             lines.append(f"Disk list unavailable: {str(e)[:48]}")
         return lines or ["Installer ready."]
@@ -2312,8 +2342,17 @@ class OkamaShell:
             self.install_system_lines = self._collect_install_system_info()
             self.install_system_status = "Refreshed installer status."
         elif action == "X":
+            # Check if we have any disks with existing OS for repair update
+            if hasattr(self, '_install_existing_os') and self._install_existing_os:
+                self._enter_repair_update_select()
+            else:
+                self.install_system_status = (
+                    "Use Dev Console: okama-install --target /dev/sdX --dry-run"
+                )
+        elif action == "SELECT":
+            # Standard fresh install via dev console command
             self.install_system_status = (
-                "Use Dev Console: okama-install --target /dev/sdX --dry-run"
+                "Dev Console: okama-install --target /dev/sdX --yes"
             )
 
     def _draw_settings_install(self):
@@ -2339,8 +2378,93 @@ class OkamaShell:
         if self.install_system_status:
             st = self.font_sm.render(self.install_system_status, True, COL_OK)
             self.screen.blit(st, (60, HEIGHT - 105))
+        # Dynamic hint based on available options
+        has_repair = hasattr(self, '_install_existing_os') and self._install_existing_os
+        if has_repair:
+            hint_text = "[A/Y] Refresh   [X] Repair Update   [SELECT] Fresh Install   [Esc/B] Back"
+        else:
+            hint_text = "[A/Y] Refresh   [X] Show command   [SELECT] Fresh Install   [Esc/B] Back"
+        hint = self.font_sm.render(hint_text, True, COL_DIM)
+        self.screen.blit(hint, (60, HEIGHT - 76))
+
+    # -----------------------------------------------------------------------
+    # Settings > Repair Update Selection
+    # -----------------------------------------------------------------------
+    def _enter_repair_update_select(self):
+        self.repair_update_idx = 0
+        self.repair_update_status = ""
+        # Build list of disks with existing OS
+        if hasattr(self, '_install_existing_os') and self._install_existing_os:
+            self.repair_update_disks = list(self._install_existing_os.items())  # [(disk, version), ...]
+        else:
+            self.repair_update_disks = []
+        self.state = "settings_repair_update"
+
+    def _settings_repair_update_input(self, action: str, ev: dict = None):
+        n = len(self.repair_update_disks)
+        if action in ("B", "START"):
+            self.state = "settings_install"
+        elif action == "DPAD_UP" and n:
+            self.repair_update_idx = (self.repair_update_idx - 1) % n
+        elif action == "DPAD_DOWN" and n:
+            self.repair_update_idx = (self.repair_update_idx + 1) % n
+        elif action == "A" and n:
+            disk, version = self.repair_update_disks[self.repair_update_idx]
+            self._run_repair_update(disk, version)
+
+    def _run_repair_update(self, disk: str, old_version: str):
+        self.repair_update_status = f"Starting repair update on {disk}..."
+        self._draw()
+        pygame.display.flip()
+        installer = shutil.which("okama-install")
+        if not installer:
+            sibling = os.path.join(os.path.dirname(os.path.realpath(__file__)), "okama-install")
+            installer = sibling if os.path.exists(sibling) else "/usr/bin/okama-install"
+        try:
+            result = subprocess.run(
+                [installer, "--target", disk, "--repair-update", "--yes"],
+                capture_output=True, text=True, timeout=300)
+            if result.returncode == 0:
+                self.repair_update_status = f"Repair update complete! Updated from v{old_version}."
+                self._installed_system = True
+            else:
+                err = result.stderr.strip() or "Unknown error"
+                self.repair_update_status = f"Update failed: {err[:60]}"
+        except subprocess.TimeoutExpired:
+            self.repair_update_status = "Update timed out after 5 minutes."
+        except Exception as e:
+            self.repair_update_status = f"Error: {str(e)[:60]}"
+
+    def _draw_settings_repair_update(self):
+        self._draw_section_header("* Repair Update", COL_UPDATE)
+        x, y = 60, 96
+        intro = [
+            "Select a disk with existing OkamaOS to perform a repair update.",
+            "Your games, saves, wallet, and settings will be preserved.",
+        ]
+        for line in intro:
+            surf = self.font_sm.render(line, True, COL_DIM)
+            self.screen.blit(surf, (x, y))
+            y += 26
+        y += 10
+        n = len(self.repair_update_disks)
+        if n == 0:
+            surf = self.font_md.render("No disks with existing OkamaOS found.", True, COL_WARN)
+            self.screen.blit(surf, (x, y))
+        else:
+            for i, (disk, version) in enumerate(self.repair_update_disks[:6]):
+                label = f"{disk} (v{version})"
+                color = COL_ACCENT if i == self.repair_update_idx else COL_TEXT2
+                prefix = "> " if i == self.repair_update_idx else "  "
+                surf = self.font_md.render(f"{prefix}{label}", True, color)
+                self.screen.blit(surf, (x, y))
+                y += 38
+        if self.repair_update_status:
+            color = COL_OK if "complete" in self.repair_update_status else COL_ERROR
+            st = self.font_sm.render(self.repair_update_status, True, color)
+            self.screen.blit(st, (60, HEIGHT - 105))
         hint = self.font_sm.render(
-            "[A/Y] Refresh   [X] Show command   [Esc/B] Back",
+            "[A] Update selected disk   [Esc/B] Back",
             True, COL_DIM)
         self.screen.blit(hint, (60, HEIGHT - 76))
 
@@ -3776,6 +3900,8 @@ class OkamaShell:
             self._draw_settings_update_confirm()
         elif self.state == "settings_install":
             self._draw_settings_install()
+        elif self.state == "settings_repair_update":
+            self._draw_settings_repair_update()
         elif self.state == "settings_wallet":
             self._draw_settings_wallet()
         elif self.state == "settings_wallet_unlock":

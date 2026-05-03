@@ -74,9 +74,9 @@ UEFI/BIOS firmware
 4. okama-run validates manifest, checks controller requirement
 5. okama-run launches: python3 <entry> (SDL2 fullscreen)
 6. Game runs — okama-inputd continues, audio continues
-7. Game exits (clean or crash)
-8. okama-run logs exit, saves crash log if needed
-9. okama-run releases lock, resumes services
+7. okama-run watchdog monitors first frame, emergency exit input, and process exit
+8. Game exits cleanly, crashes, times out, or is emergency-terminated
+9. okama-run writes logs/status, releases lock, resumes services
 10. okama-shell returns to foreground
 ```
 
@@ -101,6 +101,8 @@ UEFI/BIOS firmware
 - **No terminal in normal mode** — tty2 getty only in developer mode
 - **Controller is primary** — keyboard only for text entry + emergency nav
 - **Games get priority** — non-essential services suspended on launch
+- **Crash visibility** — launch failures write `/var/okamaos/logs/crash_<game>_<ts>.log`
+  and `/var/okamaos/logs/last-game-status.json` with fix hints
 - **Read-only root planned for v1** — data partition at `/var/okamaos`
 
 ## Filesystem Layout

@@ -2,7 +2,7 @@
 # Install the running OkamaOS live system to disk or prepare live USB persistence.
 set -eu
 
-VERSION="1.1.5"
+VERSION="2.1.2"
 MOUNTPOINT="${OKAMA_INSTALL_MOUNT:-/mnt/okama-install}"
 BOOT_ASSET_DIR="${OKAMA_INSTALL_BOOT_ASSETS:-/usr/share/okamaos/boot}"
 KERNEL_SRC="${OKAMA_INSTALL_KERNEL:-/boot/okamaos/vmlinuz}"
@@ -431,6 +431,20 @@ sysfs            /sys        sysfs   defaults          0       0
 EOF
 }
 
+write_install_state() {
+    local part="$1"
+    local stamp
+    stamp="$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date)"
+    mkdir -p "$MOUNTPOINT/etc/okamaos"
+    cat > "$MOUNTPOINT/etc/okamaos/install-state.conf" <<EOF
+INSTALLED=yes
+INSTALL_TYPE=disk
+INSTALLED_AT=${stamp}
+TARGET_DISK=${TARGET_DISK}
+ROOT_PARTITION=${part}
+EOF
+}
+
 install_bootloader() {
     local disk="$1"
     local part="$2"
@@ -493,6 +507,7 @@ run_install() {
     format_partition "$part"
     mount_target "$part"
     copy_rootfs
+    write_install_state "$part"
     install_bootloader "$TARGET_DISK" "$part"
     sync
 

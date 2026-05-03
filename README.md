@@ -5,11 +5,12 @@ partnership with **OkamaLabs**. OkamaOS boots straight into a fullscreen
 controller-driven shell, runs one game at a time, and is designed to feel like
 a dedicated console — not a PC.
 
-> Status: **v1.1.5 patch update**. Buildable ISO, polished First Wave shell,
+> Status: **v2.1.2 patch update**. Buildable ISO, polished First Wave shell,
 > live Bluetooth/update status, rollback-capable OTA bundle apply from
 > downloads, USB/media package discovery, live USB persistence, hard-drive
 > migration tooling with safe installed boot graphics, PTY-backed Dev Console
-> terminal, `.ok` package format, and Pygame-based games.
+> terminal, safer update confirmation, ranked storage diagnostics, crash-aware
+> game recovery, `.ok` package format, and Pygame-based games.
 
 ## Highlights
 
@@ -18,10 +19,12 @@ a dedicated console — not a PC.
 - Controller-first input via `okama-inputd` (USB + Bluetooth via BlueZ)
 - `.ok` package format with manifest validation
 - GitHub Pages game/system update feeds with periodic shell notifications
-- Downloads-folder update/game staging with in-shell apply and rollback actions
+- Downloads-folder update/game staging with confirmation before OS apply
 - USB/media automount and recursive package/update discovery
 - Safe game replacement with local backups and save-data preservation
 - Safe `.okupdate` system apply with backup/rollback guardrails
+- Crash-aware game launcher with startup timeout, emergency exit, and fix-hint logs
+- Ranked storage diagnostics for games, downloads, updates, saves, and logs
 - `okama-install` hard-drive migration and live USB persistence setup
 - Installed Extlinux boot uses smooth 24/32-bit safe framebuffer arguments by default
 - Xbox and PlayStation controllers are supported through evdev/HID paths

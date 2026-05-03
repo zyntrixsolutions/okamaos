@@ -4,7 +4,7 @@ import os
 import re
 
 _DEFAULTS = {
-    "VERSION": "1.1.5",
+    "VERSION": "2.1.2",
     "TIMEZONE": "SAST-2",
     "DISPLAY_MODE": "framebuffer",
     "FRAMEBUFFER_DEVICE": "/dev/fb0",
@@ -27,6 +27,9 @@ _DEFAULTS = {
     "UPDATE_BACKUP_DIR": "/var/okamaos/updates/backups",
     "UPDATE_HISTORY_DIR": "/var/okamaos/updates/history",
     "PERSISTENCE_LABEL": "OKAMA_DATA",
+    "GAME_START_TIMEOUT_SEC": "20",
+    "GAME_TERM_GRACE_SEC": "2",
+    "GAME_AUTO_FB_PRESENT": "yes",
     "SUPPORT_EMAIL": "team@zyntrix.solutions",
     "SUPPORT_WEBSITE": "https://okamaos.zyntrix.solutions",
     "GAMES_DIR": "/var/okamaos/games",

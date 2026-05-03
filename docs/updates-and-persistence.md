@@ -1,6 +1,6 @@
 # OkamaOS Updates, Rollback, and Persistence
 
-OkamaOS v1.1.5 uses GitHub Pages as the beta update source:
+OkamaOS v2.1.2 uses GitHub Pages as the beta update source:
 
 - Game catalog: `https://zyntrixsolutions.github.io/okamaos/catalog/apps.json`
 - OS update feed: `https://zyntrixsolutions.github.io/okamaos/updates/feed.json`
@@ -17,9 +17,12 @@ okama-update check
 ```
 
 The shell Settings > Updates screen can download OS update bundles into
-`/var/okamaos/updates/downloads`, apply the newest downloaded `.okupdate`, and
-run rollback without dropping to the developer console. Game Store downloads and
-available game updates are also staged in the downloads folder before install.
+`/var/okamaos/updates/downloads`, confirm before applying a downloaded
+`.okupdate`, and run rollback without dropping to the developer console. In
+developer mode the screen lists all detected update bundles from downloads,
+USB/media, `/mnt`, `/run/media`, and `/tmp` so a specific bundle can be chosen.
+Game Store downloads and available game updates are also staged in the downloads
+folder before install.
 
 ## Safe system update apply
 
@@ -79,3 +82,8 @@ Check current status:
 ```bash
 okama-install --persistence-status
 ```
+
+After a full disk install, `okama-install` writes
+`/etc/okamaos/install-state.conf`. Installed systems hide the shell
+Install / Persistence menu in normal mode; developer mode keeps it available for
+maintenance and diagnostics.

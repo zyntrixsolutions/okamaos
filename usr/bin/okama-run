@@ -26,10 +26,13 @@ import signal
 import time
 import traceback
 import shutil
+import threading
+import queue
 
 import okamaos.config as cfg_mod
 import okamaos.games as games_mod
 import okamaos.manifest as manifest_mod
+from okamaos.input_protocol import InputClient
 
 def _fallback_base(kind: str) -> str:
     if kind == "run":
@@ -76,12 +79,25 @@ def _runtime_dir(env_name: str, default: str, fallback_name: str) -> str:
 
 
 LOCK_FILE = _runtime_file("OKAMA_LOCK_FILE", "/var/run/okama-game.lock", "okama-game.lock")
+HEARTBEAT_FILE = _runtime_file("OKAMA_GAME_HEARTBEAT", "/var/run/okama-game-heartbeat", "okama-game-heartbeat")
 LOG_DIR = _runtime_dir("OKAMA_LOG_DIR", "/var/okamaos/logs", "logs")
 SAVES_DIR = _runtime_dir("OKAMA_SAVES", "/var/okamaos/saves", "saves")
+STATUS_FILE = os.environ.get("OKAMA_GAME_STATUS_FILE", os.path.join(LOG_DIR, "last-game-status.json"))
+
+BOOTSTRAP_STUB = (
+    "import runpy, sys; "
+    "import okamaos.game_bootstrap; "
+    "entry = sys.argv[1]; "
+    "sys.argv = [entry] + sys.argv[2:]; "
+    "runpy.run_path(entry, run_name='__main__')"
+)
 
 SUSPEND_SERVICES = [
     "S40okama-network",
 ]
+
+_ACTIVE_PROC = None
+_SERVICES_SUSPENDED = False
 
 
 def _path_list(value: str) -> list:
@@ -120,14 +136,75 @@ def _pygame_lib_dirs() -> list:
     return [path for path in candidates if path and os.path.isdir(path)]
 
 
+def _conf_value(conf, key: str, default: str) -> str:
+    return os.environ.get(f"OKAMA_{key}") or os.environ.get(key) or conf.get(key, default)
+
+
+def _conf_float(conf, key: str, default: float) -> float:
+    try:
+        return float(_conf_value(conf, key, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _launcher_signal(signum, _frame):
+    global _ACTIVE_PROC
+    if _ACTIVE_PROC is not None and _ACTIVE_PROC.poll() is None:
+        _terminate_process(_ACTIVE_PROC, f"launcher signal {signum}", 1.0)
+    if _SERVICES_SUSPENDED:
+        resume_services()
+    release_lock()
+    sys.exit(128 + int(signum))
+
+
+def _pid_running(pid) -> bool:
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return False
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+
+
 def acquire_lock(game_id: str) -> None:
     if os.path.exists(LOCK_FILE):
-        with open(LOCK_FILE) as f:
-            current = f.read().strip()
-        print(f"ERROR: Game already running: {current}", file=sys.stderr)
-        sys.exit(1)
+        current = ""
+        pid = None
+        try:
+            with open(LOCK_FILE) as f:
+                raw = f.read().strip()
+            data = json.loads(raw)
+            current = data.get("game_id", raw)
+            pid = data.get("pid")
+        except Exception:
+            current = raw if "raw" in locals() else "unknown"
+        if _pid_running(pid):
+            print(f"ERROR: Game already running: {current}", file=sys.stderr)
+            sys.exit(1)
+        try:
+            os.remove(LOCK_FILE)
+        except OSError:
+            print(f"ERROR: stale game lock could not be removed: {LOCK_FILE}", file=sys.stderr)
+            sys.exit(1)
     with open(LOCK_FILE, "w") as f:
-        f.write(game_id)
+        json.dump({"game_id": game_id, "pid": None, "started_at": time.time()}, f)
+
+
+def update_lock_pid(game_id: str, pid: int) -> None:
+    try:
+        with open(LOCK_FILE, "w") as f:
+            json.dump({"game_id": game_id, "pid": pid, "started_at": time.time()}, f)
+    except OSError:
+        pass
 
 
 def release_lock() -> None:
@@ -153,22 +230,65 @@ def resume_services() -> None:
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def build_launch_cmd(manifest: dict, game_dir: str) -> list:
+def build_launch_cmd(manifest: dict, game_dir: str, auto_bootstrap: bool = True) -> list:
     runtime = manifest["runtime"]
     entry = os.path.join(game_dir, manifest["entry"])
+    if not os.path.isfile(entry):
+        raise FileNotFoundError(f"game entry file not found: {manifest['entry']}")
 
     # Check if game has a venv directory
     venv_python = os.path.join(game_dir, "venv", "bin", "python3")
     if os.path.isfile(venv_python):
-        return [venv_python, entry]
-
-    if runtime in ("okama-lite", "okama-python", "okama-sdl2"):
-        return [_python_executable(), entry]
+        py = venv_python
+    elif runtime in ("okama-lite", "okama-python", "okama-sdl2"):
+        py = _python_executable()
     else:
         raise ValueError(f"Unknown runtime: {runtime}")
 
+    if not os.path.isfile(py):
+        raise FileNotFoundError(f"python executable not found: {py}")
+    if not os.access(py, os.X_OK):
+        raise PermissionError(f"python executable is not runnable: {py}")
+    if auto_bootstrap:
+        return [py, "-c", BOOTSTRAP_STUB, entry]
+    return [py, entry]
 
-def save_crash_log(game_id: str, returncode: int, stderr_out: str) -> str:
+
+def _tail_text(path: str, max_bytes: int = 16000) -> str:
+    try:
+        size = os.path.getsize(path)
+        with open(path, "rb") as f:
+            if size > max_bytes:
+                f.seek(size - max_bytes)
+            return f.read().decode(errors="replace")
+    except OSError:
+        return ""
+
+
+def _diagnostic_hints(reason: str, output: str) -> list:
+    text = f"{reason}\n{output}".lower()
+    hints = []
+    if "no module named pygame" in text or "importerror: no module named" in text:
+        hints.append("Package missing dependency: add python_deps or bundle site-packages.")
+    if "no usable sdl display" in text or "display.set_mode" in text or "video system not initialized" in text:
+        hints.append("Display failed: use okamaos.display.open_display or rely on v2.1.2 auto framebuffer bootstrap.")
+    if "manifest" in text:
+        hints.append("Check manifest.ok.json runtime, entry path, ID, permissions, and package format.")
+    if "permission denied" in text:
+        hints.append("Check executable/read permissions inside the .ok package.")
+    if "startup timeout" in text:
+        hints.append("Game opened no display frames; verify the main loop reaches display.flip().")
+    if "emergency exit" in text:
+        hints.append("Emergency exit used; inspect the game loop for blocking work.")
+    if "traceback" in text or "runtimeerror" in text or "exception" in text:
+        hints.append("The game raised an exception; fix the traceback shown in the crash log.")
+    if not hints:
+        hints.append("Open the crash log for the Python traceback and last game output.")
+    return hints[:4]
+
+
+def save_crash_log(game_id: str, returncode: int, stderr_out: str,
+                   log_path: str = "", reason: str = "") -> str:
     os.makedirs(LOG_DIR, exist_ok=True)
     ts = int(time.time())
     path = os.path.join(LOG_DIR, f"crash_{game_id}_{ts}.log")
@@ -176,11 +296,151 @@ def save_crash_log(game_id: str, returncode: int, stderr_out: str) -> str:
         f.write(f"game_id    : {game_id}\n")
         f.write(f"returncode : {returncode}\n")
         f.write(f"timestamp  : {ts}\n\n")
+        if reason:
+            f.write(f"reason     : {reason}\n\n")
+        if log_path:
+            f.write(f"stdout_log : {log_path}\n\n")
+            tail = _tail_text(log_path)
+            if tail:
+                f.write("---- game output tail ----\n")
+                f.write(tail)
+                f.write("\n")
+        if stderr_out:
+            f.write("---- launcher details ----\n")
         f.write(stderr_out or "")
     return path
 
 
+def write_status(status: dict) -> None:
+    try:
+        os.makedirs(os.path.dirname(STATUS_FILE), exist_ok=True)
+        tmp = f"{STATUS_FILE}.tmp"
+        with open(tmp, "w") as f:
+            json.dump(status, f, indent=2, sort_keys=True)
+        os.replace(tmp, STATUS_FILE)
+    except OSError:
+        pass
+
+
+def _reader_thread(pipe, log_path: str, out_q: queue.Queue) -> None:
+    try:
+        with open(log_path, "ab", buffering=0) as log_f:
+            while True:
+                chunk = pipe.readline()
+                if not chunk:
+                    break
+                log_f.write(chunk)
+                out_q.put(chunk.decode(errors="replace"))
+    except Exception as e:
+        out_q.put(f"[okama-run reader error: {e}]\n")
+
+
+def _terminate_process(proc: subprocess.Popen, reason: str, grace_sec: float) -> tuple[int, str]:
+    if proc.poll() is not None:
+        return proc.returncode, reason
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+    except Exception:
+        try:
+            proc.terminate()
+        except Exception:
+            pass
+    try:
+        return proc.wait(timeout=max(0.1, grace_sec)), reason
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+        try:
+            proc.wait(timeout=1.0)
+        except Exception:
+            pass
+        return proc.returncode if proc.returncode is not None else -9, f"{reason}; forced kill"
+
+
+def _heartbeat_seen(path: str) -> bool:
+    try:
+        return os.path.getmtime(path) > 0
+    except OSError:
+        return False
+
+
+def _emergency_requested(inp: InputClient, held: set, hold_started: dict, hold_sec: float) -> bool:
+    now = time.monotonic()
+    for ev in inp.poll():
+        if ev.get("type") != "button":
+            continue
+        btn = ev.get("button")
+        if ev.get("state") == "pressed":
+            held.add(btn)
+        else:
+            held.discard(btn)
+            hold_started.clear()
+    combo = "HOME" in held or ("START" in held and "SELECT" in held)
+    if not combo:
+        hold_started.pop("emergency", None)
+        return False
+    hold_started.setdefault("emergency", now)
+    return now - hold_started["emergency"] >= hold_sec
+
+
+def _show_recovery_screen(game_name: str, reason: str, crash_log: str,
+                          hints: list, seconds: float = 8.0) -> None:
+    try:
+        import pygame
+        from okamaos.display import open_display
+    except Exception:
+        return
+    try:
+        pygame.init()
+        screen, display = open_display(
+            pygame, 1280, 720, pygame.FULLSCREEN | pygame.NOFRAME,
+            caption="OkamaOS Game Recovery")
+        font_lg = pygame.font.SysFont("DejaVu Sans", 52, bold=True)
+        font_md = pygame.font.SysFont("DejaVu Sans", 28)
+        font_sm = pygame.font.SysFont("DejaVu Sans", 22)
+        clock = pygame.time.Clock()
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            for ev in pygame.event.get():
+                if ev.type == pygame.QUIT:
+                    deadline = 0
+                elif ev.type == pygame.KEYDOWN and ev.key in (
+                    pygame.K_RETURN, pygame.K_SPACE, pygame.K_ESCAPE):
+                    deadline = 0
+            screen.fill((8, 10, 22))
+            title = font_lg.render("Game did not start safely", True, (255, 80, 110))
+            screen.blit(title, (56, 72))
+            game_s = font_md.render(game_name, True, (235, 240, 250))
+            screen.blit(game_s, (60, 148))
+            reason_s = font_sm.render(reason[:105], True, (255, 190, 70))
+            screen.blit(reason_s, (60, 198))
+            y = 260
+            for hint in hints[:4]:
+                s = font_sm.render(f"- {hint}"[:115], True, (180, 200, 225))
+                screen.blit(s, (76, y))
+                y += 34
+            log_s = font_sm.render(f"Crash log: {crash_log}"[:118], True, (120, 150, 190))
+            screen.blit(log_s, (60, 540))
+            foot = font_sm.render("Returning to OkamaOS shell...", True, (120, 150, 190))
+            screen.blit(foot, (60, 588))
+            display.flip(screen)
+            clock.tick(30)
+        display.close()
+        pygame.quit()
+    except Exception:
+        try:
+            pygame.quit()
+        except Exception:
+            pass
+
+
 def main():
+    global _ACTIVE_PROC, _SERVICES_SUSPENDED
     p = argparse.ArgumentParser(prog="okama-run")
     p.add_argument("game_id")
     p.add_argument("--no-suspend", action="store_true")
@@ -204,9 +464,12 @@ def main():
         sys.exit(1)
 
     acquire_lock(game_id)
+    signal.signal(signal.SIGTERM, _launcher_signal)
+    signal.signal(signal.SIGINT, _launcher_signal)
 
     if not args.no_suspend:
         suspend_services()
+        _SERVICES_SUSPENDED = True
 
     env = os.environ.copy()
     env["OKAMA_GAME_ID"] = game_id
@@ -265,10 +528,19 @@ def main():
     # Reduce input latency hints
     env["SDL_MOUSE_FOCUS_CLICKTHROUGH"] = "1"
 
+    auto_bootstrap = _conf_value(conf, "GAME_AUTO_FB_PRESENT", "yes").lower() == "yes"
     try:
-        cmd = build_launch_cmd(manifest, game_dir)
+        cmd = build_launch_cmd(manifest, game_dir, auto_bootstrap=auto_bootstrap)
     except ValueError as e:
         print(f"ERROR: {e}", file=sys.stderr)
+        if not args.no_suspend:
+            resume_services()
+        release_lock()
+        sys.exit(1)
+    except Exception as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        if not args.no_suspend:
+            resume_services()
         release_lock()
         sys.exit(1)
 
@@ -283,37 +555,122 @@ def main():
     except Exception:
         pass
 
+    try:
+        os.remove(HEARTBEAT_FILE)
+    except OSError:
+        pass
+    env["OKAMA_GAME_HEARTBEAT"] = HEARTBEAT_FILE
+
     proc = None
     exit_code = 0
-    stderr_out = ""
+    launcher_details = ""
+    reason = ""
+    output_q: queue.Queue = queue.Queue()
+    start_timeout = _conf_float(conf, "GAME_START_TIMEOUT_SEC", 20.0)
+    term_grace = _conf_float(conf, "GAME_TERM_GRACE_SEC", 2.0)
+    emergency_hold_sec = 2.0
+    input_client = InputClient()
+    input_client.connect()
+    held_buttons = set()
+    hold_started = {}
     try:
         with open(log_path, "w") as log_f:
-            proc = subprocess.Popen(
-                cmd,
-                cwd=game_dir,
-                env=env,
-                stdout=log_f,
-                stderr=subprocess.PIPE,
-            )
-            _, stderr_bytes = proc.communicate()
-            exit_code = proc.returncode
-            stderr_out = (stderr_bytes or b"").decode(errors="replace")
+            log_f.write(f"Launching {manifest['name']} ({game_id})\n")
+            log_f.write(f"Command: {' '.join(cmd)}\n\n")
+        proc = subprocess.Popen(
+            cmd,
+            cwd=game_dir,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+        _ACTIVE_PROC = proc
+        update_lock_pid(game_id, proc.pid)
+        reader = threading.Thread(
+            target=_reader_thread,
+            args=(proc.stdout, log_path, output_q),
+            daemon=True,
+        )
+        reader.start()
+        started_at = time.monotonic()
+        first_frame = False
+        while True:
+            exit_code = proc.poll()
+            if exit_code is not None:
+                reason = "exited"
+                break
+            if _heartbeat_seen(HEARTBEAT_FILE):
+                first_frame = True
+            if not first_frame and time.monotonic() - started_at > start_timeout:
+                exit_code, reason = _terminate_process(
+                    proc, f"startup timeout after {int(start_timeout)}s", term_grace)
+                break
+            if _emergency_requested(input_client, held_buttons, hold_started, emergency_hold_sec):
+                exit_code, reason = _terminate_process(
+                    proc, "emergency exit requested", term_grace)
+                break
+            time.sleep(0.1)
+        try:
+            reader.join(timeout=1.0)
+        except Exception:
+            pass
     except Exception:
-        stderr_out = traceback.format_exc()
+        launcher_details = traceback.format_exc()
         exit_code = -1
+        reason = "launcher error"
+        if proc is not None:
+            _terminate_process(proc, reason, term_grace)
 
     if not args.no_suspend:
         resume_services()
+        _SERVICES_SUSPENDED = False
 
     release_lock()
+    _ACTIVE_PROC = None
+    try:
+        input_client.close()
+    except Exception:
+        pass
 
     if exit_code != 0:
-        crash_log = save_crash_log(game_id, exit_code, stderr_out)
+        if reason == "exited":
+            reason = f"game exited with code {exit_code}"
+        output_tail = _tail_text(log_path)
+        crash_log = save_crash_log(
+            game_id, exit_code, launcher_details,
+            log_path=log_path, reason=reason)
+        hints = _diagnostic_hints(reason, output_tail + launcher_details)
+        write_status({
+            "game_id": game_id,
+            "name": manifest.get("name", game_id),
+            "status": "crashed",
+            "reason": reason,
+            "returncode": exit_code,
+            "log_path": log_path,
+            "crash_log": crash_log,
+            "hints": hints,
+            "timestamp": int(time.time()),
+        })
         print(f"Game exited with code {exit_code}. Crash log: {crash_log}")
+        for hint in hints:
+            print(f"Hint: {hint}")
         print("Returning to OkamaOS shell…")
+        if os.environ.get("OKAMA_RECOVERY_SCREEN", "yes").lower() != "no":
+            _show_recovery_screen(manifest.get("name", game_id), reason, crash_log, hints)
+        sys.exit(1)
     else:
+        write_status({
+            "game_id": game_id,
+            "name": manifest.get("name", game_id),
+            "status": "clean",
+            "returncode": 0,
+            "log_path": log_path,
+            "timestamp": int(time.time()),
+        })
         print(f"Game finished cleanly. Returning to OkamaOS shell…")
         _submit_game_rewards(game_id)
+        sys.exit(0)
 
 
 def _submit_game_rewards(game_id: str) -> None:

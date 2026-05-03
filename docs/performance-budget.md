@@ -31,6 +31,9 @@ When a game is running:
 - Available RAM for a game: ~1.8 GB out of 2 GB
 - `okama-inputd` stays active (~15 MB) for controller events
 - Audio stack stays active (~3 MB)
+- `okama-run` watches for the first rendered frame and can terminate a hung
+  startup after `GAME_START_TIMEOUT_SEC` so the shell can recover instead of
+  waiting forever
 
 | Component during gameplay     | RSS         |
 |-------------------------------|-------------|

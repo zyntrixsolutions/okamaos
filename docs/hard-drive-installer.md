@@ -2,7 +2,9 @@
 
 `okama-install` migrates the running live system onto a selected whole disk.
 It creates one Linux partition, copies the current root filesystem, installs a
-legacy BIOS Extlinux bootloader, and writes an installed-system `fstab`.
+legacy BIOS Extlinux bootloader, writes an installed-system `fstab`, and records
+`/etc/okamaos/install-state.conf` so the shell can hide live install/persistence
+controls in normal installed mode.
 
 List candidate disks:
 

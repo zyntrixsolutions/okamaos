@@ -62,13 +62,13 @@ not just a description.
 
 | MVP State                         | v1 Target                                     |
 |-----------------------------------|-----------------------------------------------|
-| Shell respawns after crash        | Friendly "Oops" screen, not raw text          |
+| Shell respawns after crash        | Friendly recovery screen with fix hints       |
 | Crash log in /var/okamaos/logs    | Crash reported to OkamaLabs (opt-in)          |
-| No auto save on crash             | Hook: SIGTERM sent 500 ms before kill for save|
+| No auto save on crash             | SIGTERM grace before kill for save flush      |
 
 **Implementation path:**
-1. `okama-run`: on non-zero exit, render a full-screen "Something went wrong" pygame screen
-2. Give game 500 ms with SIGTERM before SIGKILL — games can catch this to flush save state
+1. `okama-run`: on non-zero exit, render a full-screen recovery screen and write `last-game-status.json`
+2. Give game a configurable SIGTERM grace window before SIGKILL — games can catch this to flush save state
 3. Opt-in crash reporting: POST anonymized crash log to OkamaLabs endpoint
 
 ---
@@ -77,13 +77,13 @@ not just a description.
 
 | MVP State                         | v1 Target                                     |
 |-----------------------------------|-----------------------------------------------|
-| Lock file prevents double launch  | Watchdog process monitors game health         |
+| Lock file prevents double launch  | Watchdog monitors startup, hangs, and emergency exit |
 | No OOM handling                   | cgroups limit game to MAX_GAME_RAM_MB         |
 | No GPU memory limits              | DRM render node ownership per game            |
 
 **Implementation path:**
 1. Create cgroup `okama_game` with `memory.max = $(MAX_GAME_RAM_MB)M` before `execv`
-2. Watchdog thread in `okama-run`: if game process disappears unexpectedly, trigger recovery
+2. Watchdog loop in `okama-run`: first-frame timeout and `HOME` / `START+SELECT` emergency exit trigger recovery
 3. Use DRM render node `/dev/dri/renderD128` leased to game process
 
 ---

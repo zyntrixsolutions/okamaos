@@ -10,6 +10,7 @@ import os
 sys.path.insert(0, "/usr/lib/okamaos")
 
 import pygame
+from okamaos.display import open_display
 from okamaos.input_protocol import InputClient
 
 WIDTH, HEIGHT = 1280, 720
@@ -18,10 +19,9 @@ FPS = 30
 
 def main():
     pygame.init()
-    screen = pygame.display.set_mode(
-        (WIDTH, HEIGHT),
-        pygame.FULLSCREEN | pygame.NOFRAME
-    )
+    screen, display = open_display(
+        pygame, WIDTH, HEIGHT, pygame.FULLSCREEN | pygame.NOFRAME,
+        caption="OkamaOS Game")
     pygame.mouse.set_visible(False)
     clock = pygame.time.Clock()
 
@@ -41,9 +41,10 @@ def main():
                     running = False  # return to okama-shell
 
         screen.fill((10, 10, 24))
-        pygame.display.flip()
+        display.flip(screen)
         clock.tick(FPS)
 
+    display.close()
     pygame.quit()
     sys.exit(0)
 

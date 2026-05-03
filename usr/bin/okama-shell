@@ -367,6 +367,21 @@ def _safe_download_name(raw: str, fallback: str) -> str:
     return safe or fallback
 
 
+def _fmt_bytes(size_bytes: int) -> str:
+    try:
+        value = float(size_bytes)
+    except (TypeError, ValueError):
+        value = 0.0
+    units = ("B", "KB", "MB", "GB", "TB")
+    idx = 0
+    while value >= 1024 and idx < len(units) - 1:
+        value /= 1024.0
+        idx += 1
+    if idx == 0:
+        return f"{int(value)} {units[idx]}"
+    return f"{value:.1f} {units[idx]}"
+
+
 # ---------------------------------------------------------------------------
 # Fallback text renderer (no Pygame)
 # ---------------------------------------------------------------------------
@@ -457,6 +472,7 @@ class OkamaShell:
         self.list_idx = 0
         self.settings_idx = 0
         self.power_idx = 0
+        self._installed_system = self._detect_installed_system()
         self.message = ""
         self.message_timer = 0
 
@@ -479,6 +495,7 @@ class OkamaShell:
         self.net_info = []
         self.net_idx = 0
         self.storage_info = []
+        self.storage_idx = 0
         # Install browse state
         self.install_files = []
         self.install_idx = 0
@@ -504,6 +521,8 @@ class OkamaShell:
         self._next_update_check = time.monotonic() + 5.0
         self._update_thread = None
         self._update_download_progress: tuple = (0, 0)
+        self._update_file_idx: int = 0
+        self._pending_update_file: str = ""
         self._bt_label_cache: tuple = (0.0, "Off")
 
         # Install / persistence state
@@ -617,6 +636,35 @@ class OkamaShell:
     def _refresh_games(self):
         self.games = games_mod.list_installed()
 
+    def _detect_installed_system(self) -> bool:
+        markers = [
+            "/etc/okamaos/install-state.conf",
+            "/boot/extlinux/extlinux.conf",
+        ]
+        for path in markers:
+            if os.path.exists(path):
+                if path.endswith("install-state.conf"):
+                    try:
+                        with open(path, encoding="utf-8") as f:
+                            if "INSTALLED=yes" in f.read():
+                                return True
+                    except OSError:
+                        pass
+                else:
+                    return True
+        try:
+            with open("/proc/cmdline", encoding="utf-8") as f:
+                cmdline = f.read()
+            return "root=PARTUUID=" in cmdline and "boot=live" not in cmdline
+        except OSError:
+            return False
+
+    def _settings_options(self) -> list:
+        opts = list(SETTINGS_OPTIONS)
+        if self._installed_system and not self.dev_mode:
+            opts = [o for o in opts if o != "Install / Persistence"]
+        return opts
+
     def _os_version(self) -> str:
         if updates_mod:
             try:
@@ -644,6 +692,16 @@ class OkamaShell:
             os.makedirs(fallback, exist_ok=True)
             return fallback
 
+    def _game_downloads_dir(self) -> str:
+        path = self.conf.get("GAME_DOWNLOADS_DIR", "/var/okamaos/downloads")
+        try:
+            os.makedirs(path, exist_ok=True)
+            return path
+        except OSError:
+            fallback = "/tmp/okamaos-game-downloads"
+            os.makedirs(fallback, exist_ok=True)
+            return fallback
+
     def _rescan_media(self) -> None:
         candidates = [
             shutil.which("okama-mount-media"),
@@ -661,7 +719,7 @@ class OkamaShell:
     def _file_search_roots(self) -> list:
         roots = [
             self._downloads_dir(),
-            "/var/okamaos/downloads",
+            self._game_downloads_dir(),
             "/var/okamaos/updates",
             "/media",
             "/mnt",
@@ -991,6 +1049,10 @@ class OkamaShell:
                     self.state = "game_store"
         elif self.state == "settings_updates":
             self._settings_updates_input(action, ev)
+        elif self.state == "settings_update_files":
+            self._settings_update_files_input(action, ev)
+        elif self.state == "settings_update_confirm":
+            self._settings_update_confirm_input(action, ev)
         elif self.state == "settings_install":
             self._settings_install_input(action, ev)
         elif self.state == "settings_wallet":
@@ -1139,7 +1201,7 @@ class OkamaShell:
         _exec_okama_run(gid)
 
     def _settings_input(self, action: str, ev: dict = None):
-        n = len(SETTINGS_OPTIONS)
+        n = len(self._settings_options())
         if action == "B" or action == "START":
             self.state = "home"
         elif action == "DPAD_DOWN":
@@ -1157,7 +1219,11 @@ class OkamaShell:
             self._settings_select()
 
     def _settings_select(self):
-        opt = SETTINGS_OPTIONS[self.settings_idx]
+        options = self._settings_options()
+        if not options:
+            return
+        self.settings_idx = min(self.settings_idx, len(options) - 1)
+        opt = options[self.settings_idx]
         if opt == "Controllers":
             self._enter_settings_controllers()
         elif opt == "Bluetooth":
@@ -1178,7 +1244,7 @@ class OkamaShell:
             self.state = "settings_support"
 
     def _settings_rects(self):
-        n = len(SETTINGS_OPTIONS)
+        n = len(self._settings_options())
         top = 86 if HEIGHT < 680 else 108
         bottom = HEIGHT - 58
         gap = 10 if HEIGHT < 680 else 12
@@ -2081,53 +2147,125 @@ class OkamaShell:
     # Settings > Storage Info
     # -----------------------------------------------------------------------
     def _enter_settings_storage(self):
+        self.storage_idx = 0
         self.storage_info = self._collect_storage_info()
         self.state = "settings_storage"
 
-    def _collect_storage_info(self) -> list:
-        def _fmt(b):
-            if b >= 1 << 30:
-                return f"{b / (1 << 30):.1f} GB"
-            if b >= 1 << 20:
-                return f"{b / (1 << 20):.1f} MB"
-            return f"{b / (1 << 10):.1f} KB"
-
-        lines = []
+    def _path_size(self, path: str) -> int:
+        total = 0
         try:
-            st = os.statvfs("/")
-            total = st.f_blocks * st.f_frsize
-            free  = st.f_bavail * st.f_frsize
-            used  = total - free
-            lines.append({"label": f"Total disk:    {_fmt(total)}"})
-            lines.append({"label": f"Used:          {_fmt(used)}"})
-            lines.append({"label": f"Free:          {_fmt(free)}"})
+            p = Path(path)
+            if p.is_file():
+                return p.stat().st_size
+            for item in p.rglob("*"):
+                try:
+                    if item.is_file():
+                        total += item.stat().st_size
+                except OSError:
+                    pass
         except Exception:
-            lines.append({"label": "Disk info unavailable"})
+            pass
+        return total
+
+    def _largest_files(self, roots: list, limit: int = 8) -> list:
+        files = []
+        seen = set()
+        for root in roots:
+            if not root or root in seen or not os.path.isdir(root):
+                continue
+            seen.add(root)
+            try:
+                for path in Path(root).rglob("*"):
+                    try:
+                        if path.is_file():
+                            files.append((path.stat().st_size, str(path)))
+                    except OSError:
+                        pass
+            except Exception:
+                pass
+        return sorted(files, reverse=True)[:limit]
+
+    def _collect_storage_info(self) -> list:
+        lines = []
+        for mount in ("/", "/var/okamaos"):
+            try:
+                st = os.statvfs(mount)
+                total = st.f_blocks * st.f_frsize
+                free  = st.f_bavail * st.f_frsize
+                used  = total - free
+                lines.append({"label": f"{mount} total {_fmt_bytes(total)}  used {_fmt_bytes(used)}  free {_fmt_bytes(free)}"})
+            except Exception:
+                if mount == "/":
+                    lines.append({"label": "Disk info unavailable"})
+
+        paths = {
+            "Installed games": self.conf.get("GAMES_DIR", "/var/okamaos/games"),
+            "Saves": self.conf.get("SAVES_DIR", "/var/okamaos/saves"),
+            "Game downloads": self._game_downloads_dir(),
+            "Update downloads": self._downloads_dir(),
+            "Update backups": os.path.join(self.conf.get("UPDATES_DIR", "/var/okamaos/updates"), "backups"),
+            "Game backups": os.path.join(self.conf.get("UPDATES_DIR", "/var/okamaos/updates"), "game-backups"),
+            "Cache": self.conf.get("CACHE_DIR", "/var/okamaos/cache"),
+            "Logs": self.conf.get("LOGS_DIR", "/var/okamaos/logs"),
+            "Wallet": "/var/okamaos/wallet",
+            "Controllers": self.conf.get("CONTROLLERS_DIR", "/var/okamaos/controllers"),
+        }
+        ranked = sorted(
+            ((self._path_size(path), label, path) for label, path in paths.items()),
+            reverse=True,
+        )
+        lines.append({"label": "Storage by category"})
+        for rank, (size, label, path) in enumerate(ranked, start=1):
+            lines.append({"label": f"#{rank} {label}: {_fmt_bytes(size)}", "detail": path})
 
         installed = games_mod.list_installed()
-        lines.append({"label": f"Games installed: {len(installed)}"})
+        if installed:
+            lines.append({"label": f"Installed games ({len(installed)})"})
+        game_sizes = []
         for g in installed:
-            gdir = games_mod.game_dir(g["id"])
-            try:
-                size = sum(f.stat().st_size
-                           for f in Path(gdir).rglob("*") if f.is_file())
-                lines.append({"label": f"  {g['name']}: {_fmt(size)}"})
-            except Exception:
-                lines.append({"label": f"  {g['name']}"})
+            gdir = games_mod.game_dir(g.get("id", ""))
+            game_sizes.append((self._path_size(gdir), g.get("name", g.get("id", "")), g))
+        for rank, (size, _name, g) in enumerate(sorted(game_sizes, reverse=True)[:10], start=1):
+            lines.append({
+                "label": f"#{rank} {g.get('name', g.get('id', '?'))}: {_fmt_bytes(size)}",
+                "detail": games_mod.game_dir(g.get("id", "")),
+            })
+
+        largest_roots = list(paths.values())
+        largest = self._largest_files(largest_roots)
+        if largest:
+            lines.append({"label": "Largest files"})
+        for rank, (size, path) in enumerate(largest, start=1):
+            lines.append({"label": f"#{rank} {_fmt_bytes(size)}  {path}"})
         return lines
 
     def _settings_storage_input(self, action: str, ev: dict = None):
-        if action in ("B", "START", "A"):
+        if action in ("B", "START"):
             self.state = "settings"
+        elif action in ("A", "Y"):
+            self.storage_info = self._collect_storage_info()
+            self.storage_idx = 0
+        elif action == "DPAD_DOWN" and self.storage_info:
+            self.storage_idx = min(self.storage_idx + 1, max(0, len(self.storage_info) - 1))
+        elif action == "DPAD_UP" and self.storage_info:
+            self.storage_idx = max(0, self.storage_idx - 1)
 
     def _draw_settings_storage(self):
         self._draw_section_header("* Storage Info", COL_SETTINGS)
-        for i, item in enumerate(self.storage_info):
-            y = 120 + i * 44
-            if y + 36 > HEIGHT - 60:
-                break
-            lbl = self.font_md.render(item["label"], True, COL_TEXT2)
+        max_rows = max(1, (HEIGHT - 150) // 42)
+        start = min(self.storage_idx, max(0, len(self.storage_info) - max_rows))
+        for i, item in enumerate(self.storage_info[start:start + max_rows]):
+            y = 92 + i * 42
+            label = item.get("label", "")
+            font = self.font_hint if len(label) > 78 else self.font_sm
+            lbl = font.render(label[:118], True, COL_TEXT2)
             self.screen.blit(lbl, (60, y))
+            detail = item.get("detail")
+            if detail and y + 20 < HEIGHT - 70:
+                ds = self.font_hint.render(str(detail)[:118], True, COL_DIM)
+                self.screen.blit(ds, (78, y + 20))
+        hint = self.font_sm.render("[Y/A] Refresh   [Up/Down] Scroll   [Esc/B] Back", True, COL_DIM)
+        self.screen.blit(hint, (60, HEIGHT - 82))
 
     # -----------------------------------------------------------------------
     # Settings > Install / Persistence
@@ -2303,7 +2441,7 @@ class OkamaShell:
                 entry.get("download_url", ""),
                 f"{entry.get('id','game')}-{entry.get('version','latest')}.ok",
             )
-            dest = os.path.join(self._downloads_dir(), safe_name)
+            dest = os.path.join(self._game_downloads_dir(), safe_name)
             try:
                 def _progress(recv, total):
                     self._store_dl_progress = (recv, total)
@@ -2314,7 +2452,7 @@ class OkamaShell:
                 manifest = games_mod.install_package(dest, dev_mode=self.dev_mode)
                 self._refresh_games()
                 self.store_status = (
-                    f"Downloaded to updates/downloads and installed: "
+                    f"Downloaded to game downloads and installed: "
                     f"{name} v{manifest['version']}"
                 )
             except Exception as e:
@@ -2587,6 +2725,7 @@ class OkamaShell:
     def _get_update_actions(self) -> list:
         actions = list(_UPDATE_ACTIONS_BASE)
         if self.dev_mode:
+            actions.insert(3, "Choose Update Bundle  [dev]")
             actions.append("Browse Update History  [dev]")
         return actions
 
@@ -2619,6 +2758,8 @@ class OkamaShell:
             self._download_os_update()
         elif opt.startswith("Apply"):
             self._apply_downloaded_update()
+        elif opt.startswith("Choose Update"):
+            self._enter_settings_update_files()
         elif opt.startswith("Download Game"):
             self._download_game_updates()
         elif "Rollback" in opt:
@@ -2700,8 +2841,21 @@ class OkamaShell:
             return
         path = max(files, key=lambda p: os.path.getmtime(p) if os.path.exists(p) else 0)
         self._update_local_files = files
+        if self.dev_mode:
+            self._enter_settings_update_files()
+            return
+        self._enter_settings_update_confirm(path)
+
+    def _start_apply_update(self, path: str):
+        if self.update_loading:
+            return
+        if not path or not os.path.exists(path):
+            self.update_status = "Selected update bundle was not found."
+            self.state = "settings_updates"
+            return
         self.update_loading = True
         self.update_status = f"Applying {os.path.basename(path)}..."
+        self.state = "settings_updates"
 
         def _work():
             try:
@@ -2720,6 +2874,61 @@ class OkamaShell:
                 self.update_loading = False
 
         threading.Thread(target=_work, daemon=True).start()
+
+    def _enter_settings_update_files(self):
+        if updates_mod:
+            files = updates_mod.find_local_updates(search_paths=self._file_search_roots())
+        else:
+            files = self._find_files((".okupdate", ".ok-update"))
+        self._update_local_files = files
+        self._update_file_idx = 0
+        if not files:
+            self.update_status = "No downloaded .okupdate bundles found."
+            self.state = "settings_updates"
+            return
+        self.state = "settings_update_files"
+
+    def _settings_update_files_input(self, action: str, ev: dict = None):
+        n = len(self._update_local_files)
+        if action in ("B", "START"):
+            self.state = "settings_updates"
+        elif action == "DPAD_UP" and n:
+            self._update_file_idx = (self._update_file_idx - 1) % n
+        elif action == "DPAD_DOWN" and n:
+            self._update_file_idx = (self._update_file_idx + 1) % n
+        elif action in ("A", "ENTER") and n:
+            self._enter_settings_update_confirm(self._update_local_files[self._update_file_idx])
+        elif action == "CLICK" and ev:
+            start, count = self._update_file_window()
+            rects = self._subscreen_rects(count)
+            for i, r in enumerate(rects):
+                if r.collidepoint(ev["pos"]):
+                    idx = start + i
+                    if idx == self._update_file_idx:
+                        self._enter_settings_update_confirm(self._update_local_files[idx])
+                    else:
+                        self._update_file_idx = idx
+                    return
+
+    def _enter_settings_update_confirm(self, path: str):
+        self._pending_update_file = path
+        self.state = "settings_update_confirm"
+
+    def _settings_update_confirm_input(self, action: str, ev: dict = None):
+        if action in ("B", "START"):
+            self.update_status = "Update apply cancelled."
+            self.state = "settings_updates"
+        elif action in ("A", "ENTER"):
+            self._start_apply_update(self._pending_update_file)
+
+    def _update_file_window(self) -> tuple:
+        n = len(self._update_local_files)
+        if n <= 0:
+            return 0, 0
+        count = len(self._subscreen_rects(min(n, 12))) or 1
+        count = min(count, n)
+        start = min(max(0, self._update_file_idx - count // 2), max(0, n - count))
+        return start, count
 
     def _rollback_update(self):
         if self.update_loading:
@@ -2769,7 +2978,7 @@ class OkamaShell:
                         entry.get("download_url", ""),
                         f"{entry.get('id','game')}-{entry.get('version','latest')}.ok",
                     )
-                    dest = os.path.join(self._downloads_dir(), safe_name)
+                    dest = os.path.join(self._game_downloads_dir(), safe_name)
                     self.update_status = f"Downloading {name}..."
                     try:
                         store_mod.download_game(entry, dest)
@@ -2836,6 +3045,65 @@ class OkamaShell:
             [{"label": a} for a in self._get_update_actions()],
             self.update_idx,
             key_fn=lambda x: x["label"])
+
+    def _draw_settings_update_files(self):
+        self._draw_section_header("* Update Bundles  [dev]", COL_UPDATE)
+        files = self._update_local_files
+        if not files:
+            empty = self.font_sm.render("No downloaded .okupdate bundles found.", True, COL_DIM)
+            self.screen.blit(empty, (60, 130))
+            return
+        items = []
+        start, count = self._update_file_window()
+        visible = files[start:start + count]
+        for path in visible:
+            try:
+                size = _fmt_bytes(os.path.getsize(path))
+                mtime = datetime.datetime.fromtimestamp(os.path.getmtime(path)).strftime("%Y-%m-%d %H:%M")
+            except OSError:
+                size, mtime = "missing", "unknown"
+            label = f"{os.path.basename(path)}  {size}  {mtime}"
+            items.append({"label": label, "path": path})
+        self._draw_subscreen_list(items, self._update_file_idx - start,
+                                  key_fn=lambda x: x["label"][:92])
+        if 0 <= self._update_file_idx < len(files):
+            path = files[self._update_file_idx]
+            detail = self.font_hint.render(path[:118], True, COL_DIM)
+            self.screen.blit(detail, (54, HEIGHT - 112))
+        hint = self.font_sm.render(
+            f"[A] Confirm selected update   {self._update_file_idx + 1}/{len(files)}   [Esc/B] Back",
+            True, COL_DIM)
+        self.screen.blit(hint, (54, HEIGHT - 82))
+
+    def _draw_settings_update_confirm(self):
+        self._draw_section_header("* Confirm Update", COL_UPDATE)
+        path = self._pending_update_file
+        name = os.path.basename(path) if path else "unknown"
+        try:
+            size = _fmt_bytes(os.path.getsize(path))
+            modified = datetime.datetime.fromtimestamp(os.path.getmtime(path)).strftime("%Y-%m-%d %H:%M")
+        except OSError:
+            size, modified = "missing", "unknown"
+        lines = [
+            "Apply this system update now?",
+            f"Bundle: {name}",
+            f"Size: {size}",
+            f"Modified: {modified}",
+            "The updater will back up replaced system files before writing.",
+            "Reboot is usually required after a successful apply.",
+        ]
+        y = 118
+        for i, line in enumerate(lines):
+            font = self.font_mdb if i == 0 else self.font_sm
+            col = COL_UPDATE if i == 0 else COL_TEXT2
+            surf = font.render(line[:116], True, col)
+            self.screen.blit(surf, (64, y))
+            y += 42 if i == 0 else 32
+        if path:
+            detail = self.font_hint.render(path[:118], True, COL_DIM)
+            self.screen.blit(detail, (64, y + 12))
+        hint = self.font_sm.render("[A/Enter] Apply Update   [Esc/B] Cancel", True, COL_DIM)
+        self.screen.blit(hint, (64, HEIGHT - 82))
 
     # -----------------------------------------------------------------------
     # Settings > Update Catalog  [dev mode]
@@ -3502,6 +3770,10 @@ class OkamaShell:
             self._draw_store_url_entry()
         elif self.state == "settings_updates":
             self._draw_settings_updates()
+        elif self.state == "settings_update_files":
+            self._draw_settings_update_files()
+        elif self.state == "settings_update_confirm":
+            self._draw_settings_update_confirm()
         elif self.state == "settings_install":
             self._draw_settings_install()
         elif self.state == "settings_wallet":
@@ -3555,7 +3827,7 @@ class OkamaShell:
 
         subtitles = {
             "Play": f"{len(self.games)} installed games",
-            "Settings": "Network, BT, input, storage, updates, install",
+            "Settings": "Network, BT, input, storage, updates",
             "Power": "Restart, shut down, or return safely",
         }
         rects = self._home_section_rects()
@@ -3794,8 +4066,11 @@ class OkamaShell:
         self._draw_section_header("* Settings", COL_SETTINGS)
         mx, my = self._mouse_pos
         rects = self._settings_rects()
+        options = self._settings_options()
+        if options:
+            self.settings_idx = min(self.settings_idx, len(options) - 1)
 
-        for i, opt in enumerate(SETTINGS_OPTIONS):
+        for i, opt in enumerate(options):
             r = rects[i]
             is_sel = (i == self.settings_idx)
             is_hov = r.collidepoint(mx, my)

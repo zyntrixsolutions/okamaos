@@ -238,9 +238,45 @@ def _rpc_call(method: str, params: list, rpc_url: Optional[str] = None) -> dict:
     )
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
-            return json.load(resp)
+            data = json.load(resp)
     except urllib.error.URLError as e:
         raise WalletError(f"RPC error: {e.reason}")
+    if data.get("error"):
+        err = data["error"]
+        if isinstance(err, dict):
+            msg = err.get("message", err)
+        else:
+            msg = err
+        raise WalletError(f"RPC error: {msg}")
+    return data
+
+
+def _rpc_quantity_to_int(value) -> int:
+    """Parse an Ethereum JSON-RPC hex quantity.
+
+    Some gateways return ``0x`` for empty zero values. Treat that as zero
+    instead of surfacing Python's low-level ValueError to the shell.
+    """
+    if value in (None, "", "0x"):
+        return 0
+    if isinstance(value, int):
+        return max(0, value)
+    raw = str(value).strip().lower()
+    if raw in ("", "0x"):
+        return 0
+    if not raw.startswith("0x"):
+        raise WalletError(f"RPC returned non-hex quantity: {value}")
+    try:
+        return int(raw, 16)
+    except ValueError as exc:
+        raise WalletError(f"RPC returned invalid hex quantity: {value}") from exc
+
+
+def _is_zero_address(addr: str) -> bool:
+    raw = str(addr or "").strip().lower()
+    if raw.startswith("0x"):
+        raw = raw[2:]
+    return not raw or set(raw) <= {"0"}
 
 
 def eth_balance(addr: Optional[str] = None) -> int:
@@ -248,7 +284,7 @@ def eth_balance(addr: Optional[str] = None) -> int:
     if addr is None:
         addr = address()
     result = _rpc_call("eth_getBalance", [addr, "latest"])
-    return int(result.get("result", "0x0"), 16)
+    return _rpc_quantity_to_int(result.get("result", "0x0"))
 
 
 def ok_balance(addr: Optional[str] = None,
@@ -258,10 +294,12 @@ def ok_balance(addr: Optional[str] = None,
         addr = address()
     if token_address is None:
         token_address = OKTOKEN_ADDRESS_DEFAULT
+    if _is_zero_address(token_address):
+        return 0
     padded = addr.lower().replace("0x", "").zfill(64)
     data   = "0x" + _BALANCE_OF_SELECTOR + padded
     result = _rpc_call("eth_call", [{"to": token_address, "data": data}, "latest"])
-    return int(result.get("result", "0x0"), 16)
+    return _rpc_quantity_to_int(result.get("result", "0x0"))
 
 
 # ---------------------------------------------------------------------------

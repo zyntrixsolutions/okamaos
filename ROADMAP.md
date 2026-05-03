@@ -319,6 +319,15 @@
 - [x] `okama-shell` Settings › Updates: Update History browser (dev mode) — fetch feed.json, list versions, download by selection
 - [x] Game Store: Set Server URL gated to dev mode only
 
+### v2.1.2 — Update Safety, Storage, and Game Recovery ✅ (fix/v2.1.2-update-game-recovery)
+- [x] Update apply confirmation before any downloaded OS bundle is installed
+- [x] Dev-mode chooser for all detected local `.okupdate` bundles
+- [x] Installed-system marker and normal-mode Install / Persistence hiding
+- [x] Wallet RPC parsing fix for `0x` / empty hex quantities
+- [x] Ranked Storage Info categories and largest-file visibility
+- [x] `okama-run` watchdog, startup timeout, emergency exit, crash logs, and friendly recovery screen
+- [x] Plain pygame framebuffer bootstrap and safer templates
+
 ### v2.2.0 — Marketplace & Leaderboard (pending)
 - [ ] Relay leaderboard index API (`/v1/leaderboard`)
 - [ ] Portal marketplace listing + buy flow (OKT spend)

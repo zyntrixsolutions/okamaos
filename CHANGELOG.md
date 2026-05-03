@@ -5,6 +5,23 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [2.1.2] - 2026-05-03 — Update Safety, Storage, and Game Recovery
+
+### Added
+- **`usr/bin/okama-shell`** — Settings › Updates now prompts for confirmation before applying a downloaded OS update.
+- **`usr/bin/okama-shell`** — Dev mode can browse all detected `.okupdate` bundles with file size, modified time, and full path before choosing one to apply.
+- **`usr/bin/okama-shell`** — Storage Info now ranks OkamaOS-managed storage categories and largest files across games, saves, downloads, update backups, cache, logs, wallet, and controller data.
+- **`usr/bin/okama-shell`** — Game package downloads now go to `/var/okamaos/downloads`; OS update bundles stay under `/var/okamaos/updates/downloads`.
+- **`usr/lib/okamaos/game_bootstrap.py`** — Runtime bootstrap mirrors plain pygame `display.flip()` / `display.update()` calls to `/dev/fb0` on offscreen framebuffer boots.
+- **`usr/bin/okama-run`** — Game launch watchdog with startup timeout, emergency `HOME` or `START+SELECT` hold exit, detailed crash logs, `last-game-status.json`, and a friendly recovery screen.
+
+### Fixed
+- **`usr/lib/okamaos/wallet.py`** — RPC quantity parsing now treats `0x`, empty, or missing values as zero instead of raising `Invalid literal for int() with base 16`.
+- **`usr/bin/okama-install` / `usr/bin/okama-shell`** — Disk installs now write `/etc/okamaos/install-state.conf`; installed systems hide Install / Persistence unless developer mode is enabled.
+- **`usr/share/okamaos/templates/`** — Built-in templates now use the framebuffer-safe display helper by default.
+
+---
+
 ## [2.1.1] - 2026-05-02 — .ok Package Install Reliability
 
 ### Fixed

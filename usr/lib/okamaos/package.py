@@ -28,13 +28,21 @@ def _tar_mode(writing: bool = True) -> str:
 
 
 def _is_zip(ok_path: str) -> bool:
-    """Return True if the file is a ZIP archive (magic bytes PK\x03\x04, PK\x05\x06, PK\x07\x08)."""
+    """Return True if the file is a ZIP archive.
+
+    Fast-path checks the first four magic bytes; falls back to Python's
+    structural zipfile.is_zipfile() so edge-case archives (e.g. self-extracting
+    prefixes, spanned zips, empty zips) are still recognised.
+    """
     try:
         with open(ok_path, "rb") as f:
             sig = f.read(4)
-            return sig in (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08")
+            if sig in (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"):
+                return True
     except OSError:
         return False
+    # Fallback: let Python verify the End-of-Central-Directory record.
+    return zipfile.is_zipfile(ok_path)
 
 
 def _sniff_content(ok_path: str) -> str:

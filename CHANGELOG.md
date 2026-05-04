@@ -5,6 +5,15 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [docs] - 2026-05-04 — GTM Teaser Trailer Scripts
+
+### Added — Marketing Docs
+- **`docs/gtm-teaser-script-general.md`** — Full 60/90s teaser trailer script targeting general gamers and PC enthusiasts ("FIRST WAVE" campaign).
+- **`docs/gtm-teaser-script-web3.md`** — Full 60/90s teaser trailer script targeting the Web3/blockchain gaming market ("EARN YOUR GAME" campaign).
+- Both scripts include: scene-by-scene direction, VO lines, on-screen text, music brief, platform distribution strategy, post copy (YouTube/X/Farcaster/Discord), and production checklists.
+
+---
+
 ## [2.2.2] - 2026-05-04 — Critical Fixes Bundle
 
 ### Fixed — SSL/HTTPS

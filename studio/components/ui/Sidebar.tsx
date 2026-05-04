@@ -98,10 +98,10 @@ export default function Sidebar() {
           className="text-xs px-2 py-0.5 rounded font-mono"
           style={{ background: "rgba(83,217,230,0.12)", color: "#53d9e6" }}
         >
-          v0.1.0
+          v0.3.4
         </span>
         <span className="text-xs" style={{ color: "#c9c3b3" }}>
-          MVP
+          Preview
         </span>
       </div>
     </aside>

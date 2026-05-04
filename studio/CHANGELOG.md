@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0 - 2026-05-07
+
+- **Gamepad API support in browser preview**: `pygame.joystick` now reads from the browser Gamepad API via `navigator.getGamepads()`. `get_count()`, `get_axis()`, `get_button()`, `get_name()`, `get_numaxes()`, `get_numbuttons()` all work with real USB/BT controllers. `JOYBUTTONDOWN`, `JOYBUTTONUP`, and `JOYAXISMOTION` events are injected into `pygame.event.get()` / `poll()` automatically each frame.
+- Gamepad polling starts when preview runs and stops cleanly when preview stops or component unmounts.
+- **SEO**: updated `metadata` in `layout.tsx` with `openGraph`, `twitter` card, `metadataBase`, and `robots` fields.
+- **Sidebar**: version pill updated to `v0.3.4` / `Preview` label.
+
 ## 0.3.4 - 2026-05-02
 
 - Migrated dev server storage from local filesystem to Vercel Blob storage.

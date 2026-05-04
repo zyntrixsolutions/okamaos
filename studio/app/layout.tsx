@@ -10,12 +10,28 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Okama Studio — OkamaLabs Game Engine Platform",
-  description: "AI-collaborative pygame game creation studio for OkamaOS by OkamaLabs. Vibe-code cinematic games, learn Python, export .ok packages, and host from your dev server.",
+  title: "Okama Studio — AI Game Engine in Your Browser",
+  description: "Free AI-powered browser game engine. Build Python/pygame games, earn OKToken, export .ok packages, and publish to OkamaOS — no install required.",
+  metadataBase: new URL("https://okamaos.zyntrix.solutions"),
   icons: {
     icon: "/zyntrix-favicon.svg",
     shortcut: "/zyntrix-favicon.svg",
     apple: "/zyntrix-favicon.svg",
+  },
+  robots: { index: true, follow: true },
+  openGraph: {
+    type: "website",
+    url: "https://okamaos.zyntrix.solutions",
+    title: "Okama Studio — AI Game Engine in Your Browser",
+    description: "Build Python/pygame games with AI assistance, export .ok packages, and publish to OkamaOS. Free, no install required.",
+    siteName: "Okama Studio",
+    images: [{ url: "/okama-labs-logo.svg", width: 512, height: 512, alt: "Okama Studio" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Okama Studio — AI Game Engine in Your Browser",
+    description: "Build Python/pygame games with AI, publish to OkamaOS. Free, browser-based.",
+    images: ["/okama-labs-logo.svg"],
   },
 };
 

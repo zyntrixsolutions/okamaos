@@ -34,6 +34,9 @@ const PREVIEW_CANVAS_ID = "okama-preview-canvas";
 const PREVIEW_LOG_CALLBACK = "okamaStudioPreviewLog";
 const PREVIEW_ERROR_CALLBACK = "okamaStudioPreviewError";
 const PREVIEW_STOP_CALLBACK = "okamaStudioPreviewShouldStop";
+const GAMEPAD_EVENTS_GLOBAL = "okamaGamepadEvents";
+const GAMEPAD_STATES_GLOBAL = "okamaGamepadStates";
+const GAMEPAD_COUNT_GLOBAL = "okamaGamepadCount";
 
 const STDIO_SETUP_CODE = `
 import sys
@@ -859,11 +862,13 @@ class _EventModule:
         return event.type == eventtype
     
     def get(self, eventtype=None):
+        _drain_gamepad_events(self)
         events = [event for event in self._queue if self._matches(event, eventtype)]
         self._queue = [event for event in self._queue if not self._matches(event, eventtype)]
         return events
     
     def poll(self):
+        _drain_gamepad_events(self)
         if self._queue:
             return self._queue.pop(0)
         return _Event(0)  # NOEVENT
@@ -1004,22 +1009,126 @@ class _Mixer:
     def get_busy(self):
         return False
 
+def _drain_gamepad_events(event_module):
+    """Drain JS okamaGamepadEvents into pygame's event queue."""
+    try:
+        events_js = getattr(js, '${GAMEPAD_EVENTS_GLOBAL}', None)
+        if events_js is None or not hasattr(events_js, 'length'):
+            return
+        n = int(events_js.length)
+        for i in range(n):
+            try:
+                ev = events_js[i]
+                ev_type = str(getattr(ev, 'type', ''))
+                joy = int(getattr(ev, 'joy', 0))
+                if ev_type == 'JOYBUTTONDOWN':
+                    btn = int(getattr(ev, 'button', 0))
+                    event_module._queue.append(_Event(JOYBUTTONDOWN, joy=joy, button=btn))
+                elif ev_type == 'JOYBUTTONUP':
+                    btn = int(getattr(ev, 'button', 0))
+                    event_module._queue.append(_Event(JOYBUTTONUP, joy=joy, button=btn))
+                elif ev_type == 'JOYAXISMOTION':
+                    axis = int(getattr(ev, 'axis', 0))
+                    val = float(getattr(ev, 'value', 0.0))
+                    event_module._queue.append(_Event(JOYAXISMOTION, joy=joy, axis=axis, value=val))
+            except Exception:
+                pass
+        try:
+            events_js.length = 0
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+class _JoystickInstance:
+    """A single gamepad, reads live from okamaGamepadStates."""
+    def __init__(self, index):
+        self._index = index
+        self._init = False
+
+    def init(self):
+        self._init = True
+
+    def quit(self):
+        self._init = False
+
+    def get_init(self):
+        return self._init
+
+    def get_id(self):
+        return self._index
+
+    def get_name(self):
+        return f'Controller {self._index}'
+
+    def _get_state(self):
+        try:
+            states = getattr(js, '${GAMEPAD_STATES_GLOBAL}', None)
+            if states is None or not hasattr(states, 'length'):
+                return None
+            if self._index >= int(states.length):
+                return None
+            return states[self._index]
+        except Exception:
+            return None
+
+    def get_numaxes(self):
+        st = self._get_state()
+        try:
+            return int(st.axes.length) if st is not None else 0
+        except Exception:
+            return 0
+
+    def get_numbuttons(self):
+        st = self._get_state()
+        try:
+            return int(st.buttons.length) if st is not None else 0
+        except Exception:
+            return 0
+
+    def get_numhats(self):
+        return 0
+
+    def get_axis(self, axis_num):
+        st = self._get_state()
+        try:
+            return float(st.axes[axis_num]) if st is not None else 0.0
+        except Exception:
+            return 0.0
+
+    def get_button(self, button_num):
+        st = self._get_state()
+        try:
+            return bool(st.buttons[button_num].pressed) if st is not None else False
+        except Exception:
+            return False
+
+    def get_hat(self, hat_num):
+        return (0, 0)
+
+
 class _Joystick:
-    """pygame.joystick replacement - stub"""
+    """pygame.joystick — backed by the browser Gamepad API via okamaGamepadStates"""
     def init(self):
         pass
-    
+
     def quit(self):
         pass
-    
+
     def get_init(self):
-        return False
-    
+        return True
+
     def get_count(self):
-        return 0
-    
-    def Joystick(self, id):
-        return None
+        try:
+            count = getattr(js, '${GAMEPAD_COUNT_GLOBAL}', None)
+            return int(count) if count is not None else 0
+        except Exception:
+            return 0
+
+    def Joystick(self, index):
+        inst = _JoystickInstance(index)
+        inst.init()
+        return inst
 
 class _Draw:
     """pygame.draw replacement"""
@@ -1646,6 +1755,68 @@ export default function GamePreview({ code, autoRun = false, onSendToAI }: GameP
   const [isFullscreen, setIsFullscreen] = useState(false);
   const pyRef = useRef<PyodideInterface | null>(null);
   const stopRequestedRef = useRef(false);
+  const gamepadLoopRef = useRef<number | null>(null);
+  const prevGamepadButtonsRef = useRef<boolean[][]>([]);
+  const prevGamepadAxesRef = useRef<number[][]>([]);
+
+  const startGamepadPolling = useCallback(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any;
+    w[GAMEPAD_EVENTS_GLOBAL] = [];
+    w[GAMEPAD_STATES_GLOBAL] = [];
+    w[GAMEPAD_COUNT_GLOBAL] = 0;
+    prevGamepadButtonsRef.current = [];
+    prevGamepadAxesRef.current = [];
+
+    const pollLoop = () => {
+      const gpList = navigator.getGamepads ? navigator.getGamepads() : [];
+      const states: unknown[] = [];
+      let count = 0;
+      for (let i = 0; i < gpList.length; i++) {
+        const gp = gpList[i];
+        if (!gp) { states.push(null); continue; }
+        count++;
+        states.push({
+          axes: Array.from(gp.axes),
+          buttons: gp.buttons.map((b) => ({ pressed: b.pressed, value: b.value })),
+        });
+        const prevBtns = prevGamepadButtonsRef.current[i] || [];
+        const prevAxes = prevGamepadAxesRef.current[i] || [];
+        for (let b = 0; b < gp.buttons.length; b++) {
+          const now = gp.buttons[b].pressed;
+          const was = prevBtns[b] ?? false;
+          if (now && !was) w[GAMEPAD_EVENTS_GLOBAL].push({ type: "JOYBUTTONDOWN", joy: i, button: b });
+          else if (!now && was) w[GAMEPAD_EVENTS_GLOBAL].push({ type: "JOYBUTTONUP", joy: i, button: b });
+        }
+        for (let a = 0; a < gp.axes.length; a++) {
+          const now = gp.axes[a];
+          const was = prevAxes[a] ?? 0;
+          if (Math.abs(now - was) > 0.01)
+            w[GAMEPAD_EVENTS_GLOBAL].push({ type: "JOYAXISMOTION", joy: i, axis: a, value: now });
+        }
+        prevGamepadButtonsRef.current[i] = gp.buttons.map((b) => b.pressed);
+        prevGamepadAxesRef.current[i] = Array.from(gp.axes);
+      }
+      w[GAMEPAD_STATES_GLOBAL] = states;
+      w[GAMEPAD_COUNT_GLOBAL] = count;
+      gamepadLoopRef.current = requestAnimationFrame(pollLoop);
+    };
+    gamepadLoopRef.current = requestAnimationFrame(pollLoop);
+  }, []);
+
+  const stopGamepadPolling = useCallback(() => {
+    if (gamepadLoopRef.current !== null) {
+      cancelAnimationFrame(gamepadLoopRef.current);
+      gamepadLoopRef.current = null;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any;
+    w[GAMEPAD_EVENTS_GLOBAL] = [];
+    w[GAMEPAD_STATES_GLOBAL] = [];
+    w[GAMEPAD_COUNT_GLOBAL] = 0;
+    prevGamepadButtonsRef.current = [];
+    prevGamepadAxesRef.current = [];
+  }, []);
 
   const appendOutput = (line: string, isError = false) =>
     setOutput((prev) => [...prev.slice(-100), { text: line, isError }]);
@@ -1701,6 +1872,7 @@ export default function GamePreview({ code, autoRun = false, onSendToAI }: GameP
         setProgress("Running your game…");
         setState("running");
         setProgress("");
+        startGamepadPolling();
         window.setTimeout(() => canvasRef.current?.focus(), 0);
 
         // Now run the transformed (async-yielding) user code
@@ -1719,6 +1891,7 @@ export default function GamePreview({ code, autoRun = false, onSendToAI }: GameP
           }
         }
       } finally {
+        stopGamepadPolling();
         try {
           py.runPython(PYGAME_TEARDOWN_CODE);
         } catch {
@@ -1758,7 +1931,7 @@ export default function GamePreview({ code, autoRun = false, onSendToAI }: GameP
       appendOutput(`[Error] ${msg}`, true);
       stopRequestedRef.current = false;
     }
-  }, [code]);
+  }, [code, startGamepadPolling, stopGamepadPolling]);
 
   const stop = useCallback(() => {
     stopRequestedRef.current = true;

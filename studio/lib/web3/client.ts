@@ -1,4 +1,4 @@
-import { createPublicClient, http, type PublicClient } from "viem";
+import { createPublicClient, http } from "viem";
 import { base, baseSepolia } from "viem/chains";
 
 export type NetworkId = "base" | "base-sepolia";
@@ -23,7 +23,7 @@ export function getRpcUrl(network?: NetworkId): string {
     : "https://mainnet.base.org";
 }
 
-export function createClient(network?: NetworkId): PublicClient {
+export function createClient(network?: NetworkId) {
   const net = network ?? getNetworkFromSettings();
   return createPublicClient({
     chain: getChain(net),

@@ -4288,16 +4288,25 @@ class OkamaShell:
 
     def _draw_message(self):
         if self.message and self.message_timer > 0:
+            # Determine border color based on message content FIRST
+            msg_lower = self.message.lower()
+            if any(x in msg_lower for x in ["error", "fail", "critical", "could not"]):
+                border_col = COL_ERROR
+            elif "warning" in msg_lower:
+                border_col = COL_WARN
+            elif any(x in msg_lower for x in ["success", "complete", "saved", "mounted", "connected", "paired"]):
+                border_col = COL_OK
+            else:
+                border_col = COL_ACCENT
+
             # Draw semi-transparent overlay behind popup
             overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-            overlay.fill((0, 0, 0, 160))  # Dark overlay
+            overlay.fill((0, 0, 0, 160))
             self.screen.blit(overlay, (0, 0))
-            
-            # Calculate popup size with padding for longer messages
+
+            # Word-wrap text to fit screen width
             pad_x, pad_y = 24, 20
-            max_text_width = WIDTH - 120  # Leave margins on sides
-            
-            # Wrap text if too long
+            max_text_width = WIDTH - 120
             words = self.message.split()
             lines = []
             current_line = []
@@ -4311,36 +4320,25 @@ class OkamaShell:
                     current_line = [word]
             if current_line:
                 lines.append(" ".join(current_line))
-            
             if not lines:
                 lines = [self.message]
-            
-            # Calculate dimensions
+
+            # Calculate popup dimensions (minimum 200px wide)
             line_height = self.font_sm.get_height() + 4
-            text_height = len(lines) * line_height
-            bw = max(self.font_sm.size(line)[0] for line in lines) + pad_x * 2
-            bh = text_height + pad_y * 2
-            
+            text_width = max(self.font_sm.size(line)[0] for line in lines)
+            bw = max(text_width + pad_x * 2, 200)
+            bh = len(lines) * line_height + pad_y * 2
+
             # Center on screen
             bx = WIDTH // 2 - bw // 2
             by = HEIGHT // 2 - bh // 2
-            
-            # Draw popup background with rounded corners
+
+            # Draw popup background then colored border
             popup = pygame.Surface((bw, bh), pygame.SRCALPHA)
-            popup.fill((28, 26, 60, 255))  # Solid background
-            pygame.draw.rect(popup, COL_ACCENT, (0, 0, bw, bh), 2, border_radius=12)
+            popup.fill((28, 26, 60, 255))
+            pygame.draw.rect(popup, border_col, (0, 0, bw, bh), 2, border_radius=12)
             self.screen.blit(popup, (bx, by))
-            
-            # Determine message color based on content
-            icon_color = COL_ACCENT
-            msg_lower = self.message.lower()
-            if any(x in msg_lower for x in ["error", "fail", "critical", "could not"]):
-                icon_color = COL_ERROR
-            elif "warning" in msg_lower:
-                icon_color = COL_WARN
-            elif any(x in msg_lower for x in ["success", "complete", "saved", "mounted", "connected", "paired"]):
-                icon_color = COL_OK
-            
+
             # Draw text lines
             for i, line in enumerate(lines):
                 line_surf = self.font_sm.render(line, True, COL_TEXT)

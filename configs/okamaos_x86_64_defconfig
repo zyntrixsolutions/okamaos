@@ -140,6 +140,10 @@ BR2_PACKAGE_DHCPCD=y
 # --- Fonts / font discovery ---
 BR2_PACKAGE_FONTCONFIG=y
 
+# --- Filesystem utilities ---
+BR2_PACKAGE_E2FSPROGS=y
+BR2_PACKAGE_E2FSPROGS_FSCK=y
+
 # --- Compression for .ok packages ---
 BR2_PACKAGE_ZSTD=y
 

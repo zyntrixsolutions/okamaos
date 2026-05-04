@@ -32,7 +32,26 @@ case "$1" in
         PERSIST_DEV="$(blkid -L "$PERSIST_LABEL" 2>/dev/null || true)"
     fi
     if [ -n "$PERSIST_DEV" ] && ! grep -q ' /var/okamaos ' /proc/mounts; then
-        mount -o rw,noatime "$PERSIST_DEV" /var/okamaos 2>/dev/null || true
+        echo "Persistence device found: $PERSIST_DEV"
+        # Check and repair filesystem before mounting (handles unclean shutdowns)
+        if command -v e2fsck >/dev/null 2>&1; then
+            echo "Checking filesystem on $PERSIST_DEV..."
+            e2fsck -p "$PERSIST_DEV" 2>/dev/null || echo "Filesystem check completed (may have found errors)"
+        fi
+        echo "Mounting $PERSIST_DEV at /var/okamaos..."
+        if mount -o rw,noatime "$PERSIST_DEV" /var/okamaos 2>/dev/null; then
+            echo "Persistence mounted successfully."
+        else
+            echo "ERROR: Failed to mount persistence partition $PERSIST_DEV" >&2
+            # Try read-only mount as fallback
+            echo "Attempting read-only mount as fallback..."
+            if mount -o ro,noatime "$PERSIST_DEV" /var/okamaos 2>/dev/null; then
+                echo "WARNING: Persistence mounted read-only due to filesystem errors." >&2
+                echo "Run 'okama-install --make-persistence $PERSIST_DEV --yes' to reformat." >&2
+            else
+                echo "CRITICAL: Could not mount persistence partition. Data may be lost." >&2
+            fi
+        fi
     fi
 
     # /var/okamaos is persistent when a data partition is present; otherwise it

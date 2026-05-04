@@ -5,6 +5,18 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [2.2.1] - 2026-05-04 — Live USB Persistence Filesystem Fix
+
+### Fixed
+- **`configs/okamaos_x86_64_defconfig`** — Added `BR2_PACKAGE_E2FSPROGS` and `BR2_PACKAGE_E2FSPROGS_FSCK` to include filesystem check utilities.
+- **`board/okamaos/rootfs-overlay/etc/init.d/S10okama-mounts`** — Fixed persistence partition mounting to:
+  - Run `e2fsck -p` before mounting to repair filesystem errors from improper shutdowns
+  - Add proper logging for persistence device detection and mount status
+  - Implement fallback to read-only mount if read-write fails
+  - Display actionable error messages with reformat instructions
+
+---
+
 ## [2.2.0] - 2026-05-03 — System Repair Update
 
 ### Added — OS Installer (`usr/bin/okama-install`)

@@ -134,9 +134,9 @@ KEYBOARD_BUTTON_MAP = {
 
 AXIS_MAP = {
     ABS_X:    ("LSTICK_X", False),
-    ABS_Y:    ("LSTICK_Y", True),
+    ABS_Y:    ("LSTICK_Y", False),  # Fixed: removed inversion for natural up/down
     ABS_RX:   ("RSTICK_X", False),
-    ABS_RY:   ("RSTICK_Y", True),
+    ABS_RY:   ("RSTICK_Y", False),  # Fixed: removed inversion for natural up/down
     ABS_Z:    ("L2_AXIS",  False),
     ABS_RZ:   ("R2_AXIS",  False),
     ABS_BRAKE: ("L2_AXIS", False),

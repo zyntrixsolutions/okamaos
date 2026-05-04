@@ -5,6 +5,35 @@ Format: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [2.2.2] - 2026-05-04 — Critical Fixes Bundle
+
+### Fixed — SSL/HTTPS
+- **`usr/lib/okamaos/ssl_helper.py`** — New SSL helper module that properly configures CA certificates for Python HTTPS requests.
+- **`usr/lib/okamaos/updates.py`** — Updated to use `urlopen_with_ssl()` for update checks.
+- **`usr/lib/okamaos/store.py`** — Updated to use `urlopen_with_ssl()` for catalog/game downloads.
+- **`usr/lib/okamaos/wallet.py`** — Updated to use `urlopen_with_ssl()` for RPC calls.
+- **Fixed**: `SSL: CERTIFICATE_VERIFY_FAILED` error when checking for updates or downloading games.
+
+### Fixed — UI/UX
+- **`usr/bin/okama-shell`** — Popup notifications now display as centered overlays with darkened background instead of bottom-screen messages. Text wraps for longer messages and colors indicate message type (error/warning/success).
+
+### Fixed — Input
+- **`usr/bin/okama-inputd`** — Removed Y-axis inversion from `LSTICK_Y` and `RSTICK_Y`. Joystick up now correctly moves selection up instead of down.
+
+### Added — Hardware Support
+- **`configs/okamaos_x86_64_defconfig`** — Added firmware packages for more USB WiFi/Bluetooth adapters:
+  - RTL8188EU, RTL8192EU, RTL8821AU, RTL8822BU, RTL8812AU, RTL88X2BU
+  - MediaTek MT7610U, MT7622 BT
+  - Cypress CYW43XXX
+
+### Added — System Dependencies
+- **`package/okama-runtime/okama-runtime.mk`** — Install wallet dependencies at build time:
+  - `eth-account` — Ethereum account management
+  - `mnemonic` — BIP-39 seed phrase generation
+  - `argon2-cffi` — PIN hashing for wallet encryption
+
+---
+
 ## [2.2.1] - 2026-05-04 — Live USB Persistence Filesystem Fix
 
 ### Fixed

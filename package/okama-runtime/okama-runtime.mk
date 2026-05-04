@@ -6,7 +6,7 @@
 # tree under usr/bin and usr/lib/okamaos.
 ################################################################################
 
-OKAMA_RUNTIME_VERSION = 2.1.2
+OKAMA_RUNTIME_VERSION = 2.2.2
 OKAMA_RUNTIME_SOURCE =
 # No SITE/SITE_METHOD — this is an install-only meta-package that copies files directly
 OKAMA_RUNTIME_LICENSE = Proprietary
@@ -38,6 +38,14 @@ define OKAMA_RUNTIME_INSTALL_TARGET_CMDS
 	chmod 0755 $(TARGET_DIR)/usr/bin/okama-*
 	# games dir + lib must be root-owned executable
 	chmod 0755 $(TARGET_DIR)/usr/lib/okamaos/*.py 2>/dev/null || true
+	# Install wallet dependencies (eth-account, mnemonic, argon2-cffi)
+	# These are needed for on-device wallet functionality
+	$(HOST_DIR)/bin/pip3 install --no-cache-dir \
+		--target=$(TARGET_DIR)/usr/lib/python$(PYTHON3_VERSION_MAJOR)/site-packages \
+		eth-account==0.13.5 mnemonic==0.21 argon2-cffi==23.1.0 2>/dev/null || \
+	$(HOST_DIR)/bin/pip3 install --no-cache-dir \
+		--target=$(TARGET_DIR)/usr/lib/python$(PYTHON3_VERSION_MAJOR)/site-packages \
+		eth-account mnemonic argon2-cffi 2>/dev/null || true
 endef
 
 $(eval $(generic-package))

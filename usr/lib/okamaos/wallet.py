@@ -15,6 +15,13 @@ import urllib.error
 import urllib.request
 from typing import Optional
 
+try:
+    from okamaos.ssl_helper import urlopen_with_ssl
+except Exception:
+    # Fallback to standard urlopen if ssl_helper not available
+    def urlopen_with_ssl(url, *args, **kwargs):
+        return urllib.request.urlopen(url, *args, **kwargs)
+
 WALLET_DIR_DEFAULT = "/var/okamaos/wallet"
 KEYSTORE_FILE      = "keystore.json"
 PIN_PARAMS_FILE    = "pin_params.json"
@@ -237,7 +244,7 @@ def _rpc_call(method: str, params: list, rpc_url: Optional[str] = None) -> dict:
         headers={"Content-Type": "application/json", "User-Agent": "OkamaOS/2.0"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urlopen_with_ssl(req, timeout=10) as resp:
             data = json.load(resp)
     except urllib.error.URLError as e:
         raise WalletError(f"RPC error: {e.reason}")

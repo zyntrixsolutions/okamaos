@@ -31,6 +31,13 @@ import urllib.error
 import urllib.request
 from typing import Callable, Optional
 
+try:
+    from okamaos.ssl_helper import urlopen_with_ssl
+except Exception:
+    # Fallback to standard urlopen if ssl_helper not available
+    def urlopen_with_ssl(url, *args, **kwargs):
+        return urllib.request.urlopen(url, *args, **kwargs)
+
 CATALOG_URL_DEFAULT = "https://zyntrixsolutions.github.io/okamaos/catalog/apps.json"
 DOWNLOAD_TIMEOUT = 60  # seconds
 FETCH_TIMEOUT = 10     # seconds
@@ -60,7 +67,7 @@ def fetch_catalog(url: Optional[str] = None, timeout: int = FETCH_TIMEOUT) -> di
             url = CATALOG_URL_DEFAULT
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "OkamaOS/1.0"})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urlopen_with_ssl(req, timeout=timeout) as resp:
             data = json.load(resp)
         if not isinstance(data, dict) or ("games" not in data and "apps" not in data):
             raise StoreError("Invalid catalog: missing 'games' or 'apps' list.")
@@ -102,7 +109,7 @@ def download_game(
 
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "OkamaOS/1.0"})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urlopen_with_ssl(req, timeout=timeout) as resp:
             total = int(
                 resp.headers.get("Content-Length")
                 or entry.get("size_bytes", 0)

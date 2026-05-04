@@ -8,6 +8,13 @@ import urllib.error
 import urllib.request
 from typing import Optional
 
+try:
+    from okamaos.ssl_helper import urlopen_with_ssl
+except Exception:
+    # Fallback to standard urlopen if ssl_helper not available
+    def urlopen_with_ssl(url, *args, **kwargs):
+        return urllib.request.urlopen(url, *args, **kwargs)
+
 UPDATE_URL_DEFAULT = "https://zyntrixsolutions.github.io/okamaos/updates/feed.json"
 CATALOG_URL_DEFAULT = "https://zyntrixsolutions.github.io/okamaos/catalog/apps.json"
 FETCH_TIMEOUT = 10
@@ -45,7 +52,7 @@ def _timeout() -> int:
 def _load_json(url: str, timeout: int) -> dict:
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "OkamaOS/1.0"})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urlopen_with_ssl(req, timeout=timeout) as resp:
             data = json.load(resp)
         if not isinstance(data, dict):
             raise UpdateError("Response was not a JSON object.")

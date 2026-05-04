@@ -4288,17 +4288,64 @@ class OkamaShell:
 
     def _draw_message(self):
         if self.message and self.message_timer > 0:
-            surf = self.font_sm.render(self.message, True, COL_TEXT)
-            pad_x, pad_y = 20, 12
-            bw = surf.get_width() + pad_x * 2
-            bh = surf.get_height() + pad_y * 2
-            bg = pygame.Surface((bw, bh), pygame.SRCALPHA)
-            bg.fill((20, 18, 48, 230))
+            # Draw semi-transparent overlay behind popup
+            overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 160))  # Dark overlay
+            self.screen.blit(overlay, (0, 0))
+            
+            # Calculate popup size with padding for longer messages
+            pad_x, pad_y = 24, 20
+            max_text_width = WIDTH - 120  # Leave margins on sides
+            
+            # Wrap text if too long
+            words = self.message.split()
+            lines = []
+            current_line = []
+            for word in words:
+                test_line = " ".join(current_line + [word])
+                if self.font_sm.size(test_line)[0] <= max_text_width:
+                    current_line.append(word)
+                else:
+                    if current_line:
+                        lines.append(" ".join(current_line))
+                    current_line = [word]
+            if current_line:
+                lines.append(" ".join(current_line))
+            
+            if not lines:
+                lines = [self.message]
+            
+            # Calculate dimensions
+            line_height = self.font_sm.get_height() + 4
+            text_height = len(lines) * line_height
+            bw = max(self.font_sm.size(line)[0] for line in lines) + pad_x * 2
+            bh = text_height + pad_y * 2
+            
+            # Center on screen
             bx = WIDTH // 2 - bw // 2
-            by = HEIGHT - bh - 52
-            pygame.draw.rect(bg, COL_ACCENT, (0, 0, bw, bh), 1, border_radius=8)
-            self.screen.blit(bg, (bx, by))
-            self.screen.blit(surf, (bx + pad_x, by + pad_y))
+            by = HEIGHT // 2 - bh // 2
+            
+            # Draw popup background with rounded corners
+            popup = pygame.Surface((bw, bh), pygame.SRCALPHA)
+            popup.fill((28, 26, 60, 255))  # Solid background
+            pygame.draw.rect(popup, COL_ACCENT, (0, 0, bw, bh), 2, border_radius=12)
+            self.screen.blit(popup, (bx, by))
+            
+            # Determine message color based on content
+            icon_color = COL_ACCENT
+            msg_lower = self.message.lower()
+            if any(x in msg_lower for x in ["error", "fail", "critical", "could not"]):
+                icon_color = COL_ERROR
+            elif "warning" in msg_lower:
+                icon_color = COL_WARN
+            elif any(x in msg_lower for x in ["success", "complete", "saved", "mounted", "connected", "paired"]):
+                icon_color = COL_OK
+            
+            # Draw text lines
+            for i, line in enumerate(lines):
+                line_surf = self.font_sm.render(line, True, COL_TEXT)
+                line_y = by + pad_y + i * line_height
+                self.screen.blit(line_surf, (bx + pad_x, line_y))
 
     def _draw_clock(self):
         """Clock is drawn by the home top bar or sub-screen header."""

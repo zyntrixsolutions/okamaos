@@ -11,6 +11,7 @@ Format: [Semantic Versioning](https://semver.org/)
 - **`docs/gtm-teaser-script-general.md`** — Full 60/90s teaser trailer script targeting general gamers and PC enthusiasts ("FIRST WAVE" campaign).
 - **`docs/gtm-teaser-script-web3.md`** — Full 60/90s teaser trailer script targeting the Web3/blockchain gaming market ("EARN YOUR GAME" campaign).
 - **`docs/gtm-teaser-script-cryptic.md`** — Minimal 30–45s cryptic teaser ("WHAT IF" campaign) — black screen, red pulses, single question, raises curiosity.
+- **`docs/gtm-documentary-series.md`** — Full 6-part documentary series "THE CONSOLE NOBODY MADE": story arc, scene-by-scene scripts, VO narration, footage direction, music brief, and a LinkedIn post per episode. Complete production + community activation checklist.
 - All scripts include: scene-by-scene direction, VO lines, on-screen text, music brief, platform distribution strategy, post copy, and production checklists.
 
 ---
